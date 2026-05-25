@@ -4,10 +4,15 @@ import { parse } from 'yaml';
 
 export interface ArchitectureCatalogs {
   readonly repositories: RepositoriesCatalog;
+  readonly services: ServicesCatalog;
 }
 
 export interface RepositoriesCatalog {
   readonly repositories?: unknown;
+}
+
+export interface ServicesCatalog {
+  readonly services?: unknown;
 }
 
 export async function loadArchitectureCatalogs(
@@ -17,6 +22,10 @@ export async function loadArchitectureCatalogs(
     repositories: await loadYamlFile<RepositoriesCatalog>(
       architectureRoot,
       'catalogs/repositories.yaml'
+    ),
+    services: await loadYamlFile<ServicesCatalog>(
+      architectureRoot,
+      'catalogs/services.yaml'
     )
   };
 }
@@ -27,4 +36,3 @@ async function loadYamlFile<T>(root: string, relativePath: string): Promise<T> {
 
   return parsed as T;
 }
-

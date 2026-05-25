@@ -50,15 +50,16 @@ fixtures/fail/**
 
 1. 카탈로그와 스키마 로더를 만든다. `[진행 중]`
 2. repository catalog 필수 필드 검사를 구현한다. `[완료]`
-3. fixture 기반 통과/실패 테스트를 넓힌다.
-4. 정규화된 저장소, 서비스, 데이터 저장소 그래프를 만든다.
-5. `service.yaml` 스키마 검사를 구현한다.
-6. 참조 무결성 검사를 구현한다.
-7. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다.
+3. service repo 참조 검사와 배포 불가 repo_stage 차단을 구현한다. `[완료]`
+4. fixture 기반 통과/실패 테스트를 넓힌다.
+5. 정규화된 저장소, 서비스, 데이터 저장소 그래프를 만든다.
+6. `service.yaml` 스키마 검사를 구현한다.
+7. 참조 무결성 검사를 데이터 저장소, 데이터 클래스, 이벤트, 외부 제공자로 확장한다.
+8. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다.
 
 ## 현재 상태
 
-저장소 부트스트랩과 첫 repository catalog 필수 필드 검사는 구현됐다. 현재 `zdp-architecture`의 실제 `catalogs/repositories.yaml`을 검증하면 누락된 `owner`, `repo_stage`, `kind` 필드가 실패로 보고된다.
+저장소 부트스트랩, repository catalog 필수 필드 검사, service repo 참조 검사는 구현됐다. 현재 `zdp-architecture`의 실제 카탈로그는 `ZDP-REPO-001`, `ZDP-REPO-002`, `ZDP-REF-001` 기준을 통과한다.
 
 ## 개발 명령
 
