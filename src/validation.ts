@@ -1,4 +1,5 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
+import { buildArchitectureGraph } from './architecture-graph.ts';
 import {
   buildAiSensitiveDataPolicy,
   buildAiUserDataPolicy,
@@ -10,7 +11,6 @@ import {
   validatePublicApiContracts
 } from './api-rules.ts';
 import {
-  buildDataClassIndex,
   buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
@@ -27,13 +27,11 @@ import {
   validateProductLikeDirectSensitiveDatastoreAccess
 } from './data-access-rules.ts';
 import {
-  buildDatastoreIndex,
   validateDatastoreOwnerReferences,
   validateServiceDatastoreReferences
 } from './datastore-rules.ts';
 import type { ValidationResult } from './diagnostics.ts';
 import {
-  buildEventIndex,
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
   validateEventDataClassReferences,
@@ -42,7 +40,6 @@ import {
 import { validateFixtureExpectations } from './fixture-validation.ts';
 import {
   buildProviderContractPolicy,
-  buildExternalProviderIndex,
   buildProviderWebhookPolicy,
   validateExternalProviderCatalog,
   validateServiceExternalDependencyReferences,
@@ -59,11 +56,9 @@ import {
 } from './money-rules.ts';
 import {
   buildRepositoryAreaRules,
-  buildRepositoryIndex,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
 import {
-  buildServiceIndex,
   validateServiceDependencyReferences,
   validateRepositoryServiceContractRepositoryReference,
   validateRepositoryServiceContractServiceCatalogReference,
@@ -75,7 +70,6 @@ import {
   validateRepositoryServiceContractProviderReferences
 } from './service-contract-reference-rules.ts';
 import {
-  buildRepositoryServiceContractCatalog,
   mapServiceCatalogDiagnosticsToRepositoryServiceContract
 } from './service-contract-policy-rules.ts';
 import {
@@ -99,12 +93,22 @@ export async function validateArchitecture(
   input: ValidateArchitectureInput
 ): Promise<ValidationResult> {
   const catalogs = await loadArchitectureCatalogs(input.architectureRoot);
-  const repositoryIndex = buildRepositoryIndex(catalogs.repositories);
-  const datastoreIndex = buildDatastoreIndex(catalogs.datastores);
-  const dataClassIndex = buildDataClassIndex(catalogs.dataClasses);
-  const eventIndex = buildEventIndex(catalogs.events);
-  const serviceIndex = buildServiceIndex(catalogs.services);
-  const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
+  const repositoryServiceContract =
+    input.repositoryRoot === undefined
+      ? null
+      : await loadRepositoryServiceContract(input.repositoryRoot);
+  const graph = buildArchitectureGraph({
+    catalogs,
+    repositoryServiceContract: repositoryServiceContract?.value ?? null
+  });
+  const {
+    repositories: repositoryIndex,
+    datastores: datastoreIndex,
+    dataClasses: dataClassIndex,
+    events: eventIndex,
+    services: serviceIndex,
+    externalProviders: externalProviderIndex
+  } = graph.indexes;
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
   const paymentDataFrontendPolicy = buildPaymentDataFrontendPolicy(
@@ -162,14 +166,7 @@ export async function validateArchitecture(
           architectureRoot: input.architectureRoot,
           repositoryRoot: input.repositoryRoot
         });
-  const repositoryServiceContract =
-    input.repositoryRoot === undefined
-      ? null
-      : await loadRepositoryServiceContract(input.repositoryRoot);
-  const repositoryServiceContractCatalog =
-    repositoryServiceContract === null
-      ? null
-      : buildRepositoryServiceContractCatalog(repositoryServiceContract.value);
+  const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
   const repositoryServicePolicyDiagnostics =
     repositoryServiceContractCatalog === null
       ? []
