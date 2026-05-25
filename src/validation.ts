@@ -1,6 +1,7 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import {
   buildDataClassIndex,
+  validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
   validateDatastoreDataClassReferences
 } from './data-class-rules.ts';
@@ -44,6 +45,10 @@ export async function validateArchitecture(
     diagnostics: [
       ...validateRepositoriesCatalog(catalogs.repositories),
       ...validateDataClassCatalog(catalogs.dataClasses),
+      ...validateDataClassAllowedDatastoreReferences(
+        catalogs.dataClasses,
+        datastoreIndex
+      ),
       ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),

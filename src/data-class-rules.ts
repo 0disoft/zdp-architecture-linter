@@ -1,4 +1,5 @@
 import type { Diagnostic } from './diagnostics.ts';
+import type { DatastoreIndex } from './datastore-rules.ts';
 
 const DATA_CLASSES_FILE = 'catalogs/data-classes.yaml';
 const DATASTORES_FILE = 'catalogs/datastores.yaml';
@@ -97,6 +98,35 @@ export function validateDatastoreDataClassReferences(
   );
 }
 
+export function validateDataClassAllowedDatastoreReferences(
+  value: unknown,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataClassDiagnostic(
+        'data_classes',
+        '`data-classes.yaml` must be a YAML object with a data_classes array.'
+      )
+    ];
+  }
+
+  const dataClasses = value.data_classes;
+
+  if (!Array.isArray(dataClasses)) {
+    return [
+      createDataClassDiagnostic(
+        'data_classes',
+        '`data_classes` must be a YAML array.'
+      )
+    ];
+  }
+
+  return dataClasses.flatMap((dataClass, index) =>
+    validateDataClassAllowedDatastoreRecord(dataClass, index, datastoreIndex)
+  );
+}
+
 function validateDataClassRecord(value: unknown, index: number): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -120,6 +150,63 @@ function validateDataClassRecord(value: unknown, index: number): readonly Diagno
   }
 
   return [];
+}
+
+function validateDataClassAllowedDatastoreRecord(
+  value: unknown,
+  index: number,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataClassDiagnostic(
+        `data_classes[${index}]`,
+        'Data class entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const dataClassPath = getDataClassDiagnosticPath(value, index);
+  const allowedDatastores = value.allowed_datastores;
+
+  if (allowedDatastores === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(allowedDatastores)) {
+    return [
+      createDataClassDiagnostic(
+        `${dataClassPath}.allowed_datastores`,
+        '`allowed_datastores` must be a YAML array when present.'
+      )
+    ];
+  }
+
+  return allowedDatastores.flatMap((datastoreId, datastoreIndexInDataClass) => {
+    const path = `${dataClassPath}.allowed_datastores[${datastoreIndexInDataClass}]`;
+
+    if (typeof datastoreId !== 'string' || datastoreId.trim().length === 0) {
+      return [
+        createDataClassDiagnostic(
+          path,
+          'Allowed datastore entry must be a non-empty datastore id.'
+        )
+      ];
+    }
+
+    const normalizedDatastoreId = datastoreId.trim();
+
+    if (!datastoreIndex.byId.has(normalizedDatastoreId)) {
+      return [
+        createDataClassDiagnostic(
+          path,
+          `Data class references unknown allowed datastore \`${normalizedDatastoreId}\`.`
+        )
+      ];
+    }
+
+    return [];
+  });
 }
 
 function validateDatastoreRecord(
