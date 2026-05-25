@@ -1,6 +1,8 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import {
+  buildAiSensitiveDataPolicy,
   buildAiUserDataPolicy,
+  validateAiSensitiveDataContracts,
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
 import {
@@ -67,6 +69,9 @@ export async function validateArchitecture(
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
   const aiUserDataPolicy = buildAiUserDataPolicy(catalogs.aiDataAccessRules);
+  const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
+    catalogs.aiDataAccessRules
+  );
 
   return {
     diagnostics: [
@@ -95,6 +100,10 @@ export async function validateArchitecture(
         providerContractPolicy
       ),
       ...validateAiUserDataContracts(catalogs.services, aiUserDataPolicy),
+      ...validateAiSensitiveDataContracts(
+        catalogs.services,
+        aiSensitiveDataPolicy
+      ),
       ...validateProductLikeDirectSensitiveDatastoreAccess(
         catalogs.services,
         repositoryIndex,

@@ -2,6 +2,7 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
 const AI_USER_DATA_RULE_ID = 'ZDP-AI-001';
+const AI_SENSITIVE_DATA_RULE_ID = 'ZDP-AI-002';
 
 const EMPTY_AI_USER_DATA_POLICY: AiUserDataPolicy = {
   enabled: false,
@@ -9,6 +10,12 @@ const EMPTY_AI_USER_DATA_POLICY: AiUserDataPolicy = {
   requiredValues: new Map(),
   requiredFields: [],
   forbiddenValues: new Map()
+};
+
+const EMPTY_AI_SENSITIVE_DATA_POLICY: AiSensitiveDataPolicy = {
+  enabled: false,
+  requiredValues: new Map(),
+  providerPolicyAnyFields: []
 };
 
 export interface AiUserDataPolicy {
@@ -19,15 +26,18 @@ export interface AiUserDataPolicy {
   readonly forbiddenValues: ReadonlyMap<string, readonly unknown[]>;
 }
 
+export interface AiSensitiveDataPolicy {
+  readonly enabled: boolean;
+  readonly requiredValues: ReadonlyMap<string, unknown>;
+  readonly providerPolicyAnyFields: readonly string[];
+}
+
 export function buildAiUserDataPolicy(value: unknown): AiUserDataPolicy {
   if (!isRecord(value) || !Array.isArray(value.rules)) {
     return EMPTY_AI_USER_DATA_POLICY;
   }
 
-  const aiUserDataRule = value.rules.find(
-    (rule): rule is Record<string, unknown> =>
-      isRecord(rule) && readStringField(rule, 'id') === AI_USER_DATA_RULE_ID
-  );
+  const aiUserDataRule = findRuleById(value.rules, AI_USER_DATA_RULE_ID);
 
   if (aiUserDataRule === undefined) {
     return EMPTY_AI_USER_DATA_POLICY;
@@ -47,6 +57,32 @@ export function buildAiUserDataPolicy(value: unknown): AiUserDataPolicy {
   };
 }
 
+export function buildAiSensitiveDataPolicy(value: unknown): AiSensitiveDataPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_AI_SENSITIVE_DATA_POLICY;
+  }
+
+  const aiSensitiveDataRule = findRuleById(
+    value.rules,
+    AI_SENSITIVE_DATA_RULE_ID
+  );
+
+  if (aiSensitiveDataRule === undefined) {
+    return EMPTY_AI_SENSITIVE_DATA_POLICY;
+  }
+
+  const assertions = isRecord(aiSensitiveDataRule.assertions)
+    ? aiSensitiveDataRule.assertions
+    : {};
+  const requireAny = isRecord(assertions.require_any) ? assertions.require_any : {};
+
+  return {
+    enabled: true,
+    requiredValues: readValueMap(assertions.require_values),
+    providerPolicyAnyFields: readStringArray(requireAny['ai.provider_policy'])
+  };
+}
+
 export function validateAiUserDataContracts(
   value: unknown,
   policy: AiUserDataPolicy
@@ -58,6 +94,7 @@ export function validateAiUserDataContracts(
   if (!isRecord(value)) {
     return [
       createAiDiagnostic(
+        AI_USER_DATA_RULE_ID,
         'services',
         '`services.yaml` must be a YAML object with a services array.'
       )
@@ -68,7 +105,11 @@ export function validateAiUserDataContracts(
 
   if (!Array.isArray(services)) {
     return [
-      createAiDiagnostic('services', '`services` must be a YAML array.')
+      createAiDiagnostic(
+        AI_USER_DATA_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
     ];
   }
 
@@ -85,6 +126,7 @@ function validateServiceAiUserDataContract(
   if (!isRecord(value)) {
     return [
       createAiDiagnostic(
+        AI_USER_DATA_RULE_ID,
         `services[${index}]`,
         'Service entry must be a YAML object.'
       )
@@ -105,6 +147,7 @@ function validateServiceAiUserDataContract(
     if (actualValue !== expectedValue) {
       diagnostics.push(
         createAiDiagnostic(
+          AI_USER_DATA_RULE_ID,
           `${servicePath}.${field}`,
           `AI user data service \`${serviceName}\` must set \`${field}\` to \`${String(expectedValue)}\`.`
         )
@@ -116,6 +159,7 @@ function validateServiceAiUserDataContract(
     if (!hasUsableFieldAtPath(value, field)) {
       diagnostics.push(
         createAiDiagnostic(
+          AI_USER_DATA_RULE_ID,
           `${servicePath}.${field}`,
           `AI user data service \`${serviceName}\` is missing required field \`${field}\`.`
         )
@@ -129,6 +173,7 @@ function validateServiceAiUserDataContract(
     if (forbiddenValues.includes(actualValue)) {
       diagnostics.push(
         createAiDiagnostic(
+          AI_USER_DATA_RULE_ID,
           `${servicePath}.${field}`,
           `AI user data service \`${serviceName}\` must not set \`${field}\` to \`${String(actualValue)}\`.`
         )
@@ -145,6 +190,7 @@ function validateServiceAiUserDataContract(
     if (!hasRequiredDependency) {
       diagnostics.push(
         createAiDiagnostic(
+          AI_USER_DATA_RULE_ID,
           `${servicePath}.${dependencies.path}`,
           `AI user data service \`${serviceName}\` must depend on one of: ${policy.dependencyOptions.map((dependency) => `\`${dependency}\``).join(', ')}.`
         )
@@ -153,6 +199,114 @@ function validateServiceAiUserDataContract(
   }
 
   return diagnostics;
+}
+
+export function validateAiSensitiveDataContracts(
+  value: unknown,
+  policy: AiSensitiveDataPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createAiDiagnostic(
+        AI_SENSITIVE_DATA_RULE_ID,
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createAiDiagnostic(
+        AI_SENSITIVE_DATA_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceAiSensitiveDataContract(service, index, policy)
+  );
+}
+
+function validateServiceAiSensitiveDataContract(
+  value: unknown,
+  index: number,
+  policy: AiSensitiveDataPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createAiDiagnostic(
+        AI_SENSITIVE_DATA_RULE_ID,
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const hasSensitiveAiData =
+    readBooleanAtPath(value, 'ai.sensitive_data') === true ||
+    readBooleanAtPath(value, 'data.ai_user_data') === true;
+
+  if (!hasSensitiveAiData) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceName = getServiceName(value, index);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const [field, expectedValue] of policy.requiredValues.entries()) {
+    const actualValue = readValueAtPath(value, field);
+
+    if (actualValue !== expectedValue) {
+      diagnostics.push(
+        createAiDiagnostic(
+          AI_SENSITIVE_DATA_RULE_ID,
+          `${servicePath}.${field}`,
+          `AI sensitive data service \`${serviceName}\` must set \`${field}\` to \`${String(expectedValue)}\`.`
+        )
+      );
+    }
+  }
+
+  if (
+    policy.providerPolicyAnyFields.length > 0 &&
+    !hasAnyProviderPolicyField(value, policy.providerPolicyAnyFields)
+  ) {
+    diagnostics.push(
+      createAiDiagnostic(
+        AI_SENSITIVE_DATA_RULE_ID,
+        `${servicePath}.ai.provider_policy`,
+        `AI sensitive data service \`${serviceName}\` must set one of: ${policy.providerPolicyAnyFields.map((field) => `\`ai.provider_policy.${field}\``).join(', ')}.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function hasAnyProviderPolicyField(
+  value: Record<string, unknown>,
+  fields: readonly string[]
+): boolean {
+  return fields.some((field) => {
+    const fieldPath = `ai.provider_policy.${field}`;
+    const candidate = readValueAtPath(value, fieldPath);
+
+    if (typeof candidate === 'boolean') {
+      return candidate === true;
+    }
+
+    return hasUsableFieldAtPath(value, fieldPath);
+  });
 }
 
 function readDependencyServices(value: Record<string, unknown>): {
@@ -257,6 +411,16 @@ function readForbiddenValueMap(
   return new Map(entries);
 }
 
+function findRuleById(
+  rules: readonly unknown[],
+  ruleId: string
+): Record<string, unknown> | undefined {
+  return rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === ruleId
+  );
+}
+
 function readStringField(value: Record<string, unknown>, field: string): string | null {
   const candidate = value[field];
 
@@ -275,9 +439,13 @@ function getServiceName(value: Record<string, unknown>, index: number): string {
   return readStringField(value, 'id') ?? `services[${index}]`;
 }
 
-function createAiDiagnostic(path: string, message: string): Diagnostic {
+function createAiDiagnostic(
+  ruleId: string,
+  path: string,
+  message: string
+): Diagnostic {
   return {
-    ruleId: AI_USER_DATA_RULE_ID,
+    ruleId,
     severity: 'error',
     file: SERVICES_FILE,
     path,
