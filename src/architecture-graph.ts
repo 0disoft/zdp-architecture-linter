@@ -1,5 +1,9 @@
 import type { ArchitectureCatalogs } from './catalog-loader.ts';
 import {
+  buildArchitectureGraphEdges,
+  type ArchitectureGraphEdge
+} from './architecture-graph-edges.ts';
+import {
   buildDataClassIndex,
   type DataClassIndex,
   type DataClassRecord
@@ -41,6 +45,7 @@ export interface ArchitectureGraph {
   readonly catalogs: ArchitectureCatalogs;
   readonly indexes: ArchitectureGraphIndexes;
   readonly nodes: ArchitectureGraphNodes;
+  readonly edges: readonly ArchitectureGraphEdge[];
   readonly repositoryServiceContractCatalog: {
     readonly services: readonly unknown[];
   } | null;
@@ -144,6 +149,10 @@ export function buildArchitectureGraph(input: {
       events: buildEventNodes(indexes.events),
       externalProviders: buildExternalProviderNodes(indexes.externalProviders)
     },
+    edges: buildArchitectureGraphEdges({
+      catalogs: input.catalogs,
+      repositoryServiceContract: input.repositoryServiceContract ?? null
+    }),
     repositoryServiceContractCatalog
   };
 }

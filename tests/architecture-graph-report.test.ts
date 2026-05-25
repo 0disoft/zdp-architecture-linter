@@ -80,7 +80,8 @@ describe('architecture graph report', () => {
       datastores: 1,
       dataClasses: 1,
       events: 1,
-      externalProviders: 1
+      externalProviders: 1,
+      edges: 3
     });
     expect(report.nodes.services).toEqual([
       {
@@ -98,6 +99,32 @@ describe('architecture graph report', () => {
         repo: 'zdp-architecture-linter'
       }
     ]);
+    expect(report.edges).toEqual([
+      {
+        type: 'service-owned-by-repository',
+        from: { kind: 'service', id: 'core-api' },
+        to: { kind: 'repository', id: 'zdp-core-platform' },
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].repo',
+        source: 'catalog'
+      },
+      {
+        type: 'service-owned-by-repository',
+        from: { kind: 'service', id: 'architecture-linter' },
+        to: { kind: 'repository', id: 'zdp-architecture-linter' },
+        file: 'service.yaml',
+        path: 'service.repo',
+        source: 'repository-service-contract'
+      },
+      {
+        type: 'datastore-owned-by-repository',
+        from: { kind: 'datastore', id: 'core_postgres' },
+        to: { kind: 'repository', id: 'zdp-core-platform' },
+        file: 'catalogs/datastores.yaml',
+        path: 'datastores[0:core_postgres].owner_repo',
+        source: 'catalog'
+      }
+    ]);
   });
 
   test('formats a compact text summary for humans', () => {
@@ -108,7 +135,8 @@ describe('architecture graph report', () => {
         datastores: 4,
         dataClasses: 5,
         events: 6,
-        externalProviders: 7
+        externalProviders: 7,
+        edges: 8
       },
       nodes: {
         repositories: [],
@@ -117,7 +145,8 @@ describe('architecture graph report', () => {
         dataClasses: [],
         events: [],
         externalProviders: []
-      }
+      },
+      edges: []
     });
 
     expect(text).toBe(
@@ -128,7 +157,8 @@ describe('architecture graph report', () => {
         'datastores: 4',
         'dataClasses: 5',
         'events: 6',
-        'externalProviders: 7'
+        'externalProviders: 7',
+        'edges: 8'
       ].join('\n')
     );
   });

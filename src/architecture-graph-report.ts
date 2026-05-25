@@ -3,6 +3,7 @@ import type { ArchitectureGraph, ArchitectureGraphNodes } from './architecture-g
 export interface ArchitectureGraphReport {
   readonly summary: ArchitectureGraphNodeSummary;
   readonly nodes: ArchitectureGraphNodes;
+  readonly edges: ArchitectureGraph['edges'];
 }
 
 export interface ArchitectureGraphNodeSummary {
@@ -12,6 +13,7 @@ export interface ArchitectureGraphNodeSummary {
   readonly dataClasses: number;
   readonly events: number;
   readonly externalProviders: number;
+  readonly edges: number;
 }
 
 export function createArchitectureGraphReport(
@@ -24,9 +26,11 @@ export function createArchitectureGraphReport(
       datastores: graph.nodes.datastores.length,
       dataClasses: graph.nodes.dataClasses.length,
       events: graph.nodes.events.length,
-      externalProviders: graph.nodes.externalProviders.length
+      externalProviders: graph.nodes.externalProviders.length,
+      edges: graph.edges.length
     },
-    nodes: graph.nodes
+    nodes: graph.nodes,
+    edges: graph.edges
   };
 }
 
@@ -40,6 +44,7 @@ export function formatArchitectureGraphReportText(
     `datastores: ${report.summary.datastores}`,
     `dataClasses: ${report.summary.dataClasses}`,
     `events: ${report.summary.events}`,
-    `externalProviders: ${report.summary.externalProviders}`
+    `externalProviders: ${report.summary.externalProviders}`,
+    `edges: ${report.summary.edges}`
   ].join('\n');
 }
