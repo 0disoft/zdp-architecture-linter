@@ -67,7 +67,10 @@ import {
   validateServiceDependencyReferences,
   validateServiceRepositoryReferences
 } from './service-rules.ts';
-import { validateServiceSchemaFixtures } from './service-schema-validation.ts';
+import {
+  validateRepositoryServiceContract,
+  validateServiceSchemaFixtures
+} from './service-schema-validation.ts';
 import {
   buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
@@ -77,6 +80,7 @@ import {
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
+  readonly repositoryRoot?: string;
 }
 
 export async function validateArchitecture(
@@ -139,6 +143,13 @@ export async function validateArchitecture(
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
     input.architectureRoot
   );
+  const repositoryServiceDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryServiceContract({
+          architectureRoot: input.architectureRoot,
+          repositoryRoot: input.repositoryRoot
+        });
 
   return {
     diagnostics: [
@@ -225,7 +236,8 @@ export async function validateArchitecture(
         publicApiContractPolicy
       ),
       ...fixtureDiagnostics,
-      ...serviceSchemaDiagnostics
+      ...serviceSchemaDiagnostics,
+      ...repositoryServiceDiagnostics
     ]
   };
 }

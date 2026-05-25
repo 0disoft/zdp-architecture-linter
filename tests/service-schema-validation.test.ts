@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { validateServiceSchemaFixtures } from '../src/service-schema-validation.ts';
+import {
+  validateRepositoryServiceContract,
+  validateServiceSchemaFixtures
+} from '../src/service-schema-validation.ts';
 
 const schemaSource = JSON.stringify({
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -97,6 +100,81 @@ service:
             file: 'fixtures/service-schema/fail/valid.yaml',
             path: 'schema',
             message: 'Service schema fail fixture unexpectedly passed.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('passes when a repository service contract satisfies the schema', async () => {
+    await withSchemaFixtureRoot(
+      {
+        'schemas/service.schema.json': schemaSource,
+        'repo/service.yaml': `
+service:
+  id: valid-service
+  repo: zdp-valid-service
+`
+      },
+      async (architectureRoot) => {
+        const diagnostics = await validateRepositoryServiceContract({
+          architectureRoot,
+          repositoryRoot: join(architectureRoot, 'repo')
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('fails when a repository service contract is missing', async () => {
+    await withSchemaFixtureRoot(
+      {
+        'schemas/service.schema.json': schemaSource
+      },
+      async (architectureRoot) => {
+        const diagnostics = await validateRepositoryServiceContract({
+          architectureRoot,
+          repositoryRoot: join(architectureRoot, 'missing-service')
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-SERVICE-SCHEMA-003',
+            severity: 'error',
+            file: 'service.yaml',
+            path: 'schema',
+            message:
+              '`service.yaml` is required when validating a repository root.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('fails when a repository service contract violates the schema', async () => {
+    await withSchemaFixtureRoot(
+      {
+        'schemas/service.schema.json': schemaSource,
+        'repo/service.yaml': `
+service:
+  id: invalid-service
+`
+      },
+      async (architectureRoot) => {
+        const diagnostics = await validateRepositoryServiceContract({
+          architectureRoot,
+          repositoryRoot: join(architectureRoot, 'repo')
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-SERVICE-SCHEMA-004',
+            severity: 'error',
+            file: 'service.yaml',
+            path: 'service',
+            message:
+              "Repository service contract is invalid: service must have required property 'repo'"
           }
         ]);
       }

@@ -1,0 +1,220 @@
+contract:
+  schema_version: 2
+  contract_version: 1
+  last_reviewed_at: null
+  review_owner: null
+  review_interval_days: 90
+  approved_by: []
+  adr_refs: []
+  exception_refs: []
+
+service:
+  id: architecture-linter-cli
+  display_name: null
+  owner: 0disoft
+  repo: zdp-architecture-linter
+  aliases: []
+  status: experiment
+  tier: tier3
+  risk_level: low
+  public_docs_url: null
+  runbook_url: null
+
+lifecycle:
+  stage: experiment
+  promotion_target_tier: null
+  sunset_review_at: null
+  degradation_policy: null
+
+domain:
+  type: platform
+  user_facing: false
+  public_api: false
+  money_movement: false
+  regulated: false
+
+runtime:
+  edge: null
+  core: local-cli
+  framework: bun
+  database: null
+  cache: null
+  object_storage: null
+  home_region: null
+  public_domains: []
+
+cost:
+  cost_center: architecture-tools
+  owner: 0disoft
+  monthly_budget_limit_usd: 0
+  warn_at_percent: 80
+  block_at_percent: 100
+  unit_metrics: []
+  per_action_budget: []
+  provider_cost_dimensions: []
+  gross_margin_floor_percent: null
+  automatic_actions: []
+
+data:
+  owner_domain: null
+  classes: []
+  datastores: []
+  pii_level: none
+  residency: null
+  retention_days: null
+  payment_data: false
+  money_movement: false
+  message_content: false
+  ai_user_data: false
+  crypto_key_material: false
+  append_only_required: false
+  encryption_key_owner: null
+  backup_retention_days: null
+  legal_hold_supported: false
+  redaction_policy: null
+  export_supported: false
+  deletion:
+    required: false
+    sla_days: null
+    targets: []
+    propagation_events: []
+    backup_policy: null
+    tombstone_days: null
+    legal_hold_policy: null
+    manual_review_required: false
+    evidence_required: false
+
+access:
+  auth_required: false
+  tenant_boundary: none
+  object_level_auth_required: false
+  permission_model: none
+  privileged_operations: []
+  rebac_model_ref: null
+  break_glass_policy: null
+  service_accounts: []
+  admin_roles: []
+
+audit:
+  required: false
+  events: []
+  sink: null
+  retention_days: null
+  immutable: false
+  redaction_policy: null
+  reason_required_for_admin_access: false
+  evidence_export_supported: false
+
+idempotency:
+  required: false
+  scope: null
+  key_source: null
+  dedupe_window_seconds: null
+  store: null
+  conflict_policy: null
+  replay_safe: false
+  retry_policy: null
+
+observability:
+  product_metrics: []
+  operational_metrics: []
+  otel:
+    service_name: architecture-linter-cli
+    environment: local
+    required_attributes:
+      - service_id
+    propagation_headers: []
+    sampling_policy: null
+    provider_span_required: false
+    cost_attributes: []
+    redacted_attributes: []
+
+dependencies:
+  services: []
+  datastores: []
+  queues: []
+  workers: []
+  internal_apis: []
+  fallback_paths: []
+
+providers: []
+
+ai:
+  enabled: false
+  sensitive_data: false
+  long_streaming: false
+  tools:
+    required: false
+    allowlist: []
+  provider_policy:
+    no_prompt_training_required: false
+    zero_data_retention_required: false
+    retention_exception_ref: null
+  provider_capabilities:
+    stream_cancellation_required: false
+    tool_calling_required: false
+    prompt_caching_allowed: false
+    response_caching_allowed: false
+  budgets:
+    max_input_tokens: null
+    max_output_tokens: null
+    max_usd_per_request: null
+    max_tool_calls_per_request: null
+
+api:
+  exposure: none
+  versioning: null
+  auth_scheme: null
+  rate_limit_policy: null
+  openapi_required: false
+  sdks:
+    ts: false
+    dart: false
+    rust: false
+  deprecation_policy: null
+  compatibility_policy: null
+
+events:
+  cloudevents_required: false
+  produced: []
+  consumed: []
+  replay_supported: false
+  dead_letter_policy: null
+
+release:
+  environments: []
+  rollback_required: true
+  migration_policy: null
+  change_approval: null
+  freeze_windows: []
+  canary_policy: null
+  feature_flag_required: false
+
+reliability:
+  rpo: null
+  rto: null
+  slo_availability: null
+  slo_latency_p95_ms: null
+  night_page: false
+  backup_required: false
+  restore_drill_required: false
+  status_page_required: false
+  queue_replay_policy: null
+
+policy_gates:
+  required_linter_rules: []
+
+human_review_required: []
+
+exit:
+  success_criteria: []
+  kill_criteria:
+    - service.yaml contract validation cannot be kept aligned with zdp-architecture
+  sunset_plan: null
+  owner: 0disoft
+  review_at: null
+  user_notice_days: null
+  data_export_window_days: null
+  dependency_removal_checklist: []
+
+notes: []

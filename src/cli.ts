@@ -10,6 +10,7 @@ import { validateArchitecture } from './validation.ts';
 interface ParsedCommand {
   readonly name: 'validate';
   readonly architectureRoot: string;
+  readonly repositoryRoot?: string;
   readonly json: boolean;
 }
 
@@ -23,7 +24,8 @@ async function main(argv: readonly string[]): Promise<number> {
 
   try {
     const result = await validateArchitecture({
-      architectureRoot: command.architectureRoot
+      architectureRoot: command.architectureRoot,
+      repositoryRoot: command.repositoryRoot
     });
 
     printResult(result, command.json);
@@ -51,6 +53,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   return {
     name: 'validate',
     architectureRoot: resolve(architecture),
+    repositoryRoot: readOptionalResolvedPath(rest, '--repository'),
     json: rest.includes('--json')
   };
 }
@@ -65,6 +68,12 @@ function readOption(args: readonly string[], name: string): string | null {
   const value = args[index + 1];
 
   return value === undefined || value.startsWith('--') ? null : value;
+}
+
+function readOptionalResolvedPath(args: readonly string[], name: string): string | undefined {
+  const value = readOption(args, name);
+
+  return value === null ? undefined : resolve(value);
 }
 
 function printResult(result: ValidationResult, json: boolean): void {
@@ -84,9 +93,10 @@ function printResult(result: ValidationResult, json: boolean): void {
 }
 
 function printUsage(): void {
-  console.error('Usage: zdp-arch validate --architecture <path> [--json]');
+  console.error(
+    'Usage: zdp-arch validate --architecture <path> [--repository <path>] [--json]'
+  );
 }
 
 const exitCode = await main(Bun.argv.slice(2));
 process.exit(exitCode);
-

@@ -6,10 +6,13 @@ import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
 
 const SERVICE_SCHEMA_FILE = 'schemas/service.schema.json';
+const SERVICE_CONTRACT_FILE = 'service.yaml';
 const SERVICE_SCHEMA_PASS_DIRECTORY = 'fixtures/service-schema/pass';
 const SERVICE_SCHEMA_FAIL_DIRECTORY = 'fixtures/service-schema/fail';
 const SERVICE_SCHEMA_PASS_RULE_ID = 'ZDP-SERVICE-SCHEMA-001';
 const SERVICE_SCHEMA_FAIL_RULE_ID = 'ZDP-SERVICE-SCHEMA-002';
+const SERVICE_CONTRACT_MISSING_RULE_ID = 'ZDP-SERVICE-SCHEMA-003';
+const SERVICE_CONTRACT_INVALID_RULE_ID = 'ZDP-SERVICE-SCHEMA-004';
 
 interface ServiceSchemaFixture {
   readonly file: string;
@@ -24,6 +27,49 @@ export async function validateServiceSchemaFixtures(
   const fixtures = await loadServiceSchemaFixtures(architectureRoot);
 
   return fixtures.flatMap((fixture) => validateServiceSchemaFixture(fixture, validate));
+}
+
+export async function validateRepositoryServiceContract(
+  input: {
+    readonly architectureRoot: string;
+    readonly repositoryRoot: string;
+  }
+): Promise<readonly Diagnostic[]> {
+  const validate = await compileServiceSchema(input.architectureRoot);
+  const serviceContractPath = join(input.repositoryRoot, SERVICE_CONTRACT_FILE);
+  let source: string;
+
+  try {
+    source = await readFile(serviceContractPath, 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return [
+        createServiceSchemaDiagnostic(
+          SERVICE_CONTRACT_MISSING_RULE_ID,
+          SERVICE_CONTRACT_FILE,
+          'schema',
+          '`service.yaml` is required when validating a repository root.'
+        )
+      ];
+    }
+
+    throw error;
+  }
+
+  const value = parse(source) as unknown;
+  const valid = validate(value);
+  const errors = validate.errors ?? [];
+
+  return valid
+    ? []
+    : [
+        createServiceSchemaDiagnostic(
+          SERVICE_CONTRACT_INVALID_RULE_ID,
+          SERVICE_CONTRACT_FILE,
+          toDiagnosticPath(errors[0]),
+          `Repository service contract is invalid: ${formatSchemaErrors(errors)}`
+        )
+      ];
 }
 
 async function compileServiceSchema(
