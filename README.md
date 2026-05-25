@@ -21,14 +21,13 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - GitHub 저장소 생성, 배포, 비밀값 관리, 결제 연동을 수행하지 않는다.
 - README만 보고 저장소 생성 가능 여부를 판단하지 않는다. 기계 판단은 카탈로그, 스키마, 규칙, fixture를 기준으로 한다.
 
-## 초기 명령 계획
+## 현재 명령
 
-아직 구현 전이다. 첫 CLI 표면은 아래처럼 좁게 시작한다.
+현재 구현된 첫 CLI 표면은 아래와 같다.
 
 ```txt
 zdp-arch validate --architecture <path>
-zdp-arch validate-service --architecture <path> --service <path>
-zdp-arch explain --architecture <path> --rule <rule-id>
+zdp-arch validate --architecture <path> --json
 ```
 
 ## 입력 원천
@@ -47,17 +46,25 @@ fixtures/pass/**
 fixtures/fail/**
 ```
 
-## 첫 구현 순서
+## 구현 순서
 
-1. 카탈로그와 스키마 로더를 만든다.
-2. 정규화된 저장소, 서비스, 데이터 저장소 그래프를 만든다.
-3. fixture 기반 통과/실패 테스트를 먼저 고정한다.
-4. repository catalog 필수 필드 검사를 구현한다.
+1. 카탈로그와 스키마 로더를 만든다. `[진행 중]`
+2. repository catalog 필수 필드 검사를 구현한다. `[완료]`
+3. fixture 기반 통과/실패 테스트를 넓힌다.
+4. 정규화된 저장소, 서비스, 데이터 저장소 그래프를 만든다.
 5. `service.yaml` 스키마 검사를 구현한다.
 6. 참조 무결성 검사를 구현한다.
 7. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다.
 
 ## 현재 상태
 
-저장소 부트스트랩 단계다. 실제 CLI, 패키지 구조, 테스트 실행 명령은 아직 확정되지 않았다.
+저장소 부트스트랩과 첫 repository catalog 필수 필드 검사는 구현됐다. 현재 `zdp-architecture`의 실제 `catalogs/repositories.yaml`을 검증하면 누락된 `owner`, `repo_stage`, `kind` 필드가 실패로 보고된다.
 
+## 개발 명령
+
+```txt
+bun install
+bun run check
+bun test
+bun src/cli.ts validate --architecture <zdp-architecture-path> --json
+```
