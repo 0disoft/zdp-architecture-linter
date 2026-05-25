@@ -62,6 +62,10 @@ import {
   validateServiceDependencyReferences,
   validateServiceRepositoryReferences
 } from './service-rules.ts';
+import {
+  buildTierOperationalContractPolicy,
+  validateTierOperationalContracts
+} from './tier-rules.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -99,6 +103,9 @@ export async function validateArchitecture(
   const aiUserDataPolicy = buildAiUserDataPolicy(catalogs.aiDataAccessRules);
   const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
     catalogs.aiDataAccessRules
+  );
+  const tierOperationalContractPolicy = buildTierOperationalContractPolicy(
+    catalogs.tierRules
   );
 
   return {
@@ -172,6 +179,10 @@ export async function validateArchitecture(
       ...validateCreditMonetizationContracts(
         catalogs.services,
         creditMonetizationPolicy
+      ),
+      ...validateTierOperationalContracts(
+        catalogs.services,
+        tierOperationalContractPolicy
       )
     ]
   };
