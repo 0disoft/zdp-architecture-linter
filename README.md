@@ -42,6 +42,7 @@ catalogs/data-classes.yaml
 catalogs/events.yaml
 schemas/service.schema.json
 rules/*.yaml
+rules/repository.rules.yaml
 fixtures/pass/**
 fixtures/fail/**
 ```
@@ -59,7 +60,7 @@ fixtures/fail/**
 
 ## 현재 상태
 
-저장소 부트스트랩, repository catalog 필수 필드 검사, service repo 참조 검사, 서비스 의존성 참조 검사, 데이터 저장소 참조 검사, 데이터 클래스 참조 검사, 이벤트 참조 검사, 외부 제공자 참조 검사, 제품·웹·실험 저장소의 민감 데이터 저장소 직접 접근 차단, AI 서비스의 비소유 데이터 저장소 직접 접근 차단, 엣지 런타임의 상태 저장소 직접 접근 차단은 구현됐다. 현재 `zdp-architecture`의 실제 카탈로그는 `ZDP-REPO-001`, `ZDP-REPO-002`, `ZDP-REF-001`, `ZDP-REF-002`, `ZDP-REF-003`, `ZDP-REF-004`, `ZDP-REF-005`, `ZDP-REF-006`, `ZDP-REF-007`, `ZDP-REF-008`, `ZDP-DATA-001`, `ZDP-AI-003`, `ZDP-DATA-004` 기준을 통과한다.
+저장소 부트스트랩, repository catalog 필수 필드 검사, repository 이름 접두어와 area 매핑 검사, service repo 참조 검사, 서비스 의존성 참조 검사, 데이터 저장소 참조 검사, 데이터 클래스 참조 검사, 이벤트 참조 검사, 외부 제공자 참조 검사, 제품·웹·실험 저장소의 민감 데이터 저장소 직접 접근 차단, AI 서비스의 비소유 데이터 저장소 직접 접근 차단, 엣지 런타임의 상태 저장소 직접 접근 차단은 구현됐다. 현재 `zdp-architecture`의 실제 카탈로그는 `ZDP-REPO-001`, `ZDP-REPO-002`, `ZDP-REPO-003`, `ZDP-REF-001`, `ZDP-REF-002`, `ZDP-REF-003`, `ZDP-REF-004`, `ZDP-REF-005`, `ZDP-REF-006`, `ZDP-REF-007`, `ZDP-REF-008`, `ZDP-DATA-001`, `ZDP-AI-003`, `ZDP-DATA-004` 기준을 통과한다.
 
 ## 개발 명령
 

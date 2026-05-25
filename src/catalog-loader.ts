@@ -9,6 +9,7 @@ export interface ArchitectureCatalogs {
   readonly dataClasses: DataClassesCatalog;
   readonly events: EventsCatalog;
   readonly externalProviders: ExternalProvidersCatalog;
+  readonly repositoryRules: RepositoryRulesCatalog;
 }
 
 export interface RepositoriesCatalog {
@@ -33,6 +34,10 @@ export interface EventsCatalog {
 
 export interface ExternalProvidersCatalog {
   readonly providers?: unknown;
+}
+
+export interface RepositoryRulesCatalog {
+  readonly repository_area_rules?: unknown;
 }
 
 export async function loadArchitectureCatalogs(
@@ -62,6 +67,10 @@ export async function loadArchitectureCatalogs(
     externalProviders: await loadYamlFile<ExternalProvidersCatalog>(
       architectureRoot,
       'catalogs/external-providers.yaml'
+    ),
+    repositoryRules: await loadYamlFile<RepositoryRulesCatalog>(
+      architectureRoot,
+      'rules/repository.rules.yaml'
     )
   };
 }

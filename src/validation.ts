@@ -29,6 +29,7 @@ import {
   validateServiceExternalDependencyReferences
 } from './provider-rules.ts';
 import {
+  buildRepositoryAreaRules,
   buildRepositoryIndex,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
@@ -52,10 +53,11 @@ export async function validateArchitecture(
   const eventIndex = buildEventIndex(catalogs.events);
   const serviceIndex = buildServiceIndex(catalogs.services);
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
+  const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
 
   return {
     diagnostics: [
-      ...validateRepositoriesCatalog(catalogs.repositories),
+      ...validateRepositoriesCatalog(catalogs.repositories, repositoryAreaRules),
       ...validateDataClassCatalog(catalogs.dataClasses),
       ...validateDataClassAllowedDatastoreReferences(
         catalogs.dataClasses,

@@ -20,6 +20,11 @@ const NON_DEPLOYABLE_REPO_STAGES = new Set([
   'later_candidate'
 ]);
 
+const EMPTY_REPOSITORY_AREA_RULES: RepositoryAreaRules = {
+  exact: new Map(),
+  prefixes: []
+};
+
 export interface RepositoryCatalogRecord {
   readonly name: string;
   readonly repoStage: string | null;
@@ -30,6 +35,16 @@ export interface RepositoryCatalogRecord {
 
 export interface RepositoryIndex {
   readonly byName: ReadonlyMap<string, RepositoryCatalogRecord>;
+}
+
+export interface RepositoryAreaPrefixRule {
+  readonly prefix: string;
+  readonly area: string;
+}
+
+export interface RepositoryAreaRules {
+  readonly exact: ReadonlyMap<string, string>;
+  readonly prefixes: readonly RepositoryAreaPrefixRule[];
 }
 
 export function buildRepositoryIndex(value: unknown): RepositoryIndex {
@@ -65,7 +80,21 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
   return { byName: new Map(entries) };
 }
 
-export function validateRepositoriesCatalog(value: unknown): readonly Diagnostic[] {
+export function buildRepositoryAreaRules(value: unknown): RepositoryAreaRules {
+  if (!isRecord(value) || !isRecord(value.repository_area_rules)) {
+    return EMPTY_REPOSITORY_AREA_RULES;
+  }
+
+  const exact = buildExactAreaRules(value.repository_area_rules.exact);
+  const prefixes = buildPrefixAreaRules(value.repository_area_rules.prefixes);
+
+  return { exact, prefixes };
+}
+
+export function validateRepositoriesCatalog(
+  value: unknown,
+  areaRules: RepositoryAreaRules = EMPTY_REPOSITORY_AREA_RULES
+): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
       createRepositoryDiagnostic(
@@ -87,11 +116,15 @@ export function validateRepositoriesCatalog(value: unknown): readonly Diagnostic
   }
 
   return repositories.flatMap((repository, index) =>
-    validateRepositoryRecord(repository, index)
+    validateRepositoryRecord(repository, index, areaRules)
   );
 }
 
-function validateRepositoryRecord(value: unknown, index: number): readonly Diagnostic[] {
+function validateRepositoryRecord(
+  value: unknown,
+  index: number,
+  areaRules: RepositoryAreaRules
+): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
       createRepositoryDiagnostic(
@@ -114,7 +147,8 @@ function validateRepositoryRecord(value: unknown, index: number): readonly Diagn
           )
         ]
     ),
-    ...validateRepositoryStageKind(value, repositoryPath)
+    ...validateRepositoryStageKind(value, repositoryPath),
+    ...validateRepositoryAreaPrefix(value, repositoryPath, areaRules)
   ];
 }
 
@@ -144,8 +178,110 @@ function validateRepositoryStageKind(
   return [];
 }
 
+function validateRepositoryAreaPrefix(
+  value: Record<string, unknown>,
+  repositoryPath: string,
+  areaRules: RepositoryAreaRules
+): readonly Diagnostic[] {
+  if (areaRules.exact.size === 0 && areaRules.prefixes.length === 0) {
+    return [];
+  }
+
+  const name = readStringField(value, 'name');
+  const area = readStringField(value, 'area');
+
+  if (name === null || area === null) {
+    return [];
+  }
+
+  const expectedArea = findExpectedRepositoryArea(name, areaRules);
+
+  if (expectedArea === null) {
+    return [
+      {
+        ruleId: 'ZDP-REPO-003',
+        severity: 'error',
+        file: REPOSITORIES_FILE,
+        path: `${repositoryPath}.name`,
+        message: `Repository name \`${name}\` does not match any allowed area prefix rule.`
+      }
+    ];
+  }
+
+  if (expectedArea !== area) {
+    return [
+      {
+        ruleId: 'ZDP-REPO-003',
+        severity: 'error',
+        file: REPOSITORIES_FILE,
+        path: `${repositoryPath}.area`,
+        message: `Repository name \`${name}\` maps to area \`${expectedArea}\`, but catalog area is \`${area}\`.`
+      }
+    ];
+  }
+
+  return [];
+}
+
 export function isNonDeployableRepositoryStage(repoStage: string | null): boolean {
   return repoStage !== null && NON_DEPLOYABLE_REPO_STAGES.has(repoStage);
+}
+
+function findExpectedRepositoryArea(
+  name: string,
+  areaRules: RepositoryAreaRules
+): string | null {
+  const exactArea = areaRules.exact.get(name);
+
+  if (exactArea !== undefined) {
+    return exactArea;
+  }
+
+  const prefixRule = areaRules.prefixes.find((rule) =>
+    name.startsWith(rule.prefix)
+  );
+
+  return prefixRule?.area ?? null;
+}
+
+function buildExactAreaRules(value: unknown): ReadonlyMap<string, string> {
+  if (!isRecord(value)) {
+    return new Map();
+  }
+
+  const entries: Array<[string, string]> = [];
+
+  for (const [name, area] of Object.entries(value)) {
+    if (
+      typeof name === 'string' &&
+      name.trim().length > 0 &&
+      typeof area === 'string' &&
+      area.trim().length > 0
+    ) {
+      entries.push([name.trim(), area.trim()]);
+    }
+  }
+
+  return new Map(entries);
+}
+
+function buildPrefixAreaRules(value: unknown): readonly RepositoryAreaPrefixRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .flatMap((entry): RepositoryAreaPrefixRule[] => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+
+      const prefix = readStringField(entry, 'prefix');
+      const area = readStringField(entry, 'area');
+
+      return prefix === null || area === null ? [] : [{ prefix, area }];
+    })
+    .sort((left, right) => right.prefix.length - left.prefix.length);
 }
 
 function getRepositoryDiagnosticPath(value: Record<string, unknown>, index: number): string {
