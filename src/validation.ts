@@ -5,7 +5,10 @@ import {
   validateDataClassCatalog,
   validateDatastoreDataClassReferences
 } from './data-class-rules.ts';
-import { validateEdgeRuntimeDirectDatastoreAccess } from './data-access-rules.ts';
+import {
+  validateEdgeRuntimeDirectDatastoreAccess,
+  validateProductLikeDirectSensitiveDatastoreAccess
+} from './data-access-rules.ts';
 import {
   buildDatastoreIndex,
   validateDatastoreOwnerReferences,
@@ -70,6 +73,11 @@ export async function validateArchitecture(
       ...validateServiceExternalDependencyReferences(
         catalogs.services,
         externalProviderIndex
+      ),
+      ...validateProductLikeDirectSensitiveDatastoreAccess(
+        catalogs.services,
+        repositoryIndex,
+        datastoreIndex
       ),
       ...validateEdgeRuntimeDirectDatastoreAccess(catalogs.services, datastoreIndex)
     ]
