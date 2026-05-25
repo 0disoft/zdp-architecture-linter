@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { buildRepositoryIndex, validateRepositoriesCatalog } from '../src/repository-rules.ts';
-import { validateServiceRepositoryReferences } from '../src/service-rules.ts';
+import {
+  buildServiceIndex,
+  validateServiceDependencyReferences,
+  validateServiceRepositoryReferences
+} from '../src/service-rules.ts';
 
 describe('service repository references', () => {
   test('passes when services reference deployable repositories', () => {
@@ -99,6 +103,87 @@ describe('service repository references', () => {
   });
 });
 
+describe('service dependency references', () => {
+  test('passes when dependencies reference known services', () => {
+    const services = {
+      services: [
+        {
+          id: 'app-console',
+          dependencies: ['core-api']
+        },
+        {
+          id: 'core-api'
+        }
+      ]
+    };
+
+    const diagnostics = validateServiceDependencyReferences(
+      services,
+      buildServiceIndex(services)
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when dependencies reference unknown services', () => {
+    const services = {
+      services: [
+        {
+          id: 'app-console',
+          dependencies: ['ghost-api']
+        },
+        {
+          id: 'core-api'
+        }
+      ]
+    };
+
+    const diagnostics = validateServiceDependencyReferences(
+      services,
+      buildServiceIndex(services)
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-004',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:app-console].dependencies[0]',
+        message: 'Service references unknown dependency service `ghost-api`.'
+      }
+    ]);
+  });
+
+  test('fails when dependencies is not an array', () => {
+    const services = {
+      services: [
+        {
+          id: 'app-console',
+          dependencies: 'core-api'
+        },
+        {
+          id: 'core-api'
+        }
+      ]
+    };
+
+    const diagnostics = validateServiceDependencyReferences(
+      services,
+      buildServiceIndex(services)
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-004',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:app-console].dependencies',
+        message: '`dependencies` must be a YAML array when present.'
+      }
+    ]);
+  });
+});
+
 describe('repository stage and kind compatibility', () => {
   test('fails when a non-deployable repository is marked as a deploy unit', () => {
     const diagnostics = validateRepositoriesCatalog({
@@ -139,4 +224,3 @@ function createRepository(
     ...overrides
   };
 }
-
