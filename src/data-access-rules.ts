@@ -12,6 +12,8 @@ const PRODUCT_LIKE_SERVICE_REPOSITORY_AREAS = new Set([
 
 const SENSITIVE_DATASTORE_OWNER_AREAS = new Set(['core', 'money', 'privacy']);
 
+const AI_REPOSITORY_AREA = 'ai';
+
 const EDGE_RUNTIMES = new Set([
   'cloudflare-workers',
   'cloudflare-durable-objects'
@@ -48,6 +50,43 @@ export function validateProductLikeDirectSensitiveDatastoreAccess(
 
   return services.flatMap((service, index) =>
     validateServiceProductLikeSensitiveDatastoreAccess(
+      service,
+      index,
+      repositoryIndex,
+      datastoreIndex
+    )
+  );
+}
+
+export function validateAiDirectNonOwnedDatastoreAccess(
+  value: unknown,
+  repositoryIndex: RepositoryIndex,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        'ZDP-AI-003',
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createDataAccessDiagnostic(
+        'ZDP-AI-003',
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceAiDirectNonOwnedDatastoreAccess(
       service,
       index,
       repositoryIndex,
@@ -159,6 +198,72 @@ function validateServiceProductLikeSensitiveDatastoreAccess(
   });
 }
 
+function validateServiceAiDirectNonOwnedDatastoreAccess(
+  value: unknown,
+  index: number,
+  repositoryIndex: RepositoryIndex,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        'ZDP-AI-003',
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const serviceRepoName = readStringField(value, 'repo');
+
+  if (serviceRepoName === null) {
+    return [];
+  }
+
+  const serviceRepo = repositoryIndex.byName.get(serviceRepoName);
+
+  if (serviceRepo?.area !== AI_REPOSITORY_AREA) {
+    return [];
+  }
+
+  const directDatastoreAccess = value.direct_datastore_access;
+
+  if (!Array.isArray(directDatastoreAccess)) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceComponent = readStringField(value, 'component');
+
+  return directDatastoreAccess.flatMap((datastoreId, datastoreIndexInService) => {
+    if (typeof datastoreId !== 'string') {
+      return [];
+    }
+
+    const normalizedDatastoreId = datastoreId.trim();
+    const datastore = datastoreIndex.byId.get(normalizedDatastoreId);
+
+    if (datastore === undefined || datastore.ownerRepo === null) {
+      return [];
+    }
+
+    if (
+      datastore.ownerRepo === serviceRepoName ||
+      (serviceComponent !== null && datastore.ownerRepo === serviceComponent)
+    ) {
+      return [];
+    }
+
+    return [
+      createDataAccessDiagnostic(
+        'ZDP-AI-003',
+        `${servicePath}.direct_datastore_access[${datastoreIndexInService}]`,
+        `AI service \`${getServiceName(value, index)}\` must not directly access datastore \`${normalizedDatastoreId}\` owned by \`${datastore.ownerRepo}\`.`
+      )
+    ];
+  });
+}
+
 function validateServiceEdgeDatastoreAccess(
   value: unknown,
   index: number,
@@ -220,8 +325,12 @@ function getServiceDiagnosticPath(value: Record<string, unknown>, index: number)
   return id === null ? `services[${index}]` : `services[${index}:${id}]`;
 }
 
+function getServiceName(value: Record<string, unknown>, index: number): string {
+  return readStringField(value, 'id') ?? `services[${index}]`;
+}
+
 function createDataAccessDiagnostic(
-  ruleId: 'ZDP-DATA-001' | 'ZDP-DATA-004',
+  ruleId: 'ZDP-AI-003' | 'ZDP-DATA-001' | 'ZDP-DATA-004',
   path: string,
   message: string
 ): Diagnostic {

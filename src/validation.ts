@@ -6,6 +6,7 @@ import {
   validateDatastoreDataClassReferences
 } from './data-class-rules.ts';
 import {
+  validateAiDirectNonOwnedDatastoreAccess,
   validateEdgeRuntimeDirectDatastoreAccess,
   validateProductLikeDirectSensitiveDatastoreAccess
 } from './data-access-rules.ts';
@@ -75,6 +76,11 @@ export async function validateArchitecture(
         externalProviderIndex
       ),
       ...validateProductLikeDirectSensitiveDatastoreAccess(
+        catalogs.services,
+        repositoryIndex,
+        datastoreIndex
+      ),
+      ...validateAiDirectNonOwnedDatastoreAccess(
         catalogs.services,
         repositoryIndex,
         datastoreIndex

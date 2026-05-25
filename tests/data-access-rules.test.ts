@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  validateAiDirectNonOwnedDatastoreAccess,
   validateEdgeRuntimeDirectDatastoreAccess,
   validateProductLikeDirectSensitiveDatastoreAccess
 } from '../src/data-access-rules.ts';
@@ -162,6 +163,176 @@ describe('product-like direct sensitive datastore access', () => {
       },
       buildRepositoryIndex({
         repositories: [{ name: 'zdp-products-lab', area: 'labs' }]
+      }),
+      buildDatastoreIndex({ datastores: [] })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('AI direct non-owned datastore access', () => {
+  test('passes when an AI component directly accesses its owned datastore', () => {
+    const diagnostics = validateAiDirectNonOwnedDatastoreAccess(
+      {
+        services: [
+          {
+            id: 'ai-retrieval',
+            repo: 'zdp-ai-platform',
+            component: 'zdp-ai-retrieval',
+            direct_datastore_access: ['vector_qdrant']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [
+          { name: 'zdp-ai-platform', area: 'ai' },
+          { name: 'zdp-ai-retrieval', area: 'ai' }
+        ]
+      }),
+      buildDatastoreIndex({
+        datastores: [
+          {
+            id: 'vector_qdrant',
+            kind: 'vector-database',
+            owner_repo: 'zdp-ai-retrieval'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when an AI repository directly accesses a repository-owned datastore', () => {
+    const diagnostics = validateAiDirectNonOwnedDatastoreAccess(
+      {
+        services: [
+          {
+            id: 'ai-platform-service',
+            repo: 'zdp-ai-platform',
+            direct_datastore_access: ['ai_platform_postgres']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [{ name: 'zdp-ai-platform', area: 'ai' }]
+      }),
+      buildDatastoreIndex({
+        datastores: [
+          {
+            id: 'ai_platform_postgres',
+            kind: 'postgresql',
+            owner_repo: 'zdp-ai-platform'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when an AI answer service directly accesses the retrieval index', () => {
+    const diagnostics = validateAiDirectNonOwnedDatastoreAccess(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            repo: 'zdp-ai-platform',
+            component: 'zdp-ai-answer-engine',
+            direct_datastore_access: ['vector_qdrant']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [
+          { name: 'zdp-ai-platform', area: 'ai' },
+          { name: 'zdp-ai-answer-engine', area: 'ai' },
+          { name: 'zdp-ai-retrieval', area: 'ai' }
+        ]
+      }),
+      buildDatastoreIndex({
+        datastores: [
+          {
+            id: 'vector_qdrant',
+            kind: 'vector-database',
+            owner_repo: 'zdp-ai-retrieval'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AI-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].direct_datastore_access[0]',
+        message:
+          'AI service `ai-answer-engine` must not directly access datastore `vector_qdrant` owned by `zdp-ai-retrieval`.'
+      }
+    ]);
+  });
+
+  test('fails when an AI service directly accesses communication source data', () => {
+    const diagnostics = validateAiDirectNonOwnedDatastoreAccess(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            repo: 'zdp-ai-platform',
+            component: 'zdp-ai-answer-engine',
+            direct_datastore_access: ['comm_mail_postgres']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [
+          { name: 'zdp-ai-platform', area: 'ai' },
+          { name: 'zdp-ai-answer-engine', area: 'ai' },
+          { name: 'zdp-comm-mail-core', area: 'comm' }
+        ]
+      }),
+      buildDatastoreIndex({
+        datastores: [
+          {
+            id: 'comm_mail_postgres',
+            kind: 'postgresql',
+            owner_repo: 'zdp-comm-mail-core'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AI-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].direct_datastore_access[0]',
+        message:
+          'AI service `ai-answer-engine` must not directly access datastore `comm_mail_postgres` owned by `zdp-comm-mail-core`.'
+      }
+    ]);
+  });
+
+  test('skips unknown AI datastore references so reference rules can report them once', () => {
+    const diagnostics = validateAiDirectNonOwnedDatastoreAccess(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            repo: 'zdp-ai-platform',
+            component: 'zdp-ai-answer-engine',
+            direct_datastore_access: ['missing_vector']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [
+          { name: 'zdp-ai-platform', area: 'ai' },
+          { name: 'zdp-ai-answer-engine', area: 'ai' }
+        ]
       }),
       buildDatastoreIndex({ datastores: [] })
     );
