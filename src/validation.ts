@@ -29,6 +29,10 @@ import {
   validateServiceExternalDependencyReferences
 } from './provider-rules.ts';
 import {
+  buildMoneyMovementPolicy,
+  validateMoneyMovementContracts
+} from './money-rules.ts';
+import {
   buildRepositoryAreaRules,
   buildRepositoryIndex,
   validateRepositoriesCatalog
@@ -54,6 +58,7 @@ export async function validateArchitecture(
   const serviceIndex = buildServiceIndex(catalogs.services);
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
+  const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
 
   return {
     diagnostics: [
@@ -87,7 +92,11 @@ export async function validateArchitecture(
         repositoryIndex,
         datastoreIndex
       ),
-      ...validateEdgeRuntimeDirectDatastoreAccess(catalogs.services, datastoreIndex)
+      ...validateEdgeRuntimeDirectDatastoreAccess(
+        catalogs.services,
+        datastoreIndex
+      ),
+      ...validateMoneyMovementContracts(catalogs.services, moneyMovementPolicy)
     ]
   };
 }
