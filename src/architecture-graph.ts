@@ -69,6 +69,14 @@ export interface ArchitectureGraphNodes {
   readonly externalProviders: readonly ExternalProviderGraphNode[];
 }
 
+export type ArchitectureGraphNode =
+  | RepositoryGraphNode
+  | ServiceGraphNode
+  | DatastoreGraphNode
+  | DataClassGraphNode
+  | EventGraphNode
+  | ExternalProviderGraphNode;
+
 export interface RepositoryGraphNode {
   readonly id: string;
   readonly file: 'catalogs/repositories.yaml';

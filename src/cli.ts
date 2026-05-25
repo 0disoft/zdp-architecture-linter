@@ -6,13 +6,17 @@ import {
   formatArchitectureGraphReportText
 } from './architecture-graph-report.ts';
 import {
+  createDiagnosticExplainReport,
+  formatDiagnosticExplainReportText
+} from './diagnostic-explain-report.ts';
+import {
   formatDiagnostic,
   hasErrors,
   type ValidationResult
 } from './diagnostics.ts';
 import { validateArchitecture } from './validation.ts';
 
-type ParsedCommand = ParsedValidateCommand | ParsedGraphCommand;
+type ParsedCommand = ParsedValidateCommand | ParsedGraphCommand | ParsedExplainCommand;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -23,6 +27,13 @@ interface ParsedValidateCommand {
 
 interface ParsedGraphCommand {
   readonly name: 'graph';
+  readonly architectureRoot: string;
+  readonly repositoryRoot?: string;
+  readonly json: boolean;
+}
+
+interface ParsedExplainCommand {
+  readonly name: 'explain';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly json: boolean;
@@ -53,6 +64,31 @@ async function main(argv: readonly string[]): Promise<number> {
       return 0;
     }
 
+    if (command.name === 'explain') {
+      const [result, graph] = await Promise.all([
+        validateArchitecture({
+          architectureRoot: command.architectureRoot,
+          repositoryRoot: command.repositoryRoot
+        }),
+        loadArchitectureGraph({
+          architectureRoot: command.architectureRoot,
+          repositoryRoot: command.repositoryRoot
+        })
+      ]);
+      const report = createDiagnosticExplainReport({
+        validation: result,
+        graph
+      });
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatDiagnosticExplainReportText(report));
+      }
+
+      return hasErrors(result) ? 1 : 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -69,7 +105,11 @@ async function main(argv: readonly string[]): Promise<number> {
 function parseCommand(argv: readonly string[]): ParsedCommand | null {
   const [commandName, ...rest] = argv;
 
-  if (commandName !== 'validate' && commandName !== 'graph') {
+  if (
+    commandName !== 'validate' &&
+    commandName !== 'graph' &&
+    commandName !== 'explain'
+  ) {
     return null;
   }
 
@@ -126,7 +166,8 @@ function printUsage(): void {
     [
       'Usage:',
       '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch graph --architecture <path> [--repository <path>] [--json]'
+      '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch explain --architecture <path> [--repository <path>] [--json]'
     ].join('\n')
   );
 }
