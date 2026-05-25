@@ -174,6 +174,24 @@ export async function validateArchitecture(
     repositoryServiceContractCatalog === null
       ? []
       : mapServiceCatalogDiagnosticsToRepositoryServiceContract([
+          ...validateProductLikeDirectSensitiveDatastoreAccess(
+            repositoryServiceContractCatalog,
+            repositoryIndex,
+            datastoreIndex
+          ),
+          ...validateLedgerDatastoreDependencyAccess(
+            repositoryServiceContractCatalog,
+            ledgerDatastoreDependencyPolicy
+          ),
+          ...validateAiDirectNonOwnedDatastoreAccess(
+            repositoryServiceContractCatalog,
+            repositoryIndex,
+            datastoreIndex
+          ),
+          ...validateEdgeRuntimeDirectDatastoreAccess(
+            repositoryServiceContractCatalog,
+            datastoreIndex
+          ),
           ...validateServiceProviderContracts(
             repositoryServiceContractCatalog,
             providerContractPolicy

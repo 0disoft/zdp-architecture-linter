@@ -28,10 +28,16 @@ function normalizeRepositoryServiceContract(
   value: Record<string, unknown>
 ): Record<string, unknown> {
   const service = isRecord(value.service) ? value.service : {};
+  const runtime = isRecord(value.runtime) ? value.runtime : {};
+  const data = isRecord(value.data) ? value.data : {};
 
   return {
     ...value,
     id: readStringField(service, 'id') ?? readStringField(value, 'id') ?? undefined,
+    component:
+      readStringField(service, 'component') ??
+      readStringField(value, 'component') ??
+      undefined,
     repo:
       readStringField(service, 'repo') ?? readStringField(value, 'repo') ?? undefined,
     status:
@@ -43,6 +49,17 @@ function normalizeRepositoryServiceContract(
     risk_level:
       readStringField(service, 'risk_level') ??
       readStringField(value, 'risk_level') ??
+      undefined,
+    runtime:
+      readStringField(runtime, 'edge') ??
+      readStringField(runtime, 'deploy_target') ??
+      readStringField(runtime, 'core') ??
+      readStringField(value, 'runtime') ??
+      undefined,
+    direct_datastore_access:
+      readStringArrayField(value, 'direct_datastore_access') ??
+      readStringArrayField(data, 'direct_datastore_access') ??
+      readStringArrayField(data, 'datastores') ??
       undefined
   };
 }
@@ -63,6 +80,21 @@ function readStringField(value: Record<string, unknown>, field: string): string 
   return typeof candidate === 'string' && candidate.trim().length > 0
     ? candidate.trim()
     : null;
+}
+
+function readStringArrayField(
+  value: Record<string, unknown>,
+  field: string
+): readonly string[] | null {
+  const candidate = value[field];
+
+  if (!Array.isArray(candidate)) {
+    return null;
+  }
+
+  return candidate.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
