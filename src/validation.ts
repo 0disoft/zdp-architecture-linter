@@ -7,6 +7,11 @@ import {
 } from './datastore-rules.ts';
 import type { ValidationResult } from './diagnostics.ts';
 import {
+  buildExternalProviderIndex,
+  validateExternalProviderCatalog,
+  validateServiceExternalDependencyReferences
+} from './provider-rules.ts';
+import {
   buildRepositoryIndex,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
@@ -27,14 +32,20 @@ export async function validateArchitecture(
   const repositoryIndex = buildRepositoryIndex(catalogs.repositories);
   const datastoreIndex = buildDatastoreIndex(catalogs.datastores);
   const serviceIndex = buildServiceIndex(catalogs.services);
+  const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
 
   return {
     diagnostics: [
       ...validateRepositoriesCatalog(catalogs.repositories),
+      ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
       ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
+      ...validateServiceExternalDependencyReferences(
+        catalogs.services,
+        externalProviderIndex
+      ),
       ...validateEdgeRuntimeDirectDatastoreAccess(catalogs.services, datastoreIndex)
     ]
   };

@@ -6,6 +6,7 @@ export interface ArchitectureCatalogs {
   readonly repositories: RepositoriesCatalog;
   readonly services: ServicesCatalog;
   readonly datastores: DatastoresCatalog;
+  readonly externalProviders: ExternalProvidersCatalog;
 }
 
 export interface RepositoriesCatalog {
@@ -18,6 +19,10 @@ export interface ServicesCatalog {
 
 export interface DatastoresCatalog {
   readonly datastores?: unknown;
+}
+
+export interface ExternalProvidersCatalog {
+  readonly providers?: unknown;
 }
 
 export async function loadArchitectureCatalogs(
@@ -35,6 +40,10 @@ export async function loadArchitectureCatalogs(
     datastores: await loadYamlFile<DatastoresCatalog>(
       architectureRoot,
       'catalogs/datastores.yaml'
+    ),
+    externalProviders: await loadYamlFile<ExternalProvidersCatalog>(
+      architectureRoot,
+      'catalogs/external-providers.yaml'
     )
   };
 }
