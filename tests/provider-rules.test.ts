@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildProviderContractPolicy,
   buildExternalProviderIndex,
+  buildProviderWebhookPolicy,
   validateExternalProviderCatalog,
   validateServiceExternalDependencyReferences,
-  validateServiceProviderContracts
+  validateServiceProviderContracts,
+  validateServiceProviderWebhooks
 } from '../src/provider-rules.ts';
 
 const providerContractPolicy = buildProviderContractPolicy({
@@ -16,6 +18,20 @@ const providerContractPolicy = buildProviderContractPolicy({
           'providers[].data_sent',
           'providers[].secret_owner',
           'providers[].allowed_envs'
+        ]
+      }
+    }
+  ]
+});
+
+const providerWebhookPolicy = buildProviderWebhookPolicy({
+  rules: [
+    {
+      id: 'ZDP-PROVIDER-002',
+      assertions: {
+        require_fields: [
+          'providers[].webhook.replay_supported',
+          'providers[].webhook.signature_required'
         ]
       }
     }
@@ -250,6 +266,130 @@ describe('service provider contracts', () => {
         file: 'catalogs/services.yaml',
         path: 'services[0:payment-webhook-handler].providers[0]',
         message: 'Provider entry must be a YAML object.'
+      }
+    ]);
+  });
+});
+
+describe('service provider webhooks', () => {
+  test('passes when enabled webhooks declare replay and signature handling', () => {
+    const diagnostics = validateServiceProviderWebhooks(
+      {
+        services: [
+          {
+            id: 'payment-webhook-handler',
+            providers: [
+              {
+                id: 'stripe',
+                webhook: {
+                  enabled: true,
+                  replay_supported: true,
+                  signature_required: true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      providerWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when webhook is disabled or absent', () => {
+    const diagnostics = validateServiceProviderWebhooks(
+      {
+        services: [
+          {
+            id: 'ai-gateway-service',
+            providers: [
+              {
+                id: 'openai'
+              },
+              {
+                id: 'anthropic',
+                webhook: {
+                  enabled: false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      providerWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when enabled webhook omits replay and signature fields', () => {
+    const diagnostics = validateServiceProviderWebhooks(
+      {
+        services: [
+          {
+            id: 'payment-webhook-handler',
+            providers: [
+              {
+                id: 'stripe',
+                webhook: {
+                  enabled: true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      providerWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-PROVIDER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:payment-webhook-handler].providers[0].webhook.replay_supported',
+        message:
+          'Provider webhook is missing required field `replay_supported`.'
+      },
+      {
+        ruleId: 'ZDP-PROVIDER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:payment-webhook-handler].providers[0].webhook.signature_required',
+        message:
+          'Provider webhook is missing required field `signature_required`.'
+      }
+    ]);
+  });
+
+  test('fails when webhook is not an object', () => {
+    const diagnostics = validateServiceProviderWebhooks(
+      {
+        services: [
+          {
+            id: 'payment-webhook-handler',
+            providers: [
+              {
+                id: 'stripe',
+                webhook: true
+              }
+            ]
+          }
+        ]
+      },
+      providerWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-PROVIDER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:payment-webhook-handler].providers[0].webhook',
+        message: '`webhook` must be a YAML object when present.'
       }
     ]);
   });

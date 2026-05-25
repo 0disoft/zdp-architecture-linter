@@ -3,10 +3,16 @@ import type { Diagnostic } from './diagnostics.ts';
 const EXTERNAL_PROVIDERS_FILE = 'catalogs/external-providers.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const PROVIDER_CONTRACT_RULE_ID = 'ZDP-PROVIDER-001';
+const PROVIDER_WEBHOOK_RULE_ID = 'ZDP-PROVIDER-002';
 
 const EMPTY_PROVIDER_CONTRACT_POLICY: ProviderContractPolicy = {
   enabled: false,
   requiredProviderFields: []
+};
+
+const EMPTY_PROVIDER_WEBHOOK_POLICY: ProviderWebhookPolicy = {
+  enabled: false,
+  requiredWebhookFields: []
 };
 
 export interface ExternalProviderRecord {
@@ -21,6 +27,11 @@ export interface ExternalProviderIndex {
 export interface ProviderContractPolicy {
   readonly enabled: boolean;
   readonly requiredProviderFields: readonly string[];
+}
+
+export interface ProviderWebhookPolicy {
+  readonly enabled: boolean;
+  readonly requiredWebhookFields: readonly string[];
 }
 
 export function buildExternalProviderIndex(value: unknown): ExternalProviderIndex {
@@ -58,10 +69,7 @@ export function buildProviderContractPolicy(value: unknown): ProviderContractPol
     return EMPTY_PROVIDER_CONTRACT_POLICY;
   }
 
-  const providerRule = value.rules.find(
-    (rule): rule is Record<string, unknown> =>
-      isRecord(rule) && readStringField(rule, 'id') === PROVIDER_CONTRACT_RULE_ID
-  );
+  const providerRule = findRuleById(value.rules, PROVIDER_CONTRACT_RULE_ID);
 
   if (providerRule === undefined) {
     return EMPTY_PROVIDER_CONTRACT_POLICY;
@@ -77,6 +85,30 @@ export function buildProviderContractPolicy(value: unknown): ProviderContractPol
   return {
     enabled: true,
     requiredProviderFields
+  };
+}
+
+export function buildProviderWebhookPolicy(value: unknown): ProviderWebhookPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_PROVIDER_WEBHOOK_POLICY;
+  }
+
+  const providerWebhookRule = findRuleById(value.rules, PROVIDER_WEBHOOK_RULE_ID);
+
+  if (providerWebhookRule === undefined) {
+    return EMPTY_PROVIDER_WEBHOOK_POLICY;
+  }
+
+  const assertions = isRecord(providerWebhookRule.assertions)
+    ? providerWebhookRule.assertions
+    : {};
+  const requiredWebhookFields = readStringArray(assertions.require_fields)
+    .map((field) => parseProviderWebhookField(field))
+    .filter((field): field is string => field !== null);
+
+  return {
+    enabled: true,
+    requiredWebhookFields
   };
 }
 
@@ -159,6 +191,39 @@ export function validateServiceProviderContracts(
 
   return services.flatMap((service, index) =>
     validateServiceProviderContractRecord(service, index, policy)
+  );
+}
+
+export function validateServiceProviderWebhooks(
+  value: unknown,
+  policy: ProviderWebhookPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceProviderWebhookRecord(service, index, policy)
   );
 }
 
@@ -314,11 +379,96 @@ function validateProviderContractEntry(
   );
 }
 
+function validateServiceProviderWebhookRecord(
+  value: unknown,
+  index: number,
+  policy: ProviderWebhookPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const providers = value.providers;
+
+  if (providers === undefined) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  if (!Array.isArray(providers)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        `${servicePath}.providers`,
+        '`providers` must be a YAML array when present.'
+      )
+    ];
+  }
+
+  return providers.flatMap((provider, providerIndex) =>
+    validateProviderWebhookEntry(
+      provider,
+      `${servicePath}.providers[${providerIndex}]`,
+      policy
+    )
+  );
+}
+
+function validateProviderWebhookEntry(
+  value: unknown,
+  providerPath: string,
+  policy: ProviderWebhookPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        providerPath,
+        'Provider entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const webhook = value.webhook;
+
+  if (webhook === undefined) {
+    return [];
+  }
+
+  if (!isRecord(webhook)) {
+    return [
+      createServiceProviderWebhookDiagnostic(
+        `${providerPath}.webhook`,
+        '`webhook` must be a YAML object when present.'
+      )
+    ];
+  }
+
+  if (webhook.enabled !== true) {
+    return [];
+  }
+
+  return policy.requiredWebhookFields.flatMap((field) =>
+    hasUsableProviderField(webhook, field)
+      ? []
+      : [
+          createServiceProviderWebhookDiagnostic(
+            `${providerPath}.webhook.${field}`,
+            `Provider webhook is missing required field \`${field}\`.`
+          )
+        ]
+  );
+}
+
 function hasUsableProviderField(
   value: Record<string, unknown>,
   field: string
 ): boolean {
-  const candidate = value[field];
+  const candidate = readValueAtPath(value, field);
 
   if (typeof candidate === 'string') {
     return candidate.trim().length > 0;
@@ -333,12 +483,40 @@ function hasUsableProviderField(
   return candidate !== null && candidate !== undefined;
 }
 
+function readValueAtPath(value: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+
+    return current[segment];
+  }, value);
+}
+
 function parseProviderField(field: string): string | null {
   const prefix = 'providers[].';
 
   return field.startsWith(prefix) && field.length > prefix.length
     ? field.slice(prefix.length)
     : null;
+}
+
+function parseProviderWebhookField(field: string): string | null {
+  const prefix = 'providers[].webhook.';
+
+  return field.startsWith(prefix) && field.length > prefix.length
+    ? field.slice(prefix.length)
+    : null;
+}
+
+function findRuleById(
+  rules: readonly unknown[],
+  ruleId: string
+): Record<string, unknown> | undefined {
+  return rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === ruleId
+  );
 }
 
 function getProviderDiagnosticPath(value: Record<string, unknown>, index: number): string {
@@ -379,6 +557,19 @@ function createServiceProviderContractDiagnostic(
 ): Diagnostic {
   return {
     ruleId: PROVIDER_CONTRACT_RULE_ID,
+    severity: 'error',
+    file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function createServiceProviderWebhookDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: PROVIDER_WEBHOOK_RULE_ID,
     severity: 'error',
     file: SERVICES_FILE,
     path,

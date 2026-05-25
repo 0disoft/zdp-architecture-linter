@@ -32,9 +32,11 @@ import {
 import {
   buildProviderContractPolicy,
   buildExternalProviderIndex,
+  buildProviderWebhookPolicy,
   validateExternalProviderCatalog,
   validateServiceExternalDependencyReferences,
-  validateServiceProviderContracts
+  validateServiceProviderContracts,
+  validateServiceProviderWebhooks
 } from './provider-rules.ts';
 import {
   buildMoneyMovementPolicy,
@@ -68,6 +70,7 @@ export async function validateArchitecture(
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
+  const providerWebhookPolicy = buildProviderWebhookPolicy(catalogs.providerRules);
   const aiUserDataPolicy = buildAiUserDataPolicy(catalogs.aiDataAccessRules);
   const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
     catalogs.aiDataAccessRules
@@ -98,6 +101,10 @@ export async function validateArchitecture(
       ...validateServiceProviderContracts(
         catalogs.services,
         providerContractPolicy
+      ),
+      ...validateServiceProviderWebhooks(
+        catalogs.services,
+        providerWebhookPolicy
       ),
       ...validateAiUserDataContracts(catalogs.services, aiUserDataPolicy),
       ...validateAiSensitiveDataContracts(
