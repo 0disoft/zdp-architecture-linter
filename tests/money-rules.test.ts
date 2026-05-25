@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildMoneyMovementPolicy,
-  validateMoneyMovementContracts
+  buildPaymentDataFrontendPolicy,
+  validateMoneyMovementContracts,
+  validatePaymentDataFrontendContracts
 } from '../src/money-rules.ts';
 
 const moneyMovementPolicy = buildMoneyMovementPolicy({
@@ -16,6 +18,23 @@ const moneyMovementPolicy = buildMoneyMovementPolicy({
         },
         require_any: {
           'dependencies.services': ['zdp-money-ledger', 'zdp-money-platform']
+        }
+      }
+    }
+  ]
+});
+
+const paymentDataFrontendPolicy = buildPaymentDataFrontendPolicy({
+  rules: [
+    {
+      id: 'ZDP-MONEY-002',
+      assertions: {
+        forbid_values: {
+          'service.repo': [
+            'zdp-web-apps',
+            'zdp-web-public',
+            'zdp-products-lab'
+          ]
         }
       }
     }
@@ -190,5 +209,103 @@ describe('money movement contracts', () => {
     );
 
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('payment data frontend contracts', () => {
+  test('passes when payment data belongs to the money platform', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'payment-webhook-handler',
+            repo: 'zdp-money-platform',
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when a frontend service does not handle payment data', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'app-console',
+            repo: 'zdp-web-apps',
+            data: {
+              payment_data: false
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when a frontend repository declares payment data', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'app-console',
+            repo: 'zdp-web-apps',
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:app-console].repo',
+        message:
+          'Payment data service `app-console` must not use forbidden repository `zdp-web-apps`.'
+      }
+    ]);
+  });
+
+  test('supports nested service repo in service.yaml contracts', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'checkout-bff',
+            service: {
+              repo: 'zdp-products-lab'
+            },
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:checkout-bff].service.repo',
+        message:
+          'Payment data service `checkout-bff` must not use forbidden repository `zdp-products-lab`.'
+      }
+    ]);
   });
 });

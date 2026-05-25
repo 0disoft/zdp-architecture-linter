@@ -42,7 +42,9 @@ import {
 } from './provider-rules.ts';
 import {
   buildMoneyMovementPolicy,
-  validateMoneyMovementContracts
+  buildPaymentDataFrontendPolicy,
+  validateMoneyMovementContracts,
+  validatePaymentDataFrontendContracts
 } from './money-rules.ts';
 import {
   buildRepositoryAreaRules,
@@ -71,6 +73,9 @@ export async function validateArchitecture(
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
+  const paymentDataFrontendPolicy = buildPaymentDataFrontendPolicy(
+    catalogs.moneyRules
+  );
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
   const providerWebhookPolicy = buildProviderWebhookPolicy(catalogs.providerRules);
   const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy(
@@ -134,7 +139,11 @@ export async function validateArchitecture(
         catalogs.services,
         datastoreIndex
       ),
-      ...validateMoneyMovementContracts(catalogs.services, moneyMovementPolicy)
+      ...validateMoneyMovementContracts(catalogs.services, moneyMovementPolicy),
+      ...validatePaymentDataFrontendContracts(
+        catalogs.services,
+        paymentDataFrontendPolicy
+      )
     ]
   };
 }

@@ -2,6 +2,7 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
 const MONEY_MOVEMENT_RULE_ID = 'ZDP-MONEY-001';
+const PAYMENT_DATA_FRONTEND_RULE_ID = 'ZDP-MONEY-002';
 
 const EMPTY_MONEY_MOVEMENT_POLICY: MoneyMovementPolicy = {
   enabled: false,
@@ -9,6 +10,11 @@ const EMPTY_MONEY_MOVEMENT_POLICY: MoneyMovementPolicy = {
   auditRequired: null,
   idempotencyRequired: null,
   moneyDependencyOptions: []
+};
+
+const EMPTY_PAYMENT_DATA_FRONTEND_POLICY: PaymentDataFrontendPolicy = {
+  enabled: false,
+  forbiddenRepos: []
 };
 
 export interface MoneyMovementPolicy {
@@ -19,15 +25,17 @@ export interface MoneyMovementPolicy {
   readonly moneyDependencyOptions: readonly string[];
 }
 
+export interface PaymentDataFrontendPolicy {
+  readonly enabled: boolean;
+  readonly forbiddenRepos: readonly string[];
+}
+
 export function buildMoneyMovementPolicy(value: unknown): MoneyMovementPolicy {
   if (!isRecord(value) || !Array.isArray(value.rules)) {
     return EMPTY_MONEY_MOVEMENT_POLICY;
   }
 
-  const moneyMovementRule = value.rules.find(
-    (rule): rule is Record<string, unknown> =>
-      isRecord(rule) && readStringField(rule, 'id') === MONEY_MOVEMENT_RULE_ID
-  );
+  const moneyMovementRule = findRuleById(value.rules, MONEY_MOVEMENT_RULE_ID);
 
   if (moneyMovementRule === undefined) {
     return EMPTY_MONEY_MOVEMENT_POLICY;
@@ -54,6 +62,35 @@ export function buildMoneyMovementPolicy(value: unknown): MoneyMovementPolicy {
   };
 }
 
+export function buildPaymentDataFrontendPolicy(
+  value: unknown
+): PaymentDataFrontendPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_PAYMENT_DATA_FRONTEND_POLICY;
+  }
+
+  const paymentDataFrontendRule = findRuleById(
+    value.rules,
+    PAYMENT_DATA_FRONTEND_RULE_ID
+  );
+
+  if (paymentDataFrontendRule === undefined) {
+    return EMPTY_PAYMENT_DATA_FRONTEND_POLICY;
+  }
+
+  const assertions = isRecord(paymentDataFrontendRule.assertions)
+    ? paymentDataFrontendRule.assertions
+    : {};
+  const forbidValues = isRecord(assertions.forbid_values)
+    ? assertions.forbid_values
+    : {};
+
+  return {
+    enabled: true,
+    forbiddenRepos: readStringArray(forbidValues['service.repo'])
+  };
+}
+
 export function validateMoneyMovementContracts(
   value: unknown,
   policy: MoneyMovementPolicy
@@ -65,6 +102,7 @@ export function validateMoneyMovementContracts(
   if (!isRecord(value)) {
     return [
       createMoneyDiagnostic(
+        MONEY_MOVEMENT_RULE_ID,
         'services',
         '`services.yaml` must be a YAML object with a services array.'
       )
@@ -75,7 +113,11 @@ export function validateMoneyMovementContracts(
 
   if (!Array.isArray(services)) {
     return [
-      createMoneyDiagnostic('services', '`services` must be a YAML array.')
+      createMoneyDiagnostic(
+        MONEY_MOVEMENT_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
     ];
   }
 
@@ -92,6 +134,7 @@ function validateServiceMoneyMovementContract(
   if (!isRecord(value)) {
     return [
       createMoneyDiagnostic(
+        MONEY_MOVEMENT_RULE_ID,
         `services[${index}]`,
         'Service entry must be a YAML object.'
       )
@@ -114,6 +157,7 @@ function validateServiceMoneyMovementContract(
     if (tier.value !== policy.expectedTier) {
       diagnostics.push(
         createMoneyDiagnostic(
+          MONEY_MOVEMENT_RULE_ID,
           `${servicePath}.${tier.path}`,
           `Money movement service \`${getServiceName(value, index)}\` must set \`${tier.path}\` to \`${policy.expectedTier}\`.`
         )
@@ -127,6 +171,7 @@ function validateServiceMoneyMovementContract(
     if (auditRequired !== policy.auditRequired) {
       diagnostics.push(
         createMoneyDiagnostic(
+          MONEY_MOVEMENT_RULE_ID,
           `${servicePath}.audit.required`,
           `Money movement service \`${getServiceName(value, index)}\` must set \`audit.required\` to \`${policy.auditRequired}\`.`
         )
@@ -143,6 +188,7 @@ function validateServiceMoneyMovementContract(
     if (idempotencyRequired !== policy.idempotencyRequired) {
       diagnostics.push(
         createMoneyDiagnostic(
+          MONEY_MOVEMENT_RULE_ID,
           `${servicePath}.idempotency.required`,
           `Money movement service \`${getServiceName(value, index)}\` must set \`idempotency.required\` to \`${policy.idempotencyRequired}\`.`
         )
@@ -159,6 +205,7 @@ function validateServiceMoneyMovementContract(
     if (!hasMoneyDependency) {
       diagnostics.push(
         createMoneyDiagnostic(
+          MONEY_MOVEMENT_RULE_ID,
           `${servicePath}.${dependencies.path}`,
           `Money movement service \`${getServiceName(value, index)}\` must depend on one of: ${policy.moneyDependencyOptions.map((dependency) => `\`${dependency}\``).join(', ')}.`
         )
@@ -167,6 +214,75 @@ function validateServiceMoneyMovementContract(
   }
 
   return diagnostics;
+}
+
+export function validatePaymentDataFrontendContracts(
+  value: unknown,
+  policy: PaymentDataFrontendPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createMoneyDiagnostic(
+        PAYMENT_DATA_FRONTEND_RULE_ID,
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createMoneyDiagnostic(
+        PAYMENT_DATA_FRONTEND_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServicePaymentDataFrontendContract(service, index, policy)
+  );
+}
+
+function validateServicePaymentDataFrontendContract(
+  value: unknown,
+  index: number,
+  policy: PaymentDataFrontendPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createMoneyDiagnostic(
+        PAYMENT_DATA_FRONTEND_RULE_ID,
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  if (readBooleanAtPath(value, 'data.payment_data') !== true) {
+    return [];
+  }
+
+  const repo = readStringAtPreferredPaths(value, ['service.repo', 'repo']);
+
+  if (repo.value === null || !policy.forbiddenRepos.includes(repo.value)) {
+    return [];
+  }
+
+  return [
+    createMoneyDiagnostic(
+      PAYMENT_DATA_FRONTEND_RULE_ID,
+      `${getServiceDiagnosticPath(value, index)}.${repo.path}`,
+      `Payment data service \`${getServiceName(value, index)}\` must not use forbidden repository \`${repo.value}\`.`
+    )
+  ];
 }
 
 function hasMoneyMovement(value: Record<string, unknown>): boolean {
@@ -276,6 +392,16 @@ function readBooleanField(
   return typeof candidate === 'boolean' ? candidate : null;
 }
 
+function findRuleById(
+  rules: readonly unknown[],
+  ruleId: string
+): Record<string, unknown> | undefined {
+  return rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === ruleId
+  );
+}
+
 function getServiceDiagnosticPath(value: Record<string, unknown>, index: number): string {
   const id = readStringField(value, 'id');
 
@@ -286,9 +412,13 @@ function getServiceName(value: Record<string, unknown>, index: number): string {
   return readStringField(value, 'id') ?? `services[${index}]`;
 }
 
-function createMoneyDiagnostic(path: string, message: string): Diagnostic {
+function createMoneyDiagnostic(
+  ruleId: string,
+  path: string,
+  message: string
+): Diagnostic {
   return {
-    ruleId: MONEY_MOVEMENT_RULE_ID,
+    ruleId,
     severity: 'error',
     file: SERVICES_FILE,
     path,
