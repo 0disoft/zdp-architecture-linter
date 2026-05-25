@@ -1,4 +1,9 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
+import {
+  buildDataClassIndex,
+  validateDataClassCatalog,
+  validateDatastoreDataClassReferences
+} from './data-class-rules.ts';
 import { validateEdgeRuntimeDirectDatastoreAccess } from './data-access-rules.ts';
 import {
   buildDatastoreIndex,
@@ -31,16 +36,19 @@ export async function validateArchitecture(
   const catalogs = await loadArchitectureCatalogs(input.architectureRoot);
   const repositoryIndex = buildRepositoryIndex(catalogs.repositories);
   const datastoreIndex = buildDatastoreIndex(catalogs.datastores);
+  const dataClassIndex = buildDataClassIndex(catalogs.dataClasses);
   const serviceIndex = buildServiceIndex(catalogs.services);
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
 
   return {
     diagnostics: [
       ...validateRepositoriesCatalog(catalogs.repositories),
+      ...validateDataClassCatalog(catalogs.dataClasses),
       ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
+      ...validateDatastoreDataClassReferences(catalogs.datastores, dataClassIndex),
       ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
       ...validateServiceExternalDependencyReferences(
         catalogs.services,
