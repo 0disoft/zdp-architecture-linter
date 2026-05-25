@@ -6,6 +6,10 @@ import {
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
 import {
+  buildPublicApiContractPolicy,
+  validatePublicApiContracts
+} from './api-rules.ts';
+import {
   buildDataClassIndex,
   buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
@@ -112,6 +116,7 @@ export async function validateArchitecture(
   const tierCriticalControlsPolicy = buildTierCriticalControlsPolicy(
     catalogs.tierRules
   );
+  const publicApiContractPolicy = buildPublicApiContractPolicy(catalogs.tierRules);
 
   return {
     diagnostics: [
@@ -192,6 +197,10 @@ export async function validateArchitecture(
       ...validateTierCriticalControls(
         catalogs.services,
         tierCriticalControlsPolicy
+      ),
+      ...validatePublicApiContracts(
+        catalogs.services,
+        publicApiContractPolicy
       )
     ]
   };
