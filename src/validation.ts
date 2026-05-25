@@ -1,4 +1,9 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
+import {
+  buildDatastoreIndex,
+  validateDatastoreOwnerReferences,
+  validateServiceDatastoreReferences
+} from './datastore-rules.ts';
 import type { ValidationResult } from './diagnostics.ts';
 import {
   buildRepositoryIndex,
@@ -15,11 +20,14 @@ export async function validateArchitecture(
 ): Promise<ValidationResult> {
   const catalogs = await loadArchitectureCatalogs(input.architectureRoot);
   const repositoryIndex = buildRepositoryIndex(catalogs.repositories);
+  const datastoreIndex = buildDatastoreIndex(catalogs.datastores);
 
   return {
     diagnostics: [
       ...validateRepositoriesCatalog(catalogs.repositories),
-      ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex)
+      ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
+      ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
+      ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex)
     ]
   };
 }

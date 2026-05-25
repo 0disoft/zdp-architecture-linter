@@ -5,6 +5,7 @@ import { parse } from 'yaml';
 export interface ArchitectureCatalogs {
   readonly repositories: RepositoriesCatalog;
   readonly services: ServicesCatalog;
+  readonly datastores: DatastoresCatalog;
 }
 
 export interface RepositoriesCatalog {
@@ -13,6 +14,10 @@ export interface RepositoriesCatalog {
 
 export interface ServicesCatalog {
   readonly services?: unknown;
+}
+
+export interface DatastoresCatalog {
+  readonly datastores?: unknown;
 }
 
 export async function loadArchitectureCatalogs(
@@ -26,6 +31,10 @@ export async function loadArchitectureCatalogs(
     services: await loadYamlFile<ServicesCatalog>(
       architectureRoot,
       'catalogs/services.yaml'
+    ),
+    datastores: await loadYamlFile<DatastoresCatalog>(
+      architectureRoot,
+      'catalogs/datastores.yaml'
     )
   };
 }
