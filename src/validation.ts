@@ -66,6 +66,7 @@ import {
   buildServiceIndex,
   validateServiceDependencyReferences,
   validateRepositoryServiceContractRepositoryReference,
+  validateRepositoryServiceContractServiceCatalogReference,
   validateServiceRepositoryReferences
 } from './service-rules.ts';
 import {
@@ -249,6 +250,12 @@ export async function validateArchitecture(
         : validateRepositoryServiceContractRepositoryReference(
             repositoryServiceContract.value,
             repositoryIndex
+          )),
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceContractServiceCatalogReference(
+            repositoryServiceContract.value,
+            serviceIndex
           ))
     ]
   };

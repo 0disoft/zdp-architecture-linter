@@ -9,6 +9,7 @@ const SERVICE_CONTRACT_FILE = 'service.yaml';
 
 export interface ServiceCatalogRecord {
   readonly id: string;
+  readonly repo: string | null;
   readonly path: string;
 }
 
@@ -38,6 +39,7 @@ export function buildServiceIndex(value: unknown): ServiceIndex {
       id,
       {
         id,
+        repo: readStringField(service, 'repo'),
         path: getServiceDiagnosticPath(service, index)
       }
     ]);
@@ -115,6 +117,57 @@ export function validateRepositoryServiceContractRepositoryReference(
         'ZDP-REPO-002',
         'service.repo',
         `Service contract must not be owned by \`${repo}\` because its repo_stage is \`${repository.repoStage}\`.`
+      )
+    ];
+  }
+
+  return [];
+}
+
+export function validateRepositoryServiceContractServiceCatalogReference(
+  value: unknown,
+  serviceIndex: ServiceIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const service = value.service;
+
+  if (!isRecord(service)) {
+    return [];
+  }
+
+  const serviceId = readStringField(service, 'id');
+
+  if (serviceId === null) {
+    return [];
+  }
+
+  const catalogService = serviceIndex.byId.get(serviceId);
+
+  if (catalogService === undefined) {
+    return [
+      createRepositoryServiceContractDiagnostic(
+        'ZDP-REF-009',
+        'service.id',
+        `Service contract id \`${serviceId}\` is not registered in \`catalogs/services.yaml\`.`
+      )
+    ];
+  }
+
+  const repo = readStringField(service, 'repo');
+
+  if (
+    repo !== null &&
+    catalogService.repo !== null &&
+    repo !== catalogService.repo
+  ) {
+    return [
+      createRepositoryServiceContractDiagnostic(
+        'ZDP-REF-009',
+        'service.repo',
+        `Service contract repo \`${repo}\` does not match \`catalogs/services.yaml\` repo \`${catalogService.repo}\` for service \`${serviceId}\`.`
       )
     ];
   }
@@ -288,7 +341,7 @@ function createServiceDiagnostic(
 }
 
 function createRepositoryServiceContractDiagnostic(
-  ruleId: 'ZDP-REF-001' | 'ZDP-REPO-002',
+  ruleId: 'ZDP-REF-001' | 'ZDP-REF-009' | 'ZDP-REPO-002',
   path: string,
   message: string
 ): Diagnostic {

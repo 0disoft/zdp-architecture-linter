@@ -9,7 +9,7 @@ contract:
   exception_refs: []
 
 service:
-  id: architecture-linter-cli
+  id: architecture-linter
   display_name: null
   owner: 0disoft
   repo: zdp-architecture-linter
@@ -119,7 +119,7 @@ observability:
   product_metrics: []
   operational_metrics: []
   otel:
-    service_name: architecture-linter-cli
+    service_name: architecture-linter
     environment: local
     required_attributes:
       - service_id

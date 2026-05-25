@@ -3,6 +3,7 @@ import { buildRepositoryIndex, validateRepositoriesCatalog } from '../src/reposi
 import {
   buildServiceIndex,
   validateRepositoryServiceContractRepositoryReference,
+  validateRepositoryServiceContractServiceCatalogReference,
   validateServiceDependencyReferences,
   validateServiceRepositoryReferences
 } from '../src/service-rules.ts';
@@ -181,6 +182,86 @@ describe('repository service contract repository references', () => {
         path: 'service.repo',
         message:
           'Service contract must not be owned by `zdp-ai-memory` because its repo_stage is `logical_only`.'
+      }
+    ]);
+  });
+});
+
+describe('repository service contract service catalog references', () => {
+  test('passes when service.yaml is registered in services.yaml with the same repo', () => {
+    const services = {
+      services: [
+        {
+          id: 'architecture-linter',
+          repo: 'zdp-architecture-linter'
+        }
+      ]
+    };
+
+    const diagnostics = validateRepositoryServiceContractServiceCatalogReference(
+      {
+        service: {
+          id: 'architecture-linter',
+          repo: 'zdp-architecture-linter'
+        }
+      },
+      buildServiceIndex(services)
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service.yaml is not registered in services.yaml', () => {
+    const diagnostics = validateRepositoryServiceContractServiceCatalogReference(
+      {
+        service: {
+          id: 'ghost-service',
+          repo: 'zdp-architecture-linter'
+        }
+      },
+      buildServiceIndex({ services: [] })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-009',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.id',
+        message:
+          'Service contract id `ghost-service` is not registered in `catalogs/services.yaml`.'
+      }
+    ]);
+  });
+
+  test('fails when service.yaml repo differs from services.yaml repo', () => {
+    const services = {
+      services: [
+        {
+          id: 'architecture-linter',
+          repo: 'zdp-architecture-linter'
+        }
+      ]
+    };
+
+    const diagnostics = validateRepositoryServiceContractServiceCatalogReference(
+      {
+        service: {
+          id: 'architecture-linter',
+          repo: 'zdp-core-platform'
+        }
+      },
+      buildServiceIndex(services)
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-009',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.repo',
+        message:
+          'Service contract repo `zdp-core-platform` does not match `catalogs/services.yaml` repo `zdp-architecture-linter` for service `architecture-linter`.'
       }
     ]);
   });
