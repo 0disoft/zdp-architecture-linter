@@ -49,16 +49,26 @@ function validateRepositoryRecord(value: unknown, index: number): readonly Diagn
     ];
   }
 
+  const repositoryPath = getRepositoryDiagnosticPath(value, index);
+
   return REPOSITORY_REQUIRED_FIELDS.flatMap((field) =>
     hasUsableField(value, field)
       ? []
       : [
           createRepositoryDiagnostic(
-            `repositories[${index}].${field}`,
+            `${repositoryPath}.${field}`,
             `Repository entry is missing required field \`${field}\`.`
           )
         ]
   );
+}
+
+function getRepositoryDiagnosticPath(value: Record<string, unknown>, index: number): string {
+  const name = value.name;
+
+  return typeof name === 'string' && name.trim().length > 0
+    ? `repositories[${index}:${name.trim()}]`
+    : `repositories[${index}]`;
 }
 
 function hasUsableField(value: Record<string, unknown>, field: string): boolean {
@@ -84,4 +94,3 @@ function createRepositoryDiagnostic(path: string, message: string): Diagnostic {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-

@@ -40,17 +40,16 @@ describe('repository catalog required fields', () => {
         ruleId: 'ZDP-REPO-001',
         severity: 'error',
         file: 'catalogs/repositories.yaml',
-        path: 'repositories[0].owner',
+        path: 'repositories[0:zdp-platform-runtime].owner',
         message: 'Repository entry is missing required field `owner`.'
       },
       {
         ruleId: 'ZDP-REPO-001',
         severity: 'error',
         file: 'catalogs/repositories.yaml',
-        path: 'repositories[0].risk_level',
+        path: 'repositories[0:zdp-platform-runtime].risk_level',
         message: 'Repository entry is missing required field `risk_level`.'
       }
     ]);
   });
 });
-
