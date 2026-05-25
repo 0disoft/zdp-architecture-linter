@@ -1,0 +1,175 @@
+import { describe, expect, test } from 'bun:test';
+import { buildDataClassIndex } from '../src/data-class-rules.ts';
+import { buildDatastoreIndex } from '../src/datastore-rules.ts';
+import { buildEventIndex } from '../src/event-rules.ts';
+import { buildExternalProviderIndex } from '../src/provider-rules.ts';
+import {
+  validateRepositoryServiceContractDataReferences,
+  validateRepositoryServiceContractEventReferences,
+  validateRepositoryServiceContractProviderReferences
+} from '../src/service-contract-reference-rules.ts';
+
+describe('repository service contract data references', () => {
+  test('passes when data classes and datastores exist in catalogs', () => {
+    const diagnostics = validateRepositoryServiceContractDataReferences(
+      {
+        data: {
+          classes: ['identity'],
+          datastores: ['core_postgres']
+        },
+        dependencies: {
+          datastores: ['core_postgres']
+        }
+      },
+      buildDataClassIndex({
+        data_classes: [{ id: 'identity' }]
+      }),
+      buildDatastoreIndex({
+        datastores: [{ id: 'core_postgres' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service.yaml references unknown data classes and datastores', () => {
+    const diagnostics = validateRepositoryServiceContractDataReferences(
+      {
+        data: {
+          classes: ['ghost-data'],
+          datastores: ['ghost_postgres']
+        },
+        dependencies: {
+          datastores: ['missing_postgres']
+        }
+      },
+      buildDataClassIndex({ data_classes: [] }),
+      buildDatastoreIndex({ datastores: [] })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'data.classes[0]',
+        message: 'Service contract references unknown data class `ghost-data`.'
+      },
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'data.datastores[0]',
+        message: 'Service contract references unknown datastore `ghost_postgres`.'
+      },
+      {
+        ruleId: 'ZDP-REF-002',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'dependencies.datastores[0]',
+        message:
+          'Service contract references unknown datastore `missing_postgres`.'
+      }
+    ]);
+  });
+});
+
+describe('repository service contract provider references', () => {
+  test('passes when providers exist in the external provider catalog', () => {
+    const diagnostics = validateRepositoryServiceContractProviderReferences(
+      {
+        providers: [
+          {
+            id: 'openai'
+          }
+        ]
+      },
+      buildExternalProviderIndex({
+        providers: [{ id: 'openai' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service.yaml references an unknown external provider', () => {
+    const diagnostics = validateRepositoryServiceContractProviderReferences(
+      {
+        providers: [
+          {
+            id: 'ghost-provider'
+          }
+        ]
+      },
+      buildExternalProviderIndex({ providers: [] })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-005',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'providers[0].id',
+        message:
+          'Service contract references unknown external provider `ghost-provider`.'
+      }
+    ]);
+  });
+});
+
+describe('repository service contract event references', () => {
+  test('passes when produced and consumed events exist in the event catalog', () => {
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          produced: ['service.created'],
+          consumed: [
+            {
+              id: 'service.deleted',
+              schema_ref: 'schemas/events/service.deleted.schema.json'
+            }
+          ]
+        }
+      },
+      buildEventIndex({
+        events: [{ id: 'service.created' }, { id: 'service.deleted' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service.yaml references unknown events', () => {
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          produced: ['ghost.produced'],
+          consumed: [
+            {
+              id: 'ghost.consumed',
+              schema_ref: 'schemas/events/ghost.consumed.schema.json'
+            }
+          ]
+        }
+      },
+      buildEventIndex({ events: [] })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-007',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.produced[0]',
+        message: 'Service contract references unknown event `ghost.produced`.'
+      },
+      {
+        ruleId: 'ZDP-REF-007',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.consumed[0]',
+        message: 'Service contract references unknown event `ghost.consumed`.'
+      }
+    ]);
+  });
+});

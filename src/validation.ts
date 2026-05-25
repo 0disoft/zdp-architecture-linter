@@ -70,6 +70,11 @@ import {
   validateServiceRepositoryReferences
 } from './service-rules.ts';
 import {
+  validateRepositoryServiceContractDataReferences,
+  validateRepositoryServiceContractEventReferences,
+  validateRepositoryServiceContractProviderReferences
+} from './service-contract-reference-rules.ts';
+import {
   loadRepositoryServiceContract,
   validateRepositoryServiceContract,
   validateServiceSchemaFixtures
@@ -256,6 +261,25 @@ export async function validateArchitecture(
         : validateRepositoryServiceContractServiceCatalogReference(
             repositoryServiceContract.value,
             serviceIndex
+          )),
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceContractDataReferences(
+            repositoryServiceContract.value,
+            dataClassIndex,
+            datastoreIndex
+          )),
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceContractProviderReferences(
+            repositoryServiceContract.value,
+            externalProviderIndex
+          )),
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceContractEventReferences(
+            repositoryServiceContract.value,
+            eventIndex
           ))
     ]
   };
