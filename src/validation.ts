@@ -63,7 +63,9 @@ import {
   validateServiceRepositoryReferences
 } from './service-rules.ts';
 import {
+  buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
+  validateTierCriticalControls,
   validateTierOperationalContracts
 } from './tier-rules.ts';
 
@@ -105,6 +107,9 @@ export async function validateArchitecture(
     catalogs.aiDataAccessRules
   );
   const tierOperationalContractPolicy = buildTierOperationalContractPolicy(
+    catalogs.tierRules
+  );
+  const tierCriticalControlsPolicy = buildTierCriticalControlsPolicy(
     catalogs.tierRules
   );
 
@@ -183,6 +188,10 @@ export async function validateArchitecture(
       ...validateTierOperationalContracts(
         catalogs.services,
         tierOperationalContractPolicy
+      ),
+      ...validateTierCriticalControls(
+        catalogs.services,
+        tierCriticalControlsPolicy
       )
     ]
   };

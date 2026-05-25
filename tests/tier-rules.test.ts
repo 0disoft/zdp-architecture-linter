@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
+  validateTierCriticalControls,
   validateTierOperationalContracts
 } from '../src/tier-rules.ts';
 
@@ -21,6 +23,27 @@ const tierOperationalContractPolicy = buildTierOperationalContractPolicy({
         ],
         require_values: {
           'reliability.backup_required': true
+        }
+      }
+    }
+  ]
+});
+
+const tierCriticalControlsPolicy = buildTierCriticalControlsPolicy({
+  rules: [
+    {
+      id: 'ZDP-TIER-002',
+      condition: {
+        expression: 'service.tier == tier0'
+      },
+      assertions: {
+        require_fields: [
+          'release.change_approval',
+          'access.break_glass_policy',
+          'data.encryption_key_owner'
+        ],
+        require_values: {
+          'audit.immutable': true
         }
       }
     }
@@ -192,6 +215,158 @@ describe('tier operational contracts', () => {
     expect(diagnostics).toEqual([
       {
         ruleId: 'ZDP-TIER-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services',
+        message: '`services` must be a YAML array.'
+      }
+    ]);
+  });
+});
+
+describe('tier critical controls', () => {
+  test('passes when a tier0 service declares critical controls', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'ledger-writer',
+            service: {
+              tier: 'tier0'
+            },
+            release: {
+              change_approval: 'required'
+            },
+            access: {
+              break_glass_policy: 'two-person-approval'
+            },
+            data: {
+              encryption_key_owner: 'security'
+            },
+            audit: {
+              immutable: true
+            }
+          }
+        ]
+      },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when a tier1 service omits tier0-only controls', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'public-api',
+            service: {
+              tier: 'tier1'
+            }
+          }
+        ]
+      },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('supports the legacy flat tier field for tier0 controls', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'core-audit',
+            tier: 'tier0',
+            release: {
+              change_approval: 'required'
+            },
+            access: {
+              break_glass_policy: 'security-break-glass'
+            },
+            data: {
+              encryption_key_owner: 'core-security'
+            },
+            audit: {
+              immutable: true
+            }
+          }
+        ]
+      },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when a tier0 service omits critical controls', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'ledger-writer',
+            service: {
+              tier: 'tier0'
+            },
+            release: {},
+            access: {},
+            data: {},
+            audit: {
+              immutable: false
+            }
+          }
+        ]
+      },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ledger-writer].release.change_approval',
+        message:
+          'Tier `tier0` service `ledger-writer` must set `release.change_approval`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ledger-writer].access.break_glass_policy',
+        message:
+          'Tier `tier0` service `ledger-writer` must set `access.break_glass_policy`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ledger-writer].data.encryption_key_owner',
+        message:
+          'Tier `tier0` service `ledger-writer` must set `data.encryption_key_owner`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ledger-writer].audit.immutable',
+        message:
+          'Tier `tier0` service `ledger-writer` must set `audit.immutable` to `true`.'
+      }
+    ]);
+  });
+
+  test('fails when services is not an array for tier0 controls', () => {
+    const diagnostics = validateTierCriticalControls(
+      { services: 'ledger-writer' },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-002',
         severity: 'error',
         file: 'catalogs/services.yaml',
         path: 'services',

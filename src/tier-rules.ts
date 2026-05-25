@@ -2,6 +2,7 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
 const TIER_OPERATIONAL_CONTRACT_RULE_ID = 'ZDP-TIER-001';
+const TIER_CRITICAL_CONTROLS_RULE_ID = 'ZDP-TIER-002';
 
 const EMPTY_TIER_OPERATIONAL_CONTRACT_POLICY: TierOperationalContractPolicy = {
   enabled: false,
@@ -10,9 +11,23 @@ const EMPTY_TIER_OPERATIONAL_CONTRACT_POLICY: TierOperationalContractPolicy = {
   requiredValues: new Map()
 };
 
+const EMPTY_TIER_CRITICAL_CONTROLS_POLICY: TierCriticalControlsPolicy = {
+  enabled: false,
+  requiredTier: null,
+  requiredFields: [],
+  requiredValues: new Map()
+};
+
 export interface TierOperationalContractPolicy {
   readonly enabled: boolean;
   readonly applicableTiers: readonly string[];
+  readonly requiredFields: readonly string[];
+  readonly requiredValues: ReadonlyMap<string, unknown>;
+}
+
+export interface TierCriticalControlsPolicy {
+  readonly enabled: boolean;
+  readonly requiredTier: string | null;
   readonly requiredFields: readonly string[];
   readonly requiredValues: ReadonlyMap<string, unknown>;
 }
@@ -38,6 +53,29 @@ export function buildTierOperationalContractPolicy(
   return {
     enabled: true,
     applicableTiers: readServiceTierConditionValues(tierRule.condition),
+    requiredFields: readStringArray(assertions.require_fields),
+    requiredValues: readValueMap(assertions.require_values)
+  };
+}
+
+export function buildTierCriticalControlsPolicy(
+  value: unknown
+): TierCriticalControlsPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_TIER_CRITICAL_CONTROLS_POLICY;
+  }
+
+  const tierRule = findRuleById(value.rules, TIER_CRITICAL_CONTROLS_RULE_ID);
+
+  if (tierRule === undefined) {
+    return EMPTY_TIER_CRITICAL_CONTROLS_POLICY;
+  }
+
+  const assertions = isRecord(tierRule.assertions) ? tierRule.assertions : {};
+
+  return {
+    enabled: true,
+    requiredTier: readServiceTierEqualityValue(tierRule.condition),
     requiredFields: readStringArray(assertions.require_fields),
     requiredValues: readValueMap(assertions.require_values)
   };
@@ -75,6 +113,41 @@ export function validateTierOperationalContracts(
 
   return services.flatMap((service, index) =>
     validateServiceTierOperationalContract(service, index, policy)
+  );
+}
+
+export function validateTierCriticalControls(
+  value: unknown,
+  policy: TierCriticalControlsPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createTierDiagnostic(
+        TIER_CRITICAL_CONTROLS_RULE_ID,
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createTierDiagnostic(
+        TIER_CRITICAL_CONTROLS_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceTierCriticalControls(service, index, policy)
   );
 }
 
@@ -136,6 +209,68 @@ function validateServiceTierOperationalContract(
   return diagnostics;
 }
 
+function validateServiceTierCriticalControls(
+  value: unknown,
+  index: number,
+  policy: TierCriticalControlsPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createTierDiagnostic(
+        TIER_CRITICAL_CONTROLS_RULE_ID,
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const tier = readStringAtPreferredPaths(value, ['service.tier', 'tier']);
+
+  if (
+    tier.value === null ||
+    policy.requiredTier === null ||
+    tier.value !== policy.requiredTier
+  ) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceName = getServiceName(value, index);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const field of policy.requiredFields) {
+    if (hasUsableFieldAtPath(value, field)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createTierDiagnostic(
+        TIER_CRITICAL_CONTROLS_RULE_ID,
+        `${servicePath}.${field}`,
+        `Tier \`${tier.value}\` service \`${serviceName}\` must set \`${field}\`.`
+      )
+    );
+  }
+
+  for (const [field, expectedValue] of policy.requiredValues.entries()) {
+    const actualValue = readValueAtPath(value, field);
+
+    if (actualValue === expectedValue) {
+      continue;
+    }
+
+    diagnostics.push(
+      createTierDiagnostic(
+        TIER_CRITICAL_CONTROLS_RULE_ID,
+        `${servicePath}.${field}`,
+        `Tier \`${tier.value}\` service \`${serviceName}\` must set \`${field}\` to \`${String(expectedValue)}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function readServiceTierConditionValues(condition: unknown): readonly string[] {
   const expression = readConditionExpressions(condition).find((entry) =>
     entry.startsWith('service.tier in [')
@@ -150,6 +285,20 @@ function readServiceTierConditionValues(condition: unknown): readonly string[] {
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+}
+
+function readServiceTierEqualityValue(condition: unknown): string | null {
+  const expression = readConditionExpressions(condition).find((entry) =>
+    entry.startsWith('service.tier == ')
+  );
+
+  if (expression === undefined) {
+    return null;
+  }
+
+  const value = expression.slice('service.tier == '.length).trim();
+
+  return value.length > 0 ? value : null;
 }
 
 function readConditionExpressions(value: unknown): readonly string[] {
