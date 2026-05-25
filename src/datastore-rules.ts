@@ -6,6 +6,7 @@ const SERVICES_FILE = 'catalogs/services.yaml';
 
 export interface DatastoreCatalogRecord {
   readonly id: string;
+  readonly kind: string | null;
   readonly ownerRepo: string | null;
   readonly path: string;
 }
@@ -36,6 +37,7 @@ export function buildDatastoreIndex(value: unknown): DatastoreIndex {
       id,
       {
         id,
+        kind: readStringField(datastore, 'kind'),
         ownerRepo: readStringField(datastore, 'owner_repo'),
         path: getDatastoreDiagnosticPath(datastore, index)
       }

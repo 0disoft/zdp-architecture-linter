@@ -1,4 +1,5 @@
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
+import { validateEdgeRuntimeDirectDatastoreAccess } from './data-access-rules.ts';
 import {
   buildDatastoreIndex,
   validateDatastoreOwnerReferences,
@@ -27,7 +28,8 @@ export async function validateArchitecture(
       ...validateRepositoriesCatalog(catalogs.repositories),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
-      ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex)
+      ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
+      ...validateEdgeRuntimeDirectDatastoreAccess(catalogs.services, datastoreIndex)
     ]
   };
 }

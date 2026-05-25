@@ -55,11 +55,11 @@ fixtures/fail/**
 5. 정규화된 저장소, 서비스, 데이터 저장소 그래프를 만든다.
 6. `service.yaml` 스키마 검사를 구현한다.
 7. 참조 무결성 검사를 데이터 저장소, 데이터 클래스, 이벤트, 외부 제공자로 확장한다. `[진행 중]`
-8. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다.
+8. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다. `[진행 중]`
 
 ## 현재 상태
 
-저장소 부트스트랩, repository catalog 필수 필드 검사, service repo 참조 검사, 데이터 저장소 참조 검사는 구현됐다. 현재 `zdp-architecture`의 실제 카탈로그는 `ZDP-REPO-001`, `ZDP-REPO-002`, `ZDP-REF-001`, `ZDP-REF-002`, `ZDP-REF-003` 기준을 통과한다.
+저장소 부트스트랩, repository catalog 필수 필드 검사, service repo 참조 검사, 데이터 저장소 참조 검사, 엣지 런타임의 상태 저장소 직접 접근 차단은 구현됐다. 현재 `zdp-architecture`의 실제 카탈로그는 `ZDP-REPO-001`, `ZDP-REPO-002`, `ZDP-REF-001`, `ZDP-REF-002`, `ZDP-REF-003`, `ZDP-DATA-004` 기준을 통과한다.
 
 ## 개발 명령
 

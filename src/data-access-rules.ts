@@ -1,0 +1,118 @@
+import type { DatastoreIndex } from './datastore-rules.ts';
+import type { Diagnostic } from './diagnostics.ts';
+
+const SERVICES_FILE = 'catalogs/services.yaml';
+
+const EDGE_RUNTIMES = new Set([
+  'cloudflare-workers',
+  'cloudflare-durable-objects'
+]);
+
+const EDGE_FORBIDDEN_DATASTORE_KINDS = new Set(['postgresql', 'secure-storage']);
+
+export function validateEdgeRuntimeDirectDatastoreAccess(
+  value: unknown,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createDataAccessDiagnostic('services', '`services` must be a YAML array.')
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceEdgeDatastoreAccess(service, index, datastoreIndex)
+  );
+}
+
+function validateServiceEdgeDatastoreAccess(
+  value: unknown,
+  index: number,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const runtime = readStringField(value, 'runtime');
+
+  if (runtime === null || !EDGE_RUNTIMES.has(runtime)) {
+    return [];
+  }
+
+  const directDatastoreAccess = value.direct_datastore_access;
+
+  if (!Array.isArray(directDatastoreAccess)) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  return directDatastoreAccess.flatMap((datastoreId, datastoreIndexInService) => {
+    if (typeof datastoreId !== 'string') {
+      return [];
+    }
+
+    const normalizedDatastoreId = datastoreId.trim();
+    const datastore = datastoreIndex.byId.get(normalizedDatastoreId);
+
+    if (
+      datastore === undefined ||
+      datastore.kind === null ||
+      !EDGE_FORBIDDEN_DATASTORE_KINDS.has(datastore.kind)
+    ) {
+      return [];
+    }
+
+    return [
+      createDataAccessDiagnostic(
+        `${servicePath}.direct_datastore_access[${datastoreIndexInService}]`,
+        `Service with runtime \`${runtime}\` must not directly access \`${datastore.kind}\` datastore \`${normalizedDatastoreId}\`.`
+      )
+    ];
+  });
+}
+
+function getServiceDiagnosticPath(value: Record<string, unknown>, index: number): string {
+  const id = readStringField(value, 'id');
+
+  return id === null ? `services[${index}]` : `services[${index}:${id}]`;
+}
+
+function createDataAccessDiagnostic(path: string, message: string): Diagnostic {
+  return {
+    ruleId: 'ZDP-DATA-004',
+    severity: 'error',
+    file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function readStringField(value: Record<string, unknown>, field: string): string | null {
+  const candidate = value[field];
+
+  return typeof candidate === 'string' && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
