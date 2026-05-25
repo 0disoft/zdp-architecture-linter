@@ -1,5 +1,10 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
+import { loadArchitectureGraph } from './architecture-graph-loader.ts';
+import {
+  createArchitectureGraphReport,
+  formatArchitectureGraphReportText
+} from './architecture-graph-report.ts';
 import {
   formatDiagnostic,
   hasErrors,
@@ -7,8 +12,17 @@ import {
 } from './diagnostics.ts';
 import { validateArchitecture } from './validation.ts';
 
-interface ParsedCommand {
+type ParsedCommand = ParsedValidateCommand | ParsedGraphCommand;
+
+interface ParsedValidateCommand {
   readonly name: 'validate';
+  readonly architectureRoot: string;
+  readonly repositoryRoot?: string;
+  readonly json: boolean;
+}
+
+interface ParsedGraphCommand {
+  readonly name: 'graph';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly json: boolean;
@@ -23,11 +37,26 @@ async function main(argv: readonly string[]): Promise<number> {
   }
 
   try {
+    if (command.name === 'graph') {
+      const graph = await loadArchitectureGraph({
+        architectureRoot: command.architectureRoot,
+        repositoryRoot: command.repositoryRoot
+      });
+      const report = createArchitectureGraphReport(graph);
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatArchitectureGraphReportText(report));
+      }
+
+      return 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
     });
-
     printResult(result, command.json);
 
     return hasErrors(result) ? 1 : 0;
@@ -40,7 +69,7 @@ async function main(argv: readonly string[]): Promise<number> {
 function parseCommand(argv: readonly string[]): ParsedCommand | null {
   const [commandName, ...rest] = argv;
 
-  if (commandName !== 'validate') {
+  if (commandName !== 'validate' && commandName !== 'graph') {
     return null;
   }
 
@@ -51,7 +80,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   }
 
   return {
-    name: 'validate',
+    name: commandName,
     architectureRoot: resolve(architecture),
     repositoryRoot: readOptionalResolvedPath(rest, '--repository'),
     json: rest.includes('--json')
@@ -94,7 +123,11 @@ function printResult(result: ValidationResult, json: boolean): void {
 
 function printUsage(): void {
   console.error(
-    'Usage: zdp-arch validate --architecture <path> [--repository <path>] [--json]'
+    [
+      'Usage:',
+      '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch graph --architecture <path> [--repository <path>] [--json]'
+    ].join('\n')
   );
 }
 
