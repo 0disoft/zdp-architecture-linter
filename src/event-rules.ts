@@ -1,5 +1,6 @@
 import type { DataClassIndex } from './data-class-rules.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import type { RepositoryIndex } from './repository-rules.ts';
 
 const DATA_CLASSES_FILE = 'catalogs/data-classes.yaml';
 const EVENTS_FILE = 'catalogs/events.yaml';
@@ -87,6 +88,32 @@ export function validateEventDataClassReferences(
 
   return events.flatMap((event, index) =>
     validateEventDataClassRecord(event, index, dataClassIndex)
+  );
+}
+
+export function validateEventRepositoryReferences(
+  value: unknown,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createEventRepositoryDiagnostic(
+        'events',
+        '`events.yaml` must be a YAML object with an events array.'
+      )
+    ];
+  }
+
+  const events = value.events;
+
+  if (!Array.isArray(events)) {
+    return [
+      createEventRepositoryDiagnostic('events', '`events` must be a YAML array.')
+    ];
+  }
+
+  return events.flatMap((event, index) =>
+    validateEventRepositoryRecord(event, index, repositoryIndex)
   );
 }
 
@@ -201,6 +228,114 @@ function validateEventDataClassRecord(
   });
 }
 
+function validateEventRepositoryRecord(
+  value: unknown,
+  index: number,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createEventRepositoryDiagnostic(
+        `events[${index}]`,
+        'Event entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const eventPath = getEventDiagnosticPath(value, index);
+  const ownerRepo = readStringField(value, 'owner_repo');
+
+  return [
+    ...validateEventOwnerRepo(ownerRepo, eventPath, repositoryIndex),
+    ...validateEventRepositoryArray(
+      value,
+      'emitted_by',
+      eventPath,
+      repositoryIndex
+    ),
+    ...validateEventRepositoryArray(
+      value,
+      'consumed_by',
+      eventPath,
+      repositoryIndex
+    )
+  ];
+}
+
+function validateEventOwnerRepo(
+  ownerRepo: string | null,
+  eventPath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  if (ownerRepo === null) {
+    return [
+      createEventRepositoryDiagnostic(
+        `${eventPath}.owner_repo`,
+        'Event entry is missing required field `owner_repo`.'
+      )
+    ];
+  }
+
+  if (!repositoryIndex.byName.has(ownerRepo)) {
+    return [
+      createEventRepositoryDiagnostic(
+        `${eventPath}.owner_repo`,
+        `Event references unknown owner repository \`${ownerRepo}\`.`
+      )
+    ];
+  }
+
+  return [];
+}
+
+function validateEventRepositoryArray(
+  value: Record<string, unknown>,
+  field: 'emitted_by' | 'consumed_by',
+  eventPath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  const repositoryRefs = value[field];
+
+  if (repositoryRefs === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(repositoryRefs)) {
+    return [
+      createEventRepositoryDiagnostic(
+        `${eventPath}.${field}`,
+        `\`${field}\` must be a YAML array when present.`
+      )
+    ];
+  }
+
+  return repositoryRefs.flatMap((repositoryName, repositoryIndexInEvent) => {
+    const path = `${eventPath}.${field}[${repositoryIndexInEvent}]`;
+
+    if (typeof repositoryName !== 'string' || repositoryName.trim().length === 0) {
+      return [
+        createEventRepositoryDiagnostic(
+          path,
+          `${field} entry must be a non-empty repository or logical boundary id.`
+        )
+      ];
+    }
+
+    const normalizedRepositoryName = repositoryName.trim();
+
+    if (!repositoryIndex.byName.has(normalizedRepositoryName)) {
+      return [
+        createEventRepositoryDiagnostic(
+          path,
+          `Event references unknown ${field} repository or logical boundary \`${normalizedRepositoryName}\`.`
+        )
+      ];
+    }
+
+    return [];
+  });
+}
+
 function validateDataClassDeletionEventRecord(
   value: unknown,
   index: number,
@@ -283,6 +418,16 @@ function createDataClassEventDiagnostic(path: string, message: string): Diagnost
 function createEventDiagnostic(path: string, message: string): Diagnostic {
   return {
     ruleId: 'ZDP-REF-007',
+    severity: 'error',
+    file: EVENTS_FILE,
+    path,
+    message
+  };
+}
+
+function createEventRepositoryDiagnostic(path: string, message: string): Diagnostic {
+  return {
+    ruleId: 'ZDP-REF-008',
     severity: 'error',
     file: EVENTS_FILE,
     path,

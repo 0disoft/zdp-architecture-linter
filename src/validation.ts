@@ -16,7 +16,8 @@ import {
   buildEventIndex,
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
-  validateEventDataClassReferences
+  validateEventDataClassReferences,
+  validateEventRepositoryReferences
 } from './event-rules.ts';
 import {
   buildExternalProviderIndex,
@@ -58,6 +59,7 @@ export async function validateArchitecture(
       ),
       ...validateEventCatalog(catalogs.events),
       ...validateEventDataClassReferences(catalogs.events, dataClassIndex),
+      ...validateEventRepositoryReferences(catalogs.events, repositoryIndex),
       ...validateDataClassDeletionEventReferences(catalogs.dataClasses, eventIndex),
       ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),

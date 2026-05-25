@@ -4,8 +4,10 @@ import {
   buildEventIndex,
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
-  validateEventDataClassReferences
+  validateEventDataClassReferences,
+  validateEventRepositoryReferences
 } from '../src/event-rules.ts';
+import { buildRepositoryIndex } from '../src/repository-rules.ts';
 
 describe('event catalog', () => {
   test('passes when events have ids', () => {
@@ -37,6 +39,139 @@ describe('event catalog', () => {
         file: 'catalogs/events.yaml',
         path: 'events[0].id',
         message: 'Event entry is missing required field `id`.'
+      }
+    ]);
+  });
+});
+
+describe('event repository references', () => {
+  test('passes when event repository references exist in the repository catalog', () => {
+    const diagnostics = validateEventRepositoryReferences(
+      {
+        events: [
+          {
+            id: 'deletion.request.created',
+            owner_repo: 'zdp-core-platform',
+            emitted_by: ['zdp-core-accounts'],
+            consumed_by: ['zdp-core-audit']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [
+          createRepository({ name: 'zdp-core-platform' }),
+          createRepository({ name: 'zdp-core-accounts', repo_stage: 'logical_only' }),
+          createRepository({ name: 'zdp-core-audit', repo_stage: 'logical_only' })
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when owner repo is missing', () => {
+    const diagnostics = validateEventRepositoryReferences(
+      {
+        events: [
+          {
+            id: 'deletion.request.created',
+            emitted_by: ['zdp-core-accounts']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-accounts' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-008',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:deletion.request.created].owner_repo',
+        message: 'Event entry is missing required field `owner_repo`.'
+      }
+    ]);
+  });
+
+  test('fails when owner repo references an unknown repository', () => {
+    const diagnostics = validateEventRepositoryReferences(
+      {
+        events: [
+          {
+            id: 'deletion.request.created',
+            owner_repo: 'zdp-ghost-platform'
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-platform' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-008',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:deletion.request.created].owner_repo',
+        message: 'Event references unknown owner repository `zdp-ghost-platform`.'
+      }
+    ]);
+  });
+
+  test('fails when emitted_by references an unknown repository', () => {
+    const diagnostics = validateEventRepositoryReferences(
+      {
+        events: [
+          {
+            id: 'deletion.request.created',
+            owner_repo: 'zdp-core-platform',
+            emitted_by: ['zdp-ghost-producer']
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-platform' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-008',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:deletion.request.created].emitted_by[0]',
+        message:
+          'Event references unknown emitted_by repository or logical boundary `zdp-ghost-producer`.'
+      }
+    ]);
+  });
+
+  test('fails when consumed_by is not an array', () => {
+    const diagnostics = validateEventRepositoryReferences(
+      {
+        events: [
+          {
+            id: 'deletion.request.created',
+            owner_repo: 'zdp-core-platform',
+            consumed_by: 'zdp-core-audit'
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-platform' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-008',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:deletion.request.created].consumed_by',
+        message: '`consumed_by` must be a YAML array when present.'
       }
     ]);
   });
@@ -87,6 +222,22 @@ describe('event data class references', () => {
     ]);
   });
 });
+
+function createRepository(
+  overrides: Partial<Record<string, unknown>>
+): Record<string, unknown> {
+  return {
+    name: 'zdp-example',
+    status: 'reserved',
+    repo_stage: 'deploy_unit',
+    kind: 'deploy_unit',
+    area: 'core',
+    purpose: 'Example repository.',
+    owner: '0disoft',
+    risk_level: 'medium',
+    ...overrides
+  };
+}
 
 describe('data class deletion event references', () => {
   test('passes when deletion events reference known events', () => {
