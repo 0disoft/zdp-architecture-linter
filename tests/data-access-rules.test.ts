@@ -1,11 +1,32 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildLedgerDatastoreDependencyPolicy,
   validateAiDirectNonOwnedDatastoreAccess,
   validateEdgeRuntimeDirectDatastoreAccess,
+  validateLedgerDatastoreDependencyAccess,
   validateProductLikeDirectSensitiveDatastoreAccess
 } from '../src/data-access-rules.ts';
 import { buildDatastoreIndex } from '../src/datastore-rules.ts';
 import { buildRepositoryIndex } from '../src/repository-rules.ts';
+
+const ledgerDatastoreDependencyPolicy = buildLedgerDatastoreDependencyPolicy({
+  rules: [
+    {
+      id: 'ZDP-DATA-002',
+      condition: {
+        all: [
+          'service.repo in [zdp-web-apps, zdp-web-public, zdp-products-lab]',
+          'dependencies.datastores contains ledger_postgres'
+        ]
+      },
+      assertions: {
+        forbid_values: {
+          'dependencies.datastores': ['ledger_postgres']
+        }
+      }
+    }
+  ]
+});
 
 describe('product-like direct sensitive datastore access', () => {
   test('passes when a frontend service does not directly access sensitive datastores', () => {
@@ -168,6 +189,131 @@ describe('product-like direct sensitive datastore access', () => {
     );
 
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('ledger datastore dependency access', () => {
+  test('passes when a frontend service depends on money APIs instead of ledger datastores', () => {
+    const diagnostics = validateLedgerDatastoreDependencyAccess(
+      {
+        services: [
+          {
+            id: 'app-console',
+            repo: 'zdp-web-apps',
+            dependencies: {
+              services: ['money-api']
+            }
+          }
+        ]
+      },
+      ledgerDatastoreDependencyPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when a money service depends on ledger datastores', () => {
+    const diagnostics = validateLedgerDatastoreDependencyAccess(
+      {
+        services: [
+          {
+            id: 'money-ledger-writer',
+            repo: 'zdp-money-platform',
+            dependencies: {
+              datastores: ['ledger_postgres']
+            }
+          }
+        ]
+      },
+      ledgerDatastoreDependencyPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when a web app depends directly on the ledger datastore', () => {
+    const diagnostics = validateLedgerDatastoreDependencyAccess(
+      {
+        services: [
+          {
+            id: 'app-console',
+            repo: 'zdp-web-apps',
+            dependencies: {
+              datastores: ['ledger_postgres']
+            }
+          }
+        ]
+      },
+      ledgerDatastoreDependencyPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:app-console].dependencies.datastores[0]',
+        message:
+          'Service `app-console` in repository `zdp-web-apps` must not depend directly on datastore `ledger_postgres`.'
+      }
+    ]);
+  });
+
+  test('fails when a nested service repo uses the lab repository', () => {
+    const diagnostics = validateLedgerDatastoreDependencyAccess(
+      {
+        services: [
+          {
+            id: 'lab-checkout',
+            service: {
+              repo: 'zdp-products-lab'
+            },
+            dependencies: {
+              datastores: ['ledger_postgres']
+            }
+          }
+        ]
+      },
+      ledgerDatastoreDependencyPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:lab-checkout].dependencies.datastores[0]',
+        message:
+          'Service `lab-checkout` in repository `zdp-products-lab` must not depend directly on datastore `ledger_postgres`.'
+      }
+    ]);
+  });
+
+  test('fails when datastore dependencies are not an array on a forbidden repo', () => {
+    const diagnostics = validateLedgerDatastoreDependencyAccess(
+      {
+        services: [
+          {
+            id: 'public-web',
+            repo: 'zdp-web-public',
+            dependencies: {
+              datastores: 'ledger_postgres'
+            }
+          }
+        ]
+      },
+      ledgerDatastoreDependencyPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:public-web].dependencies.datastores',
+        message: '`dependencies.datastores` must be a YAML array when present.'
+      }
+    ]);
   });
 });
 

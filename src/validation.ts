@@ -16,8 +16,10 @@ import {
   validateServiceDataOwnershipContracts
 } from './data-class-rules.ts';
 import {
+  buildLedgerDatastoreDependencyPolicy,
   validateAiDirectNonOwnedDatastoreAccess,
   validateEdgeRuntimeDirectDatastoreAccess,
+  validateLedgerDatastoreDependencyAccess,
   validateProductLikeDirectSensitiveDatastoreAccess
 } from './data-access-rules.ts';
 import {
@@ -91,6 +93,9 @@ export async function validateArchitecture(
   const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy(
     catalogs.dataAccessRules
   );
+  const ledgerDatastoreDependencyPolicy = buildLedgerDatastoreDependencyPolicy(
+    catalogs.dataAccessRules
+  );
   const aiUserDataPolicy = buildAiUserDataPolicy(catalogs.aiDataAccessRules);
   const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
     catalogs.aiDataAccessRules
@@ -145,6 +150,10 @@ export async function validateArchitecture(
         catalogs.services,
         repositoryIndex,
         datastoreIndex
+      ),
+      ...validateLedgerDatastoreDependencyAccess(
+        catalogs.services,
+        ledgerDatastoreDependencyPolicy
       ),
       ...validateAiDirectNonOwnedDatastoreAccess(
         catalogs.services,

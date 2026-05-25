@@ -3,6 +3,7 @@ import type { Diagnostic } from './diagnostics.ts';
 import type { RepositoryIndex } from './repository-rules.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
+const LEDGER_DATASTORE_DEPENDENCY_RULE_ID = 'ZDP-DATA-002';
 
 const PRODUCT_LIKE_SERVICE_REPOSITORY_AREAS = new Set([
   'frontend',
@@ -20,6 +21,48 @@ const EDGE_RUNTIMES = new Set([
 ]);
 
 const EDGE_FORBIDDEN_DATASTORE_KINDS = new Set(['postgresql', 'secure-storage']);
+
+const EMPTY_LEDGER_DATASTORE_DEPENDENCY_POLICY: LedgerDatastoreDependencyPolicy = {
+  enabled: false,
+  forbiddenRepos: [],
+  forbiddenDatastores: []
+};
+
+export interface LedgerDatastoreDependencyPolicy {
+  readonly enabled: boolean;
+  readonly forbiddenRepos: readonly string[];
+  readonly forbiddenDatastores: readonly string[];
+}
+
+export function buildLedgerDatastoreDependencyPolicy(
+  value: unknown
+): LedgerDatastoreDependencyPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_LEDGER_DATASTORE_DEPENDENCY_POLICY;
+  }
+
+  const ledgerDependencyRule = findRuleById(
+    value.rules,
+    LEDGER_DATASTORE_DEPENDENCY_RULE_ID
+  );
+
+  if (ledgerDependencyRule === undefined) {
+    return EMPTY_LEDGER_DATASTORE_DEPENDENCY_POLICY;
+  }
+
+  const assertions = isRecord(ledgerDependencyRule.assertions)
+    ? ledgerDependencyRule.assertions
+    : {};
+  const forbidValues = isRecord(assertions.forbid_values)
+    ? assertions.forbid_values
+    : {};
+
+  return {
+    enabled: true,
+    forbiddenRepos: readServiceRepoConditionValues(ledgerDependencyRule.condition),
+    forbiddenDatastores: readStringArray(forbidValues['dependencies.datastores'])
+  };
+}
 
 export function validateProductLikeDirectSensitiveDatastoreAccess(
   value: unknown,
@@ -55,6 +98,41 @@ export function validateProductLikeDirectSensitiveDatastoreAccess(
       repositoryIndex,
       datastoreIndex
     )
+  );
+}
+
+export function validateLedgerDatastoreDependencyAccess(
+  value: unknown,
+  policy: LedgerDatastoreDependencyPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createDataAccessDiagnostic(
+        LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceLedgerDatastoreDependencyAccess(service, index, policy)
   );
 }
 
@@ -198,6 +276,77 @@ function validateServiceProductLikeSensitiveDatastoreAccess(
   });
 }
 
+function validateServiceLedgerDatastoreDependencyAccess(
+  value: unknown,
+  index: number,
+  policy: LedgerDatastoreDependencyPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createDataAccessDiagnostic(
+        LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const serviceRepo = readStringAtPreferredPaths(value, ['service.repo', 'repo']);
+
+  if (
+    serviceRepo.value === null ||
+    !policy.forbiddenRepos.includes(serviceRepo.value)
+  ) {
+    return [];
+  }
+
+  const datastoreDependencies = readValueAtPath(value, 'dependencies.datastores');
+
+  if (datastoreDependencies === undefined) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  if (!Array.isArray(datastoreDependencies)) {
+    return [
+      createDataAccessDiagnostic(
+        LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+        `${servicePath}.dependencies.datastores`,
+        '`dependencies.datastores` must be a YAML array when present.'
+      )
+    ];
+  }
+
+  return datastoreDependencies.flatMap((datastoreId, datastoreIndexInService) => {
+    const path = `${servicePath}.dependencies.datastores[${datastoreIndexInService}]`;
+
+    if (typeof datastoreId !== 'string' || datastoreId.trim().length === 0) {
+      return [
+        createDataAccessDiagnostic(
+          LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+          path,
+          'Dependency datastore entry must be a non-empty datastore id.'
+        )
+      ];
+    }
+
+    const normalizedDatastoreId = datastoreId.trim();
+
+    if (!policy.forbiddenDatastores.includes(normalizedDatastoreId)) {
+      return [];
+    }
+
+    return [
+      createDataAccessDiagnostic(
+        LEDGER_DATASTORE_DEPENDENCY_RULE_ID,
+        path,
+        `Service \`${getServiceName(value, index)}\` in repository \`${serviceRepo.value}\` must not depend directly on datastore \`${normalizedDatastoreId}\`.`
+      )
+    ];
+  });
+}
+
 function validateServiceAiDirectNonOwnedDatastoreAccess(
   value: unknown,
   index: number,
@@ -330,7 +479,11 @@ function getServiceName(value: Record<string, unknown>, index: number): string {
 }
 
 function createDataAccessDiagnostic(
-  ruleId: 'ZDP-AI-003' | 'ZDP-DATA-001' | 'ZDP-DATA-004',
+  ruleId:
+    | 'ZDP-AI-003'
+    | 'ZDP-DATA-001'
+    | 'ZDP-DATA-002'
+    | 'ZDP-DATA-004',
   path: string,
   message: string
 ): Diagnostic {
@@ -341,6 +494,98 @@ function createDataAccessDiagnostic(
     path,
     message
   };
+}
+
+function readServiceRepoConditionValues(condition: unknown): readonly string[] {
+  const expression = readConditionExpressions(condition).find((entry) =>
+    entry.startsWith('service.repo in [')
+  );
+
+  if (expression === undefined || !expression.endsWith(']')) {
+    return [];
+  }
+
+  return expression
+    .slice('service.repo in ['.length, -1)
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function readConditionExpressions(value: unknown): readonly string[] {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  if (typeof value.expression === 'string') {
+    return [value.expression.trim()].filter((entry) => entry.length > 0);
+  }
+
+  if (Array.isArray(value.all)) {
+    return readStringArray(value.all);
+  }
+
+  if (Array.isArray(value.any)) {
+    return readStringArray(value.any);
+  }
+
+  return [];
+}
+
+function readStringAtPreferredPaths(
+  value: Record<string, unknown>,
+  paths: readonly string[]
+): { readonly path: string; readonly value: string | null } {
+  for (const path of paths) {
+    const pathValue = readStringAtPath(value, path);
+
+    if (pathValue !== null) {
+      return { path, value: pathValue };
+    }
+  }
+
+  return { path: paths[0] ?? 'unknown', value: null };
+}
+
+function readStringAtPath(
+  value: Record<string, unknown>,
+  path: string
+): string | null {
+  const candidate = readValueAtPath(value, path);
+
+  return typeof candidate === 'string' && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
+}
+
+function readValueAtPath(value: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+
+    return current[segment];
+  }, value);
+}
+
+function readStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
+}
+
+function findRuleById(
+  rules: readonly unknown[],
+  ruleId: string
+): Record<string, unknown> | undefined {
+  return rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === ruleId
+  );
 }
 
 function readStringField(value: Record<string, unknown>, field: string): string | null {
