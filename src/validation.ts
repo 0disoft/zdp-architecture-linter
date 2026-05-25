@@ -7,10 +7,12 @@ import {
 } from './ai-contract-rules.ts';
 import {
   buildDataClassIndex,
+  buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
   validateDatastoreDataClassReferences,
+  validateServiceDataCatalogReferences,
   validateServiceDataOwnershipContracts
 } from './data-class-rules.ts';
 import {
@@ -83,6 +85,9 @@ export async function validateArchitecture(
   );
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
   const providerWebhookPolicy = buildProviderWebhookPolicy(catalogs.providerRules);
+  const serviceDataCatalogPolicy = buildServiceDataCatalogPolicy(
+    catalogs.dataAccessRules
+  );
   const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy(
     catalogs.dataAccessRules
   );
@@ -109,6 +114,12 @@ export async function validateArchitecture(
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
       ...validateDatastoreDataClassReferences(catalogs.datastores, dataClassIndex),
       ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
+      ...validateServiceDataCatalogReferences(
+        catalogs.services,
+        serviceDataCatalogPolicy,
+        dataClassIndex,
+        datastoreIndex
+      ),
       ...validateServiceDataOwnershipContracts(
         catalogs.services,
         serviceDataOwnershipPolicy

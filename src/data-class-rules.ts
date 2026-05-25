@@ -4,7 +4,14 @@ import type { DatastoreIndex } from './datastore-rules.ts';
 const DATA_CLASSES_FILE = 'catalogs/data-classes.yaml';
 const DATASTORES_FILE = 'catalogs/datastores.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
+const SERVICE_DATA_CATALOG_RULE_ID = 'ZDP-DATA-003';
 const SERVICE_DATA_OWNERSHIP_RULE_ID = 'ZDP-DATA-005';
+
+const EMPTY_SERVICE_DATA_CATALOG_POLICY: ServiceDataCatalogPolicy = {
+  enabled: false,
+  validateClasses: false,
+  validateDatastores: false
+};
 
 const EMPTY_SERVICE_DATA_OWNERSHIP_POLICY: ServiceDataOwnershipPolicy = {
   enabled: false,
@@ -18,6 +25,12 @@ export interface DataClassRecord {
 
 export interface DataClassIndex {
   readonly byId: ReadonlyMap<string, DataClassRecord>;
+}
+
+export interface ServiceDataCatalogPolicy {
+  readonly enabled: boolean;
+  readonly validateClasses: boolean;
+  readonly validateDatastores: boolean;
 }
 
 export interface ServiceDataOwnershipPolicy {
@@ -53,6 +66,33 @@ export function buildDataClassIndex(value: unknown): DataClassIndex {
   }
 
   return { byId: new Map(entries) };
+}
+
+export function buildServiceDataCatalogPolicy(
+  value: unknown
+): ServiceDataCatalogPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_SERVICE_DATA_CATALOG_POLICY;
+  }
+
+  const dataCatalogRule = findRuleById(value.rules, SERVICE_DATA_CATALOG_RULE_ID);
+
+  if (dataCatalogRule === undefined) {
+    return EMPTY_SERVICE_DATA_CATALOG_POLICY;
+  }
+
+  const assertions = isRecord(dataCatalogRule.assertions)
+    ? dataCatalogRule.assertions
+    : {};
+  const requireCatalogRefs = isRecord(assertions.require_catalog_refs)
+    ? assertions.require_catalog_refs
+    : {};
+
+  return {
+    enabled: true,
+    validateClasses: 'data.classes' in requireCatalogRefs,
+    validateDatastores: 'data.datastores' in requireCatalogRefs
+  };
 }
 
 export function buildServiceDataOwnershipPolicy(
@@ -140,6 +180,47 @@ export function validateServiceDataOwnershipContracts(
   );
 }
 
+export function validateServiceDataCatalogReferences(
+  value: unknown,
+  policy: ServiceDataCatalogPolicy,
+  dataClassIndex: DataClassIndex,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createServiceDataCatalogDiagnostic(
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createServiceDataCatalogDiagnostic(
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceDataCatalogRecord(
+      service,
+      index,
+      policy,
+      dataClassIndex,
+      datastoreIndex
+    )
+  );
+}
+
 export function validateDatastoreDataClassReferences(
   value: unknown,
   dataClassIndex: DataClassIndex
@@ -196,6 +277,102 @@ export function validateDataClassAllowedDatastoreReferences(
   return dataClasses.flatMap((dataClass, index) =>
     validateDataClassAllowedDatastoreRecord(dataClass, index, datastoreIndex)
   );
+}
+
+function validateServiceDataCatalogRecord(
+  value: unknown,
+  index: number,
+  policy: ServiceDataCatalogPolicy,
+  dataClassIndex: DataClassIndex,
+  datastoreIndex: DatastoreIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceDataCatalogDiagnostic(
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  if (policy.validateClasses) {
+    diagnostics.push(
+      ...validateServiceDataCatalogArray(
+        value,
+        index,
+        'data.classes',
+        'data class',
+        dataClassIndex.byId
+      )
+    );
+  }
+
+  if (policy.validateDatastores) {
+    diagnostics.push(
+      ...validateServiceDataCatalogArray(
+        value,
+        index,
+        'data.datastores',
+        'datastore',
+        datastoreIndex.byId
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateServiceDataCatalogArray(
+  value: Record<string, unknown>,
+  index: number,
+  fieldPath: string,
+  label: string,
+  indexById: ReadonlyMap<string, unknown>
+): readonly Diagnostic[] {
+  const candidate = readValueAtPath(value, fieldPath);
+
+  if (candidate === undefined) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  if (!Array.isArray(candidate)) {
+    return [
+      createServiceDataCatalogDiagnostic(
+        `${servicePath}.${fieldPath}`,
+        `\`${fieldPath}\` must be a YAML array when present.`
+      )
+    ];
+  }
+
+  return candidate.flatMap((entry, entryIndex) => {
+    const path = `${servicePath}.${fieldPath}[${entryIndex}]`;
+
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      return [
+        createServiceDataCatalogDiagnostic(
+          path,
+          `Service ${label} entry must be a non-empty ${label} id.`
+        )
+      ];
+    }
+
+    const normalizedId = entry.trim();
+
+    if (!indexById.has(normalizedId)) {
+      return [
+        createServiceDataCatalogDiagnostic(
+          path,
+          `Service references unknown ${label} \`${normalizedId}\`.`
+        )
+      ];
+    }
+
+    return [];
+  });
 }
 
 function validateServiceDataOwnershipRecord(
@@ -457,6 +634,19 @@ function createDatastoreDataClassDiagnostic(path: string, message: string): Diag
     ruleId: 'ZDP-REF-006',
     severity: 'error',
     file: DATASTORES_FILE,
+    path,
+    message
+  };
+}
+
+function createServiceDataCatalogDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: SERVICE_DATA_CATALOG_RULE_ID,
+    severity: 'error',
+    file: SERVICES_FILE,
     path,
     message
   };

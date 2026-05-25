@@ -1,13 +1,29 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildDataClassIndex,
+  buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
   validateDatastoreDataClassReferences,
+  validateServiceDataCatalogReferences,
   validateServiceDataOwnershipContracts
 } from '../src/data-class-rules.ts';
 import { buildDatastoreIndex } from '../src/datastore-rules.ts';
+
+const serviceDataCatalogPolicy = buildServiceDataCatalogPolicy({
+  rules: [
+    {
+      id: 'ZDP-DATA-003',
+      assertions: {
+        require_catalog_refs: {
+          'data.classes': 'catalogs/data-classes.yaml:data_classes[].id',
+          'data.datastores': 'catalogs/datastores.yaml:datastores[].id'
+        }
+      }
+    }
+  ]
+});
 
 const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy({
   rules: [
@@ -18,6 +34,128 @@ const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy({
       }
     }
   ]
+});
+
+describe('service data catalog references', () => {
+  test('passes when service data classes and datastores exist in catalogs', () => {
+    const diagnostics = validateServiceDataCatalogReferences(
+      {
+        services: [
+          {
+            id: 'core-api',
+            data: {
+              classes: ['identity'],
+              datastores: ['core_postgres']
+            }
+          }
+        ]
+      },
+      serviceDataCatalogPolicy,
+      buildDataClassIndex({
+        data_classes: [{ id: 'identity' }]
+      }),
+      buildDatastoreIndex({
+        datastores: [{ id: 'core_postgres', owner_repo: 'zdp-core-platform' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when service data fields are absent', () => {
+    const diagnostics = validateServiceDataCatalogReferences(
+      {
+        services: [
+          {
+            id: 'public-web'
+          }
+        ]
+      },
+      serviceDataCatalogPolicy,
+      buildDataClassIndex({ data_classes: [] }),
+      buildDatastoreIndex({ datastores: [] })
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service data catalog references are unknown', () => {
+    const diagnostics = validateServiceDataCatalogReferences(
+      {
+        services: [
+          {
+            id: 'core-api',
+            data: {
+              classes: ['identity', 'ghost-class'],
+              datastores: ['core_postgres', 'ghost_postgres']
+            }
+          }
+        ]
+      },
+      serviceDataCatalogPolicy,
+      buildDataClassIndex({
+        data_classes: [{ id: 'identity' }]
+      }),
+      buildDatastoreIndex({
+        datastores: [{ id: 'core_postgres', owner_repo: 'zdp-core-platform' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.classes[1]',
+        message: 'Service references unknown data class `ghost-class`.'
+      },
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.datastores[1]',
+        message: 'Service references unknown datastore `ghost_postgres`.'
+      }
+    ]);
+  });
+
+  test('fails when service data references are not arrays', () => {
+    const diagnostics = validateServiceDataCatalogReferences(
+      {
+        services: [
+          {
+            id: 'core-api',
+            data: {
+              classes: 'identity',
+              datastores: 'core_postgres'
+            }
+          }
+        ]
+      },
+      serviceDataCatalogPolicy,
+      buildDataClassIndex({ data_classes: [{ id: 'identity' }] }),
+      buildDatastoreIndex({
+        datastores: [{ id: 'core_postgres', owner_repo: 'zdp-core-platform' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.classes',
+        message: '`data.classes` must be a YAML array when present.'
+      },
+      {
+        ruleId: 'ZDP-DATA-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.datastores',
+        message: '`data.datastores` must be a YAML array when present.'
+      }
+    ]);
+  });
 });
 
 describe('data class catalog', () => {
