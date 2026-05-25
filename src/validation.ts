@@ -7,9 +7,11 @@ import {
 } from './ai-contract-rules.ts';
 import {
   buildDataClassIndex,
+  buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
-  validateDatastoreDataClassReferences
+  validateDatastoreDataClassReferences,
+  validateServiceDataOwnershipContracts
 } from './data-class-rules.ts';
 import {
   validateAiDirectNonOwnedDatastoreAccess,
@@ -71,6 +73,9 @@ export async function validateArchitecture(
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
   const providerWebhookPolicy = buildProviderWebhookPolicy(catalogs.providerRules);
+  const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy(
+    catalogs.dataAccessRules
+  );
   const aiUserDataPolicy = buildAiUserDataPolicy(catalogs.aiDataAccessRules);
   const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
     catalogs.aiDataAccessRules
@@ -94,6 +99,10 @@ export async function validateArchitecture(
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
       ...validateDatastoreDataClassReferences(catalogs.datastores, dataClassIndex),
       ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
+      ...validateServiceDataOwnershipContracts(
+        catalogs.services,
+        serviceDataOwnershipPolicy
+      ),
       ...validateServiceExternalDependencyReferences(
         catalogs.services,
         externalProviderIndex

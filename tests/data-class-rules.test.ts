@@ -1,11 +1,24 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildDataClassIndex,
+  buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
-  validateDatastoreDataClassReferences
+  validateDatastoreDataClassReferences,
+  validateServiceDataOwnershipContracts
 } from '../src/data-class-rules.ts';
 import { buildDatastoreIndex } from '../src/datastore-rules.ts';
+
+const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy({
+  rules: [
+    {
+      id: 'ZDP-DATA-005',
+      assertions: {
+        require_fields: ['data.owner_domain', 'data.datastores']
+      }
+    }
+  ]
+});
 
 describe('data class catalog', () => {
   test('passes when data classes have ids', () => {
@@ -37,6 +50,83 @@ describe('data class catalog', () => {
         file: 'catalogs/data-classes.yaml',
         path: 'data_classes[0].id',
         message: 'Data class entry is missing required field `id`.'
+      }
+    ]);
+  });
+});
+
+describe('service data ownership contracts', () => {
+  test('passes when data classes include owner domain and datastores', () => {
+    const diagnostics = validateServiceDataOwnershipContracts(
+      {
+        services: [
+          {
+            id: 'core-api',
+            data: {
+              classes: ['identity'],
+              owner_domain: 'core',
+              datastores: ['core_postgres']
+            }
+          }
+        ]
+      },
+      serviceDataOwnershipPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when data classes are empty', () => {
+    const diagnostics = validateServiceDataOwnershipContracts(
+      {
+        services: [
+          {
+            id: 'public-web',
+            data: {
+              classes: []
+            }
+          }
+        ]
+      },
+      serviceDataOwnershipPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when data classes omit ownership fields', () => {
+    const diagnostics = validateServiceDataOwnershipContracts(
+      {
+        services: [
+          {
+            id: 'core-api',
+            data: {
+              classes: ['identity'],
+              owner_domain: '',
+              datastores: []
+            }
+          }
+        ]
+      },
+      serviceDataOwnershipPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-005',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.owner_domain',
+        message:
+          'Service `core-api` declares data classes and must set `data.owner_domain`.'
+      },
+      {
+        ruleId: 'ZDP-DATA-005',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].data.datastores',
+        message:
+          'Service `core-api` declares data classes and must set `data.datastores`.'
       }
     ]);
   });

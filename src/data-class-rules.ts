@@ -3,6 +3,13 @@ import type { DatastoreIndex } from './datastore-rules.ts';
 
 const DATA_CLASSES_FILE = 'catalogs/data-classes.yaml';
 const DATASTORES_FILE = 'catalogs/datastores.yaml';
+const SERVICES_FILE = 'catalogs/services.yaml';
+const SERVICE_DATA_OWNERSHIP_RULE_ID = 'ZDP-DATA-005';
+
+const EMPTY_SERVICE_DATA_OWNERSHIP_POLICY: ServiceDataOwnershipPolicy = {
+  enabled: false,
+  requiredFields: []
+};
 
 export interface DataClassRecord {
   readonly id: string;
@@ -11,6 +18,11 @@ export interface DataClassRecord {
 
 export interface DataClassIndex {
   readonly byId: ReadonlyMap<string, DataClassRecord>;
+}
+
+export interface ServiceDataOwnershipPolicy {
+  readonly enabled: boolean;
+  readonly requiredFields: readonly string[];
 }
 
 export function buildDataClassIndex(value: unknown): DataClassIndex {
@@ -43,6 +55,32 @@ export function buildDataClassIndex(value: unknown): DataClassIndex {
   return { byId: new Map(entries) };
 }
 
+export function buildServiceDataOwnershipPolicy(
+  value: unknown
+): ServiceDataOwnershipPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_SERVICE_DATA_OWNERSHIP_POLICY;
+  }
+
+  const dataOwnershipRule = findRuleById(
+    value.rules,
+    SERVICE_DATA_OWNERSHIP_RULE_ID
+  );
+
+  if (dataOwnershipRule === undefined) {
+    return EMPTY_SERVICE_DATA_OWNERSHIP_POLICY;
+  }
+
+  const assertions = isRecord(dataOwnershipRule.assertions)
+    ? dataOwnershipRule.assertions
+    : {};
+
+  return {
+    enabled: true,
+    requiredFields: readStringArray(assertions.require_fields)
+  };
+}
+
 export function validateDataClassCatalog(value: unknown): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -66,6 +104,39 @@ export function validateDataClassCatalog(value: unknown): readonly Diagnostic[] 
 
   return dataClasses.flatMap((dataClass, index) =>
     validateDataClassRecord(dataClass, index)
+  );
+}
+
+export function validateServiceDataOwnershipContracts(
+  value: unknown,
+  policy: ServiceDataOwnershipPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createServiceDataOwnershipDiagnostic(
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createServiceDataOwnershipDiagnostic(
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceDataOwnershipRecord(service, index, policy)
   );
 }
 
@@ -124,6 +195,41 @@ export function validateDataClassAllowedDatastoreReferences(
 
   return dataClasses.flatMap((dataClass, index) =>
     validateDataClassAllowedDatastoreRecord(dataClass, index, datastoreIndex)
+  );
+}
+
+function validateServiceDataOwnershipRecord(
+  value: unknown,
+  index: number,
+  policy: ServiceDataOwnershipPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceDataOwnershipDiagnostic(
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const dataClasses = readStringArrayAtPath(value, 'data.classes');
+
+  if (dataClasses.length === 0) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceName = getServiceName(value, index);
+
+  return policy.requiredFields.flatMap((field) =>
+    hasUsableFieldAtPath(value, field)
+      ? []
+      : [
+          createServiceDataOwnershipDiagnostic(
+            `${servicePath}.${field}`,
+            `Service \`${serviceName}\` declares data classes and must set \`${field}\`.`
+          )
+        ]
   );
 }
 
@@ -266,6 +372,54 @@ function validateDatastoreRecord(
   });
 }
 
+function readStringArrayAtPath(
+  value: Record<string, unknown>,
+  path: string
+): readonly string[] {
+  const candidate = readValueAtPath(value, path);
+
+  return Array.isArray(candidate) ? readStringArray(candidate) : [];
+}
+
+function hasUsableFieldAtPath(
+  value: Record<string, unknown>,
+  path: string
+): boolean {
+  const candidate = readValueAtPath(value, path);
+
+  if (typeof candidate === 'string') {
+    return candidate.trim().length > 0;
+  }
+
+  if (Array.isArray(candidate)) {
+    return candidate.some(
+      (entry) => typeof entry === 'string' && entry.trim().length > 0
+    );
+  }
+
+  return candidate !== null && candidate !== undefined;
+}
+
+function readValueAtPath(value: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (!isRecord(current)) {
+      return undefined;
+    }
+
+    return current[segment];
+  }, value);
+}
+
+function findRuleById(
+  rules: readonly unknown[],
+  ruleId: string
+): Record<string, unknown> | undefined {
+  return rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === ruleId
+  );
+}
+
 function getDataClassDiagnosticPath(value: Record<string, unknown>, index: number): string {
   const id = readStringField(value, 'id');
 
@@ -276,6 +430,16 @@ function getDatastoreDiagnosticPath(value: Record<string, unknown>, index: numbe
   const id = readStringField(value, 'id');
 
   return id === null ? `datastores[${index}]` : `datastores[${index}:${id}]`;
+}
+
+function getServiceDiagnosticPath(value: Record<string, unknown>, index: number): string {
+  const id = readStringField(value, 'id');
+
+  return id === null ? `services[${index}]` : `services[${index}:${id}]`;
+}
+
+function getServiceName(value: Record<string, unknown>, index: number): string {
+  return readStringField(value, 'id') ?? `services[${index}]`;
 }
 
 function createDataClassDiagnostic(path: string, message: string): Diagnostic {
@@ -296,6 +460,29 @@ function createDatastoreDataClassDiagnostic(path: string, message: string): Diag
     path,
     message
   };
+}
+
+function createServiceDataOwnershipDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: SERVICE_DATA_OWNERSHIP_RULE_ID,
+    severity: 'error',
+    file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function readStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
 }
 
 function readStringField(value: Record<string, unknown>, field: string): string | null {
