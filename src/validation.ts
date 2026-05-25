@@ -39,6 +39,7 @@ import {
   validateEventDataClassReferences,
   validateEventRepositoryReferences
 } from './event-rules.ts';
+import { validateFixtureExpectations } from './fixture-validation.ts';
 import {
   buildProviderContractPolicy,
   buildExternalProviderIndex,
@@ -117,6 +118,23 @@ export async function validateArchitecture(
     catalogs.tierRules
   );
   const publicApiContractPolicy = buildPublicApiContractPolicy(catalogs.tierRules);
+
+  const fixtureDiagnostics = await validateFixtureExpectations({
+    architectureRoot: input.architectureRoot,
+    repositoryIndex,
+    datastoreIndex,
+    ledgerDatastoreDependencyPolicy,
+    aiUserDataPolicy,
+    aiSensitiveDataPolicy,
+    moneyMovementPolicy,
+    paymentDataFrontendPolicy,
+    creditMonetizationPolicy,
+    providerContractPolicy,
+    providerWebhookPolicy,
+    tierOperationalContractPolicy,
+    tierCriticalControlsPolicy,
+    publicApiContractPolicy
+  });
 
   return {
     diagnostics: [
@@ -201,7 +219,8 @@ export async function validateArchitecture(
       ...validatePublicApiContracts(
         catalogs.services,
         publicApiContractPolicy
-      )
+      ),
+      ...fixtureDiagnostics
     ]
   };
 }
