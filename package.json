@@ -12,6 +12,7 @@
     "validate:architecture": "bun src/cli.ts validate --architecture ../zdp-architecture"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
@@ -19,4 +20,3 @@
     "typescript": "^5.9.3"
   }
 }
-

@@ -67,6 +67,7 @@ import {
   validateServiceDependencyReferences,
   validateServiceRepositoryReferences
 } from './service-rules.ts';
+import { validateServiceSchemaFixtures } from './service-schema-validation.ts';
 import {
   buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
@@ -135,6 +136,9 @@ export async function validateArchitecture(
     tierCriticalControlsPolicy,
     publicApiContractPolicy
   });
+  const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
+    input.architectureRoot
+  );
 
   return {
     diagnostics: [
@@ -220,7 +224,8 @@ export async function validateArchitecture(
         catalogs.services,
         publicApiContractPolicy
       ),
-      ...fixtureDiagnostics
+      ...fixtureDiagnostics,
+      ...serviceSchemaDiagnostics
     ]
   };
 }
