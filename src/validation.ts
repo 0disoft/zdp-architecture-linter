@@ -65,9 +65,11 @@ import {
 import {
   buildServiceIndex,
   validateServiceDependencyReferences,
+  validateRepositoryServiceContractRepositoryReference,
   validateServiceRepositoryReferences
 } from './service-rules.ts';
 import {
+  loadRepositoryServiceContract,
   validateRepositoryServiceContract,
   validateServiceSchemaFixtures
 } from './service-schema-validation.ts';
@@ -150,6 +152,10 @@ export async function validateArchitecture(
           architectureRoot: input.architectureRoot,
           repositoryRoot: input.repositoryRoot
         });
+  const repositoryServiceContract =
+    input.repositoryRoot === undefined
+      ? null
+      : await loadRepositoryServiceContract(input.repositoryRoot);
 
   return {
     diagnostics: [
@@ -237,7 +243,13 @@ export async function validateArchitecture(
       ),
       ...fixtureDiagnostics,
       ...serviceSchemaDiagnostics,
-      ...repositoryServiceDiagnostics
+      ...repositoryServiceDiagnostics,
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceContractRepositoryReference(
+            repositoryServiceContract.value,
+            repositoryIndex
+          ))
     ]
   };
 }

@@ -20,6 +20,11 @@ interface ServiceSchemaFixture {
   readonly expectation: 'pass' | 'fail';
 }
 
+export interface RepositoryServiceContract {
+  readonly file: string;
+  readonly value: unknown;
+}
+
 export async function validateServiceSchemaFixtures(
   architectureRoot: string
 ): Promise<readonly Diagnostic[]> {
@@ -36,28 +41,20 @@ export async function validateRepositoryServiceContract(
   }
 ): Promise<readonly Diagnostic[]> {
   const validate = await compileServiceSchema(input.architectureRoot);
-  const serviceContractPath = join(input.repositoryRoot, SERVICE_CONTRACT_FILE);
-  let source: string;
+  const serviceContract = await loadRepositoryServiceContract(input.repositoryRoot);
 
-  try {
-    source = await readFile(serviceContractPath, 'utf8');
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return [
-        createServiceSchemaDiagnostic(
-          SERVICE_CONTRACT_MISSING_RULE_ID,
-          SERVICE_CONTRACT_FILE,
-          'schema',
-          '`service.yaml` is required when validating a repository root.'
-        )
-      ];
-    }
-
-    throw error;
+  if (serviceContract === null) {
+    return [
+      createServiceSchemaDiagnostic(
+        SERVICE_CONTRACT_MISSING_RULE_ID,
+        SERVICE_CONTRACT_FILE,
+        'schema',
+        '`service.yaml` is required when validating a repository root.'
+      )
+    ];
   }
 
-  const value = parse(source) as unknown;
-  const valid = validate(value);
+  const valid = validate(serviceContract.value);
   const errors = validate.errors ?? [];
 
   return valid
@@ -70,6 +67,28 @@ export async function validateRepositoryServiceContract(
           `Repository service contract is invalid: ${formatSchemaErrors(errors)}`
         )
       ];
+}
+
+export async function loadRepositoryServiceContract(
+  repositoryRoot: string
+): Promise<RepositoryServiceContract | null> {
+  const serviceContractPath = join(repositoryRoot, SERVICE_CONTRACT_FILE);
+  let source: string;
+
+  try {
+    source = await readFile(serviceContractPath, 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return {
+    file: SERVICE_CONTRACT_FILE,
+    value: parse(source) as unknown
+  };
 }
 
 async function compileServiceSchema(

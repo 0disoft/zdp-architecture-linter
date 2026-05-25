@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildRepositoryIndex, validateRepositoriesCatalog } from '../src/repository-rules.ts';
 import {
   buildServiceIndex,
+  validateRepositoryServiceContractRepositoryReference,
   validateServiceDependencyReferences,
   validateServiceRepositoryReferences
 } from '../src/service-rules.ts';
@@ -98,6 +99,88 @@ describe('service repository references', () => {
         path: 'services[0:ai-memory].repo',
         message:
           'Service must not be owned by `zdp-ai-memory` because its repo_stage is `logical_only`.'
+      }
+    ]);
+  });
+});
+
+describe('repository service contract repository references', () => {
+  test('passes when service.yaml references a deployable repository', () => {
+    const repositories = {
+      repositories: [
+        createRepository({
+          name: 'zdp-architecture-linter',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit'
+        })
+      ]
+    };
+
+    const diagnostics = validateRepositoryServiceContractRepositoryReference(
+      {
+        service: {
+          id: 'architecture-linter-cli',
+          repo: 'zdp-architecture-linter'
+        }
+      },
+      buildRepositoryIndex(repositories)
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when service.yaml references an unknown repository', () => {
+    const diagnostics = validateRepositoryServiceContractRepositoryReference(
+      {
+        service: {
+          id: 'ghost-cli',
+          repo: 'zdp-ghost-platform'
+        }
+      },
+      buildRepositoryIndex({ repositories: [] })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.repo',
+        message:
+          'Service contract references unknown repository `zdp-ghost-platform`.'
+      }
+    ]);
+  });
+
+  test('fails when service.yaml references a non-deployable repository stage', () => {
+    const repositories = {
+      repositories: [
+        createRepository({
+          name: 'zdp-ai-memory',
+          repo_stage: 'logical_only',
+          kind: 'logical_boundary'
+        })
+      ]
+    };
+
+    const diagnostics = validateRepositoryServiceContractRepositoryReference(
+      {
+        service: {
+          id: 'ai-memory',
+          repo: 'zdp-ai-memory'
+        }
+      },
+      buildRepositoryIndex(repositories)
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-002',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.repo',
+        message:
+          'Service contract must not be owned by `zdp-ai-memory` because its repo_stage is `logical_only`.'
       }
     ]);
   });

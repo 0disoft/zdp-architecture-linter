@@ -5,6 +5,7 @@ import {
 } from './repository-rules.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
+const SERVICE_CONTRACT_FILE = 'service.yaml';
 
 export interface ServiceCatalogRecord {
   readonly id: string;
@@ -74,6 +75,51 @@ export function validateServiceRepositoryReferences(
   return services.flatMap((service, index) =>
     validateServiceRecord(service, index, repositoryIndex)
   );
+}
+
+export function validateRepositoryServiceContractRepositoryReference(
+  value: unknown,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const service = value.service;
+
+  if (!isRecord(service)) {
+    return [];
+  }
+
+  const repo = readStringField(service, 'repo');
+
+  if (repo === null) {
+    return [];
+  }
+
+  const repository = repositoryIndex.byName.get(repo);
+
+  if (repository === undefined) {
+    return [
+      createRepositoryServiceContractDiagnostic(
+        'ZDP-REF-001',
+        'service.repo',
+        `Service contract references unknown repository \`${repo}\`.`
+      )
+    ];
+  }
+
+  if (isNonDeployableRepositoryStage(repository.repoStage)) {
+    return [
+      createRepositoryServiceContractDiagnostic(
+        'ZDP-REPO-002',
+        'service.repo',
+        `Service contract must not be owned by \`${repo}\` because its repo_stage is \`${repository.repoStage}\`.`
+      )
+    ];
+  }
+
+  return [];
 }
 
 export function validateServiceDependencyReferences(
@@ -236,6 +282,20 @@ function createServiceDiagnostic(
     ruleId,
     severity: 'error',
     file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function createRepositoryServiceContractDiagnostic(
+  ruleId: 'ZDP-REF-001' | 'ZDP-REPO-002',
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId,
+    severity: 'error',
+    file: SERVICE_CONTRACT_FILE,
     path,
     message
   };
