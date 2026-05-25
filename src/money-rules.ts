@@ -3,6 +3,7 @@ import type { Diagnostic } from './diagnostics.ts';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const MONEY_MOVEMENT_RULE_ID = 'ZDP-MONEY-001';
 const PAYMENT_DATA_FRONTEND_RULE_ID = 'ZDP-MONEY-002';
+const CREDIT_MONETIZATION_RULE_ID = 'ZDP-MONEY-003';
 
 const EMPTY_MONEY_MOVEMENT_POLICY: MoneyMovementPolicy = {
   enabled: false,
@@ -17,6 +18,12 @@ const EMPTY_PAYMENT_DATA_FRONTEND_POLICY: PaymentDataFrontendPolicy = {
   forbiddenRepos: []
 };
 
+const EMPTY_CREDIT_MONETIZATION_POLICY: CreditMonetizationPolicy = {
+  enabled: false,
+  requiredValues: new Map(),
+  moneyDependencyOptions: []
+};
+
 export interface MoneyMovementPolicy {
   readonly enabled: boolean;
   readonly expectedTier: string | null;
@@ -28,6 +35,12 @@ export interface MoneyMovementPolicy {
 export interface PaymentDataFrontendPolicy {
   readonly enabled: boolean;
   readonly forbiddenRepos: readonly string[];
+}
+
+export interface CreditMonetizationPolicy {
+  readonly enabled: boolean;
+  readonly requiredValues: ReadonlyMap<string, unknown>;
+  readonly moneyDependencyOptions: readonly string[];
 }
 
 export function buildMoneyMovementPolicy(value: unknown): MoneyMovementPolicy {
@@ -88,6 +101,34 @@ export function buildPaymentDataFrontendPolicy(
   return {
     enabled: true,
     forbiddenRepos: readStringArray(forbidValues['service.repo'])
+  };
+}
+
+export function buildCreditMonetizationPolicy(
+  value: unknown
+): CreditMonetizationPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_CREDIT_MONETIZATION_POLICY;
+  }
+
+  const creditMonetizationRule = findRuleById(
+    value.rules,
+    CREDIT_MONETIZATION_RULE_ID
+  );
+
+  if (creditMonetizationRule === undefined) {
+    return EMPTY_CREDIT_MONETIZATION_POLICY;
+  }
+
+  const assertions = isRecord(creditMonetizationRule.assertions)
+    ? creditMonetizationRule.assertions
+    : {};
+  const requireAny = isRecord(assertions.require_any) ? assertions.require_any : {};
+
+  return {
+    enabled: true,
+    requiredValues: readValueMap(assertions.require_values),
+    moneyDependencyOptions: readStringArray(requireAny['dependencies.services'])
   };
 }
 
@@ -251,6 +292,41 @@ export function validatePaymentDataFrontendContracts(
   );
 }
 
+export function validateCreditMonetizationContracts(
+  value: unknown,
+  policy: CreditMonetizationPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createMoneyDiagnostic(
+        CREDIT_MONETIZATION_RULE_ID,
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createMoneyDiagnostic(
+        CREDIT_MONETIZATION_RULE_ID,
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceCreditMonetizationContract(service, index, policy)
+  );
+}
+
 function validateServicePaymentDataFrontendContract(
   value: unknown,
   index: number,
@@ -285,10 +361,82 @@ function validateServicePaymentDataFrontendContract(
   ];
 }
 
+function validateServiceCreditMonetizationContract(
+  value: unknown,
+  index: number,
+  policy: CreditMonetizationPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createMoneyDiagnostic(
+        CREDIT_MONETIZATION_RULE_ID,
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  if (!hasCreditMonetization(value)) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceName = getServiceName(value, index);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const [field, expectedValue] of policy.requiredValues.entries()) {
+    const actualValue = readValueAtPath(value, field);
+
+    if (actualValue !== expectedValue) {
+      diagnostics.push(
+        createMoneyDiagnostic(
+          CREDIT_MONETIZATION_RULE_ID,
+          `${servicePath}.${field}`,
+          `Credit monetization service \`${serviceName}\` must set \`${field}\` to \`${String(expectedValue)}\`.`
+        )
+      );
+    }
+  }
+
+  if (policy.moneyDependencyOptions.length > 0) {
+    const dependencies = readDependencyServices(value);
+    const hasMoneyDependency = dependencies.values.some((dependency) =>
+      policy.moneyDependencyOptions.includes(dependency)
+    );
+
+    if (!hasMoneyDependency) {
+      diagnostics.push(
+        createMoneyDiagnostic(
+          CREDIT_MONETIZATION_RULE_ID,
+          `${servicePath}.${dependencies.path}`,
+          `Credit monetization service \`${serviceName}\` must depend on one of: ${policy.moneyDependencyOptions.map((dependency) => `\`${dependency}\``).join(', ')}.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
 function hasMoneyMovement(value: Record<string, unknown>): boolean {
   return (
     readBooleanAtPath(value, 'domain.money_movement') === true ||
     readBooleanAtPath(value, 'data.money_movement') === true
+  );
+}
+
+function hasCreditMonetization(value: Record<string, unknown>): boolean {
+  return (
+    readStringAtPath(value, 'monetization.model') === 'credit' ||
+    readBooleanAtPath(value, 'monetization.credit_policy.enabled') === true ||
+    readBooleanAtPath(
+      value,
+      'monetization.ad_policy.credit_ad_removal_allowed'
+    ) === true ||
+    readBooleanAtPath(
+      value,
+      'monetization.ad_policy.auto_renew_with_credits_allowed'
+    ) === true
   );
 }
 
@@ -372,6 +520,16 @@ function readStringArray(value: unknown): readonly string[] {
 
   return value.flatMap((entry) =>
     typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
+}
+
+function readValueMap(value: unknown): ReadonlyMap<string, unknown> {
+  if (!isRecord(value)) {
+    return new Map();
+  }
+
+  return new Map(
+    Object.entries(value).filter(([field]) => field.trim().length > 0)
   );
 }
 

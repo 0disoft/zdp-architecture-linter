@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildCreditMonetizationPolicy,
   buildMoneyMovementPolicy,
   buildPaymentDataFrontendPolicy,
+  validateCreditMonetizationContracts,
   validateMoneyMovementContracts,
   validatePaymentDataFrontendContracts
 } from '../src/money-rules.ts';
@@ -35,6 +37,23 @@ const paymentDataFrontendPolicy = buildPaymentDataFrontendPolicy({
             'zdp-web-public',
             'zdp-products-lab'
           ]
+        }
+      }
+    }
+  ]
+});
+
+const creditMonetizationPolicy = buildCreditMonetizationPolicy({
+  rules: [
+    {
+      id: 'ZDP-MONEY-003',
+      assertions: {
+        require_values: {
+          'monetization.credit_policy.wallet_scope': 'common_zdp_wallet',
+          'monetization.credit_policy.ledger_owner': 'zdp-money-ledger'
+        },
+        require_any: {
+          'dependencies.services': ['zdp-money-ledger', 'zdp-money-platform']
         }
       }
     }
@@ -305,6 +324,128 @@ describe('payment data frontend contracts', () => {
         path: 'services[0:checkout-bff].service.repo',
         message:
           'Payment data service `checkout-bff` must not use forbidden repository `zdp-products-lab`.'
+      }
+    ]);
+  });
+});
+
+describe('credit monetization contracts', () => {
+  test('passes when credit monetization uses the common wallet and money ledger', () => {
+    const diagnostics = validateCreditMonetizationContracts(
+      {
+        services: [
+          {
+            id: 'billing-api',
+            monetization: {
+              model: 'credit',
+              credit_policy: {
+                wallet_scope: 'common_zdp_wallet',
+                ledger_owner: 'zdp-money-ledger'
+              }
+            },
+            dependencies: {
+              services: ['zdp-money-platform']
+            }
+          }
+        ]
+      },
+      creditMonetizationPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when credit ad removal depends on the money ledger', () => {
+    const diagnostics = validateCreditMonetizationContracts(
+      {
+        services: [
+          {
+            id: 'ads-api',
+            monetization: {
+              ad_policy: {
+                credit_ad_removal_allowed: true
+              },
+              credit_policy: {
+                wallet_scope: 'common_zdp_wallet',
+                ledger_owner: 'zdp-money-ledger'
+              }
+            },
+            dependencies: ['zdp-money-ledger']
+          }
+        ]
+      },
+      creditMonetizationPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('passes when a service does not use credit monetization', () => {
+    const diagnostics = validateCreditMonetizationContracts(
+      {
+        services: [
+          {
+            id: 'public-web',
+            monetization: {
+              model: 'none'
+            }
+          }
+        ]
+      },
+      creditMonetizationPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when credit monetization omits ledger ownership controls', () => {
+    const diagnostics = validateCreditMonetizationContracts(
+      {
+        services: [
+          {
+            id: 'billing-api',
+            monetization: {
+              credit_policy: {
+                enabled: true,
+                wallet_scope: 'site_wallet',
+                ledger_owner: 'zdp-products-lab'
+              }
+            },
+            dependencies: {
+              services: ['core-api']
+            }
+          }
+        ]
+      },
+      creditMonetizationPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:billing-api].monetization.credit_policy.wallet_scope',
+        message:
+          'Credit monetization service `billing-api` must set `monetization.credit_policy.wallet_scope` to `common_zdp_wallet`.'
+      },
+      {
+        ruleId: 'ZDP-MONEY-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:billing-api].monetization.credit_policy.ledger_owner',
+        message:
+          'Credit monetization service `billing-api` must set `monetization.credit_policy.ledger_owner` to `zdp-money-ledger`.'
+      },
+      {
+        ruleId: 'ZDP-MONEY-003',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:billing-api].dependencies.services',
+        message:
+          'Credit monetization service `billing-api` must depend on one of: `zdp-money-ledger`, `zdp-money-platform`.'
       }
     ]);
   });

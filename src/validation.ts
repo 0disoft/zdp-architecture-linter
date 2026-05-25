@@ -41,8 +41,10 @@ import {
   validateServiceProviderWebhooks
 } from './provider-rules.ts';
 import {
+  buildCreditMonetizationPolicy,
   buildMoneyMovementPolicy,
   buildPaymentDataFrontendPolicy,
+  validateCreditMonetizationContracts,
   validateMoneyMovementContracts,
   validatePaymentDataFrontendContracts
 } from './money-rules.ts';
@@ -74,6 +76,9 @@ export async function validateArchitecture(
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
   const paymentDataFrontendPolicy = buildPaymentDataFrontendPolicy(
+    catalogs.moneyRules
+  );
+  const creditMonetizationPolicy = buildCreditMonetizationPolicy(
     catalogs.moneyRules
   );
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
@@ -143,6 +148,10 @@ export async function validateArchitecture(
       ...validatePaymentDataFrontendContracts(
         catalogs.services,
         paymentDataFrontendPolicy
+      ),
+      ...validateCreditMonetizationContracts(
+        catalogs.services,
+        creditMonetizationPolicy
       )
     ]
   };
