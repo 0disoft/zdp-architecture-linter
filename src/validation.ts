@@ -75,6 +75,10 @@ import {
   validateRepositoryServiceContractProviderReferences
 } from './service-contract-reference-rules.ts';
 import {
+  buildRepositoryServiceContractCatalog,
+  mapServiceCatalogDiagnosticsToRepositoryServiceContract
+} from './service-contract-policy-rules.ts';
+import {
   loadRepositoryServiceContract,
   validateRepositoryServiceContract,
   validateServiceSchemaFixtures
@@ -162,6 +166,55 @@ export async function validateArchitecture(
     input.repositoryRoot === undefined
       ? null
       : await loadRepositoryServiceContract(input.repositoryRoot);
+  const repositoryServiceContractCatalog =
+    repositoryServiceContract === null
+      ? null
+      : buildRepositoryServiceContractCatalog(repositoryServiceContract.value);
+  const repositoryServicePolicyDiagnostics =
+    repositoryServiceContractCatalog === null
+      ? []
+      : mapServiceCatalogDiagnosticsToRepositoryServiceContract([
+          ...validateServiceProviderContracts(
+            repositoryServiceContractCatalog,
+            providerContractPolicy
+          ),
+          ...validateServiceProviderWebhooks(
+            repositoryServiceContractCatalog,
+            providerWebhookPolicy
+          ),
+          ...validateAiUserDataContracts(
+            repositoryServiceContractCatalog,
+            aiUserDataPolicy
+          ),
+          ...validateAiSensitiveDataContracts(
+            repositoryServiceContractCatalog,
+            aiSensitiveDataPolicy
+          ),
+          ...validateMoneyMovementContracts(
+            repositoryServiceContractCatalog,
+            moneyMovementPolicy
+          ),
+          ...validatePaymentDataFrontendContracts(
+            repositoryServiceContractCatalog,
+            paymentDataFrontendPolicy
+          ),
+          ...validateCreditMonetizationContracts(
+            repositoryServiceContractCatalog,
+            creditMonetizationPolicy
+          ),
+          ...validateTierOperationalContracts(
+            repositoryServiceContractCatalog,
+            tierOperationalContractPolicy
+          ),
+          ...validateTierCriticalControls(
+            repositoryServiceContractCatalog,
+            tierCriticalControlsPolicy
+          ),
+          ...validatePublicApiContracts(
+            repositoryServiceContractCatalog,
+            publicApiContractPolicy
+          )
+        ]);
 
   return {
     diagnostics: [
@@ -280,7 +333,8 @@ export async function validateArchitecture(
         : validateRepositoryServiceContractEventReferences(
             repositoryServiceContract.value,
             eventIndex
-          ))
+          )),
+      ...repositoryServicePolicyDiagnostics
     ]
   };
 }
