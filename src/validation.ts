@@ -24,9 +24,11 @@ import {
   validateEventRepositoryReferences
 } from './event-rules.ts';
 import {
+  buildProviderContractPolicy,
   buildExternalProviderIndex,
   validateExternalProviderCatalog,
-  validateServiceExternalDependencyReferences
+  validateServiceExternalDependencyReferences,
+  validateServiceProviderContracts
 } from './provider-rules.ts';
 import {
   buildMoneyMovementPolicy,
@@ -59,6 +61,7 @@ export async function validateArchitecture(
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
   const moneyMovementPolicy = buildMoneyMovementPolicy(catalogs.moneyRules);
+  const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
 
   return {
     diagnostics: [
@@ -81,6 +84,10 @@ export async function validateArchitecture(
       ...validateServiceExternalDependencyReferences(
         catalogs.services,
         externalProviderIndex
+      ),
+      ...validateServiceProviderContracts(
+        catalogs.services,
+        providerContractPolicy
       ),
       ...validateProductLikeDirectSensitiveDatastoreAccess(
         catalogs.services,

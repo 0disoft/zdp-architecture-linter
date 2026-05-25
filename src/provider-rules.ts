@@ -2,6 +2,12 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const EXTERNAL_PROVIDERS_FILE = 'catalogs/external-providers.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
+const PROVIDER_CONTRACT_RULE_ID = 'ZDP-PROVIDER-001';
+
+const EMPTY_PROVIDER_CONTRACT_POLICY: ProviderContractPolicy = {
+  enabled: false,
+  requiredProviderFields: []
+};
 
 export interface ExternalProviderRecord {
   readonly id: string;
@@ -10,6 +16,11 @@ export interface ExternalProviderRecord {
 
 export interface ExternalProviderIndex {
   readonly byId: ReadonlyMap<string, ExternalProviderRecord>;
+}
+
+export interface ProviderContractPolicy {
+  readonly enabled: boolean;
+  readonly requiredProviderFields: readonly string[];
 }
 
 export function buildExternalProviderIndex(value: unknown): ExternalProviderIndex {
@@ -40,6 +51,33 @@ export function buildExternalProviderIndex(value: unknown): ExternalProviderInde
   }
 
   return { byId: new Map(entries) };
+}
+
+export function buildProviderContractPolicy(value: unknown): ProviderContractPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_PROVIDER_CONTRACT_POLICY;
+  }
+
+  const providerRule = value.rules.find(
+    (rule): rule is Record<string, unknown> =>
+      isRecord(rule) && readStringField(rule, 'id') === PROVIDER_CONTRACT_RULE_ID
+  );
+
+  if (providerRule === undefined) {
+    return EMPTY_PROVIDER_CONTRACT_POLICY;
+  }
+
+  const assertions = isRecord(providerRule.assertions)
+    ? providerRule.assertions
+    : {};
+  const requiredProviderFields = readStringArray(assertions.require_fields)
+    .map((field) => parseProviderField(field))
+    .filter((field): field is string => field !== null);
+
+  return {
+    enabled: true,
+    requiredProviderFields
+  };
 }
 
 export function validateExternalProviderCatalog(value: unknown): readonly Diagnostic[] {
@@ -88,6 +126,39 @@ export function validateServiceExternalDependencyReferences(
 
   return services.flatMap((service, index) =>
     validateServiceExternalDependencyRecord(service, index, providerIndex)
+  );
+}
+
+export function validateServiceProviderContracts(
+  value: unknown,
+  policy: ProviderContractPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderContractDiagnostic(
+        'services',
+        '`services.yaml` must be a YAML object with a services array.'
+      )
+    ];
+  }
+
+  const services = value.services;
+
+  if (!Array.isArray(services)) {
+    return [
+      createServiceProviderContractDiagnostic(
+        'services',
+        '`services` must be a YAML array.'
+      )
+    ];
+  }
+
+  return services.flatMap((service, index) =>
+    validateServiceProviderContractRecord(service, index, policy)
   );
 }
 
@@ -173,6 +244,103 @@ function validateServiceExternalDependencyRecord(
   });
 }
 
+function validateServiceProviderContractRecord(
+  value: unknown,
+  index: number,
+  policy: ProviderContractPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderContractDiagnostic(
+        `services[${index}]`,
+        'Service entry must be a YAML object.'
+      )
+    ];
+  }
+
+  const providers = value.providers;
+
+  if (providers === undefined) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  if (!Array.isArray(providers)) {
+    return [
+      createServiceProviderContractDiagnostic(
+        `${servicePath}.providers`,
+        '`providers` must be a YAML array when present.'
+      )
+    ];
+  }
+
+  if (providers.length === 0) {
+    return [];
+  }
+
+  return providers.flatMap((provider, providerIndex) =>
+    validateProviderContractEntry(
+      provider,
+      `${servicePath}.providers[${providerIndex}]`,
+      policy
+    )
+  );
+}
+
+function validateProviderContractEntry(
+  value: unknown,
+  providerPath: string,
+  policy: ProviderContractPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [
+      createServiceProviderContractDiagnostic(
+        providerPath,
+        'Provider entry must be a YAML object.'
+      )
+    ];
+  }
+
+  return policy.requiredProviderFields.flatMap((field) =>
+    hasUsableProviderField(value, field)
+      ? []
+      : [
+          createServiceProviderContractDiagnostic(
+            `${providerPath}.${field}`,
+            `Provider entry is missing required field \`${field}\`.`
+          )
+        ]
+  );
+}
+
+function hasUsableProviderField(
+  value: Record<string, unknown>,
+  field: string
+): boolean {
+  const candidate = value[field];
+
+  if (typeof candidate === 'string') {
+    return candidate.trim().length > 0;
+  }
+
+  if (Array.isArray(candidate)) {
+    return candidate.some(
+      (entry) => typeof entry === 'string' && entry.trim().length > 0
+    );
+  }
+
+  return candidate !== null && candidate !== undefined;
+}
+
+function parseProviderField(field: string): string | null {
+  const prefix = 'providers[].';
+
+  return field.startsWith(prefix) && field.length > prefix.length
+    ? field.slice(prefix.length)
+    : null;
+}
+
 function getProviderDiagnosticPath(value: Record<string, unknown>, index: number): string {
   const id = readStringField(value, 'id');
 
@@ -203,6 +371,29 @@ function createServiceProviderDiagnostic(path: string, message: string): Diagnos
     path,
     message
   };
+}
+
+function createServiceProviderContractDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: PROVIDER_CONTRACT_RULE_ID,
+    severity: 'error',
+    file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function readStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
 }
 
 function readStringField(value: Record<string, unknown>, field: string): string | null {
