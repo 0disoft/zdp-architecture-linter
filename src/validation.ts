@@ -13,6 +13,12 @@ import {
 } from './datastore-rules.ts';
 import type { ValidationResult } from './diagnostics.ts';
 import {
+  buildEventIndex,
+  validateDataClassDeletionEventReferences,
+  validateEventCatalog,
+  validateEventDataClassReferences
+} from './event-rules.ts';
+import {
   buildExternalProviderIndex,
   validateExternalProviderCatalog,
   validateServiceExternalDependencyReferences
@@ -38,6 +44,7 @@ export async function validateArchitecture(
   const repositoryIndex = buildRepositoryIndex(catalogs.repositories);
   const datastoreIndex = buildDatastoreIndex(catalogs.datastores);
   const dataClassIndex = buildDataClassIndex(catalogs.dataClasses);
+  const eventIndex = buildEventIndex(catalogs.events);
   const serviceIndex = buildServiceIndex(catalogs.services);
   const externalProviderIndex = buildExternalProviderIndex(catalogs.externalProviders);
 
@@ -49,6 +56,9 @@ export async function validateArchitecture(
         catalogs.dataClasses,
         datastoreIndex
       ),
+      ...validateEventCatalog(catalogs.events),
+      ...validateEventDataClassReferences(catalogs.events, dataClassIndex),
+      ...validateDataClassDeletionEventReferences(catalogs.dataClasses, eventIndex),
       ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),

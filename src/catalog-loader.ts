@@ -7,6 +7,7 @@ export interface ArchitectureCatalogs {
   readonly services: ServicesCatalog;
   readonly datastores: DatastoresCatalog;
   readonly dataClasses: DataClassesCatalog;
+  readonly events: EventsCatalog;
   readonly externalProviders: ExternalProvidersCatalog;
 }
 
@@ -24,6 +25,10 @@ export interface DatastoresCatalog {
 
 export interface DataClassesCatalog {
   readonly data_classes?: unknown;
+}
+
+export interface EventsCatalog {
+  readonly events?: unknown;
 }
 
 export interface ExternalProvidersCatalog {
@@ -49,6 +54,10 @@ export async function loadArchitectureCatalogs(
     dataClasses: await loadYamlFile<DataClassesCatalog>(
       architectureRoot,
       'catalogs/data-classes.yaml'
+    ),
+    events: await loadYamlFile<EventsCatalog>(
+      architectureRoot,
+      'catalogs/events.yaml'
     ),
     externalProviders: await loadYamlFile<ExternalProvidersCatalog>(
       architectureRoot,
