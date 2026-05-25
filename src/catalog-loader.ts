@@ -12,6 +12,7 @@ export interface ArchitectureCatalogs {
   readonly repositoryRules: RepositoryRulesCatalog;
   readonly moneyRules: MoneyRulesCatalog;
   readonly providerRules: ProviderRulesCatalog;
+  readonly aiDataAccessRules: AiDataAccessRulesCatalog;
 }
 
 export interface RepositoriesCatalog {
@@ -47,6 +48,10 @@ export interface MoneyRulesCatalog {
 }
 
 export interface ProviderRulesCatalog {
+  readonly rules?: unknown;
+}
+
+export interface AiDataAccessRulesCatalog {
   readonly rules?: unknown;
 }
 
@@ -89,6 +94,10 @@ export async function loadArchitectureCatalogs(
     providerRules: await loadYamlFile<ProviderRulesCatalog>(
       architectureRoot,
       'rules/provider.rules.yaml'
+    ),
+    aiDataAccessRules: await loadYamlFile<AiDataAccessRulesCatalog>(
+      architectureRoot,
+      'rules/ai-data-access.rules.yaml'
     )
   };
 }
