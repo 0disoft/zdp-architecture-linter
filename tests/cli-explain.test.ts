@@ -65,6 +65,10 @@ datastores:
         'rules/ai-data-access.rules.yaml': 'rules: []\n',
         'rules/data-access.rules.yaml': 'rules: []\n',
         'rules/tier.rules.yaml': 'rules: []\n',
+        'repo/.editorconfig': 'root = true\n',
+        'repo/.gitattributes': '* text=auto eol=lf\n',
+        'repo/AGENTS.md': '# Agents\n',
+        'repo/README.md': '# Repository\n',
         'repo/service.yaml': `
 service:
   id: connectors-telegram-bot

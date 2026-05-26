@@ -64,6 +64,7 @@ import {
   type RepositoryRoadmapEvidence,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
+import { validateRepositoryBaselineFiles } from './repository-baseline-rules.ts';
 import {
   validateServiceDependencyReferences,
   validateRepositoryServiceContractRepositoryReference,
@@ -188,6 +189,9 @@ export async function validateArchitecture(
           architectureRoot: input.architectureRoot,
           repositoryRoot: input.repositoryRoot
         });
+  const repositoryBaselineDiagnostics = await validateRepositoryBaselineFiles(
+    input.repositoryRoot
+  );
   const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
   const repositoryServicePolicyDiagnostics =
     repositoryServiceContractCatalog === null
@@ -362,6 +366,7 @@ export async function validateArchitecture(
       ),
       ...fixtureDiagnostics,
       ...serviceSchemaDiagnostics,
+      ...repositoryBaselineDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
         ? []
