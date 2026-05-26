@@ -8,7 +8,9 @@ const EVENT_SCHEMA_FILE = 'schemas/event.schema.json';
 const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
 const EVENT_CATALOG_SCHEMA_RULE_ID = 'ZDP-EVENT-001';
 const EVENT_SCHEMA_REF_RULE_ID = 'ZDP-EVENT-002';
+const EVENT_SCHEMA_TARGET_RULE_ID = 'ZDP-EVENT-003';
 const EVENT_SCHEMA_REF_PREFIX = 'schemas/events/';
+const EVENT_SCHEMA_ID_PREFIX = 'https://zdp.zerodi.dev/';
 
 export async function validateEventCatalogSchema(input: {
   readonly architectureRoot: string;
@@ -103,6 +105,7 @@ function validateSchemaRefPath(
     !schemaRef.endsWith('.json')
   ) {
     return createSchemaRefDiagnostic(
+      EVENT_SCHEMA_REF_RULE_ID,
       `${eventPath}.schema_ref`,
       `Event schema_ref \`${schemaRef}\` must point to a JSON file under \`${EVENT_SCHEMA_REF_PREFIX}\`.`
     );
@@ -123,6 +126,7 @@ async function validateSchemaRefFile(
   } catch (error) {
     if (isMissingPathError(error)) {
       return createSchemaRefDiagnostic(
+        EVENT_SCHEMA_REF_RULE_ID,
         `${eventPath}.schema_ref`,
         `Event schema_ref target \`${schemaRef}\` does not exist.`
       );
@@ -131,26 +135,68 @@ async function validateSchemaRefFile(
     throw error;
   }
 
+  let schema: unknown;
+
   try {
-    JSON.parse(source);
+    schema = JSON.parse(source);
   } catch {
     return createSchemaRefDiagnostic(
+      EVENT_SCHEMA_REF_RULE_ID,
       `${eventPath}.schema_ref`,
       `Event schema_ref target \`${schemaRef}\` must be valid JSON.`
+    );
+  }
+
+  const expectedSchemaId = `${EVENT_SCHEMA_ID_PREFIX}${schemaRef}`;
+  const declaredSchemaId = isRecord(schema) ? schema.$id : undefined;
+
+  if (declaredSchemaId !== expectedSchemaId) {
+    return createSchemaRefDiagnostic(
+      EVENT_SCHEMA_TARGET_RULE_ID,
+      `${eventPath}.schema_ref`,
+      `Event schema_ref target \`${schemaRef}\` must declare \`$id: ${expectedSchemaId}\`.`
+    );
+  }
+
+  try {
+    compileJsonSchema(schema);
+  } catch (error) {
+    return createSchemaRefDiagnostic(
+      EVENT_SCHEMA_TARGET_RULE_ID,
+      `${eventPath}.schema_ref`,
+      `Event schema_ref target \`${schemaRef}\` must compile as JSON Schema: ${formatCompileError(error)}`
     );
   }
 
   return null;
 }
 
-function createSchemaRefDiagnostic(path: string, message: string): Diagnostic {
+function compileJsonSchema(schema: unknown): ValidateFunction {
+  const ajv = new Ajv2020({
+    allErrors: true,
+    strict: false,
+    validateFormats: false
+  });
+
+  return ajv.compile(schema as AnySchema);
+}
+
+function createSchemaRefDiagnostic(
+  ruleId: string,
+  path: string,
+  message: string
+): Diagnostic {
   return {
-    ruleId: EVENT_SCHEMA_REF_RULE_ID,
+    ruleId,
     severity: 'error',
     file: EVENT_CATALOG_FILE,
     path,
     message
   };
+}
+
+function formatCompileError(error: unknown): string {
+  return error instanceof Error ? error.message : 'unknown compile error';
 }
 
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {

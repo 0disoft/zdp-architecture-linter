@@ -113,10 +113,12 @@ describe('event catalog schema validation', () => {
 describe('event schema references', () => {
   test('passes when schema_ref points to an existing JSON file under schemas/events', async () => {
     await withEventSchemaRoot(async (architectureRoot) => {
+      const schemaRef = 'schemas/events/deletion-request-created.v1.json';
+
       await writeArchitectureFile(
         architectureRoot,
-        'schemas/events/deletion-request-created.v1.json',
-        JSON.stringify({ $schema: 'https://json-schema.org/draft/2020-12/schema' })
+        schemaRef,
+        JSON.stringify(createEventPayloadSchema(schemaRef))
       );
 
       const diagnostics = await validateEventSchemaReferences({
@@ -125,7 +127,7 @@ describe('event schema references', () => {
           events: [
             {
               id: 'deletion.request.created',
-              schema_ref: 'schemas/events/deletion-request-created.v1.json'
+              schema_ref: schemaRef
             }
           ]
         }
@@ -188,6 +190,82 @@ describe('event schema references', () => {
       ]);
     });
   });
+
+  test('fails when schema_ref target declares a mismatched schema id', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const schemaRef = 'schemas/events/deletion-request-created.v1.json';
+
+      await writeArchitectureFile(
+        architectureRoot,
+        schemaRef,
+        JSON.stringify({
+          ...createEventPayloadSchema(schemaRef),
+          $id: 'https://zdp.zerodi.dev/schemas/events/other.v1.json'
+        })
+      );
+
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [
+            {
+              id: 'deletion.request.created',
+              schema_ref: schemaRef
+            }
+          ]
+        }
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-EVENT-003',
+          severity: 'error',
+          file: 'catalogs/events.yaml',
+          path: 'events[0:deletion.request.created].schema_ref',
+          message:
+            'Event schema_ref target `schemas/events/deletion-request-created.v1.json` must declare `$id: https://zdp.zerodi.dev/schemas/events/deletion-request-created.v1.json`.'
+        }
+      ]);
+    });
+  });
+
+  test('fails when schema_ref target cannot compile as JSON Schema', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const schemaRef = 'schemas/events/deletion-request-created.v1.json';
+
+      await writeArchitectureFile(
+        architectureRoot,
+        schemaRef,
+        JSON.stringify({
+          ...createEventPayloadSchema(schemaRef),
+          type: 'not-a-json-schema-type'
+        })
+      );
+
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [
+            {
+              id: 'deletion.request.created',
+              schema_ref: schemaRef
+            }
+          ]
+        }
+      });
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        ruleId: 'ZDP-EVENT-003',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:deletion.request.created].schema_ref'
+      });
+      expect(diagnostics[0]?.message).toStartWith(
+        'Event schema_ref target `schemas/events/deletion-request-created.v1.json` must compile as JSON Schema:'
+      );
+    });
+  });
 });
 
 async function withEventSchemaRoot(
@@ -196,13 +274,23 @@ async function withEventSchemaRoot(
   const architectureRoot = await mkdtemp(join(tmpdir(), 'zdp-event-schema-'));
 
   try {
-    const schemaPath = join(architectureRoot, 'schemas/event.schema.json');
-
     await writeArchitectureFile(architectureRoot, 'schemas/event.schema.json', schemaSource);
     await callback(architectureRoot);
   } finally {
     await rm(architectureRoot, { recursive: true, force: true });
   }
+}
+
+function createEventPayloadSchema(schemaRef: string): Record<string, unknown> {
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $id: `https://zdp.zerodi.dev/${schemaRef}`,
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      event_id: { type: 'string' }
+    }
+  };
 }
 
 async function writeArchitectureFile(
