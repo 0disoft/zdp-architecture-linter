@@ -4,8 +4,10 @@ import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
   REPOSITORY_BASELINE_REQUIRED_FILES,
-  validateRepositoryBaselineFiles
+  validateRepositoryBaselineFiles,
+  validateRepositoryRootMarkdownFiles
 } from '../src/repository-baseline-rules.ts';
+import type { RepositoryIndex } from '../src/repository-rules.ts';
 
 describe('repository baseline rules', () => {
   test('skips repository baseline checks when no repository root is selected', async () => {
@@ -58,6 +60,85 @@ describe('repository baseline rules', () => {
   });
 });
 
+describe('repository root markdown rules', () => {
+  test('passes when a lab repository includes EXPERIMENT.md', async () => {
+    await withRepositoryRoot(
+      {
+        'EXPERIMENT.md': '# Experiment\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRootMarkdownFiles({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-labs-jiffy'
+            }
+          },
+          repositoryIndex: createRepositoryIndex({
+            name: 'zdp-labs-jiffy',
+            repoStage: 'lab_only',
+            kind: 'lab',
+            area: 'labs'
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('fails when a lab repository is missing EXPERIMENT.md', async () => {
+    await withRepositoryRoot({}, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryRootMarkdownFiles({
+        repositoryRoot,
+        repositoryServiceContract: {
+          service: {
+            repo: 'zdp-labs-prasso'
+          }
+        },
+        repositoryIndex: createRepositoryIndex({
+          name: 'zdp-labs-prasso',
+          repoStage: 'lab_only',
+          kind: 'lab',
+          area: 'labs'
+        })
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-REPO-MARKDOWN-001',
+          severity: 'error',
+          file: 'EXPERIMENT.md',
+          path: 'repository.root',
+          message:
+            'Lab repository `zdp-labs-prasso` must include root `EXPERIMENT.md`.'
+        }
+      ]);
+    });
+  });
+
+  test('skips EXPERIMENT.md when the repository is not a lab', async () => {
+    await withRepositoryRoot({}, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryRootMarkdownFiles({
+        repositoryRoot,
+        repositoryServiceContract: {
+          service: {
+            repo: 'zdp-architecture-linter'
+          }
+        },
+        repositoryIndex: createRepositoryIndex({
+          name: 'zdp-architecture-linter',
+          repoStage: 'deploy_unit',
+          kind: 'tooling',
+          area: 'architecture'
+        })
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
+  });
+});
+
 async function withRepositoryRoot(
   files: Record<string, string>,
   callback: (repositoryRoot: string) => Promise<void>
@@ -76,4 +157,23 @@ async function withRepositoryRoot(
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
+}
+
+function createRepositoryIndex(repository: {
+  readonly name: string;
+  readonly repoStage: string;
+  readonly kind: string;
+  readonly area: string;
+}): RepositoryIndex {
+  return {
+    byName: new Map([
+      [
+        repository.name,
+        {
+          ...repository,
+          path: `repositories[0:${repository.name}]`
+        }
+      ]
+    ])
+  };
 }
