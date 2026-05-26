@@ -1,11 +1,12 @@
 import type { DataClassIndex } from './data-class-rules.ts';
 import type { DatastoreIndex } from './datastore-rules.ts';
 import type { Diagnostic } from './diagnostics.ts';
-import type { EventIndex } from './event-rules.ts';
+import type { EventIndex, EventRecord } from './event-rules.ts';
 import type { ExternalProviderIndex } from './provider-rules.ts';
 
 const SERVICE_CONTRACT_FILE = 'service.yaml';
 const PRODUCED_EVENT_SCHEMA_RULE_ID = 'ZDP-SERVICE-EVENT-001';
+const EVENT_DELIVERY_CONTRACT_RULE_ID = 'ZDP-SERVICE-EVENT-002';
 
 export function validateRepositoryServiceContractDataReferences(
   value: unknown,
@@ -104,7 +105,8 @@ export function validateRepositoryServiceContractEventReferences(
 
   return [
     ...validateProducedEventReferences(value, 'events.produced'),
-    ...validateEventReferenceArray(value, 'events.consumed')
+    ...validateEventReferenceArray(value, 'events.consumed'),
+    ...validateEventDeliveryContract(value)
   ];
 
   function validateProducedEventReferences(
@@ -242,6 +244,85 @@ export function validateRepositoryServiceContractEventReferences(
 
     return [];
   }
+
+  function validateEventDeliveryContract(
+    root: Record<string, unknown>
+  ): readonly Diagnostic[] {
+    const referencedEvents = [
+      ...collectReferencedEvents(root, 'events.produced', 'produced'),
+      ...collectReferencedEvents(root, 'events.consumed', 'consumed')
+    ];
+
+    if (referencedEvents.length === 0) {
+      return [];
+    }
+
+    const diagnostics: Diagnostic[] = [];
+    const requiresReplay = referencedEvents.some(
+      (eventRecord) => eventRecord.replaySupported === true
+    );
+    const requiresDeadLetter = referencedEvents.some(
+      (eventRecord) => eventRecord.deadLetterRequired === true
+    );
+
+    if (requiresReplay && readValueAtPath(root, 'events.replay_supported') !== true) {
+      diagnostics.push(
+        createServiceContractDiagnostic(
+          EVENT_DELIVERY_CONTRACT_RULE_ID,
+          'events.replay_supported',
+          'Service contract references replayable events but `events.replay_supported` is not true.'
+        )
+      );
+    }
+
+    const deadLetterPolicy = readValueAtPath(root, 'events.dead_letter_policy');
+
+    if (
+      requiresDeadLetter &&
+      (typeof deadLetterPolicy !== 'string' || deadLetterPolicy.trim().length === 0)
+    ) {
+      diagnostics.push(
+        createServiceContractDiagnostic(
+          EVENT_DELIVERY_CONTRACT_RULE_ID,
+          'events.dead_letter_policy',
+          'Service contract references events that require a dead-letter policy but `events.dead_letter_policy` is empty.'
+        )
+      );
+    }
+
+    return diagnostics;
+  }
+
+  function collectReferencedEvents(
+    root: Record<string, unknown>,
+    path: 'events.produced' | 'events.consumed',
+    mode: 'produced' | 'consumed'
+  ): readonly EventRecord[] {
+    const candidate = readValueAtPath(root, path);
+
+    if (!Array.isArray(candidate)) {
+      return [];
+    }
+
+    return candidate.flatMap((entry) => {
+      if (mode === 'produced' && !isRecord(entry)) {
+        return [];
+      }
+
+      const eventId =
+        mode === 'produced' && isRecord(entry)
+          ? readStringField(entry, 'id')
+          : readEventReferenceId(entry);
+
+      if (eventId === null) {
+        return [];
+      }
+
+      const eventRecord = eventIndex.byId.get(eventId);
+
+      return eventRecord === undefined ? [] : [eventRecord];
+    });
+  }
 }
 
 function validateStringReferenceArray(input: {
@@ -332,7 +413,8 @@ function createServiceContractDiagnostic(
     | 'ZDP-REF-002'
     | 'ZDP-REF-005'
     | 'ZDP-REF-007'
-    | typeof PRODUCED_EVENT_SCHEMA_RULE_ID,
+    | typeof PRODUCED_EVENT_SCHEMA_RULE_ID
+    | typeof EVENT_DELIVERY_CONTRACT_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {

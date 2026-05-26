@@ -9,6 +9,8 @@ export interface EventRecord {
   readonly id: string;
   readonly path: string;
   readonly schemaRef: string | null;
+  readonly replaySupported: boolean | null;
+  readonly deadLetterRequired: boolean | null;
 }
 
 export interface EventIndex {
@@ -38,7 +40,9 @@ export function buildEventIndex(value: unknown): EventIndex {
       {
         id,
         path: getEventDiagnosticPath(event, index),
-        schemaRef: readStringField(event, 'schema_ref')
+        schemaRef: readStringField(event, 'schema_ref'),
+        replaySupported: readBooleanField(event, 'replay_supported'),
+        deadLetterRequired: readBooleanField(event, 'dead_letter_required')
       }
     ]);
   }
@@ -443,6 +447,15 @@ function readStringField(value: Record<string, unknown>, field: string): string 
   return typeof candidate === 'string' && candidate.trim().length > 0
     ? candidate.trim()
     : null;
+}
+
+function readBooleanField(
+  value: Record<string, unknown>,
+  field: string
+): boolean | null {
+  const candidate = value[field];
+
+  return typeof candidate === 'boolean' ? candidate : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

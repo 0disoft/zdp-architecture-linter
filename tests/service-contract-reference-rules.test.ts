@@ -133,18 +133,24 @@ describe('repository service contract event references', () => {
               id: 'service.deleted',
               schema_ref: 'schemas/events/service.deleted.schema.json'
             }
-          ]
+          ],
+          replay_supported: true,
+          dead_letter_policy: 'retry then dlq'
         }
       },
       buildEventIndex({
         events: [
           {
             id: 'service.created',
-            schema_ref: 'schemas/events/service.created.schema.json'
+            schema_ref: 'schemas/events/service.created.schema.json',
+            replay_supported: true,
+            dead_letter_required: true
           },
           {
             id: 'service.deleted',
-            schema_ref: 'schemas/events/service.deleted.schema.json'
+            schema_ref: 'schemas/events/service.deleted.schema.json',
+            replay_supported: true,
+            dead_letter_required: true
           }
         ]
       })
@@ -268,5 +274,82 @@ describe('repository service contract event references', () => {
           'Produced event `service.deleted` schema_ref must match catalogs/events.yaml value `schemas/events/service.deleted.schema.json`.'
       }
     ]);
+  });
+
+  test('fails when referenced events require replay and dead-letter policy controls', () => {
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          produced: [
+            {
+              id: 'service.created',
+              schema_ref: 'schemas/events/service.created.schema.json'
+            }
+          ],
+          consumed: ['service.deleted'],
+          replay_supported: false,
+          dead_letter_policy: null
+        }
+      },
+      buildEventIndex({
+        events: [
+          {
+            id: 'service.created',
+            schema_ref: 'schemas/events/service.created.schema.json',
+            replay_supported: true,
+            dead_letter_required: true
+          },
+          {
+            id: 'service.deleted',
+            schema_ref: 'schemas/events/service.deleted.schema.json',
+            replay_supported: true,
+            dead_letter_required: true
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-SERVICE-EVENT-002',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.replay_supported',
+        message:
+          'Service contract references replayable events but `events.replay_supported` is not true.'
+      },
+      {
+        ruleId: 'ZDP-SERVICE-EVENT-002',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.dead_letter_policy',
+        message:
+          'Service contract references events that require a dead-letter policy but `events.dead_letter_policy` is empty.'
+      }
+    ]);
+  });
+
+  test('passes when referenced events do not require replay or dead-letter controls', () => {
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          consumed: ['service.deleted'],
+          replay_supported: false,
+          dead_letter_policy: null
+        }
+      },
+      buildEventIndex({
+        events: [
+          {
+            id: 'service.deleted',
+            schema_ref: 'schemas/events/service.deleted.schema.json',
+            replay_supported: false,
+            dead_letter_required: false
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 });
