@@ -77,7 +77,10 @@ function isRelatedSourceLocation(
 ): boolean {
   return (
     diagnostic.file === edge.file &&
-    pathsOverlap(diagnostic.path, edge.path)
+    pathsOverlap(
+      normalizePathAlias(diagnostic.file, diagnostic.path),
+      normalizePathAlias(edge.file, edge.path)
+    )
   );
 }
 
@@ -89,6 +92,19 @@ function pathsOverlap(left: string, right: string): boolean {
     left.startsWith(`${right}.`) ||
     left.startsWith(`${right}[`)
   );
+}
+
+function normalizePathAlias(file: string, path: string): string {
+  if (file !== 'service.yaml') {
+    return path;
+  }
+
+  return path
+    .replace(/^data\.datastores(?=\[|$|\.)/, 'direct_datastore_access')
+    .replace(
+      /^data\.direct_datastore_access(?=\[|$|\.)/,
+      'direct_datastore_access'
+    );
 }
 
 function findRelatedNodes(

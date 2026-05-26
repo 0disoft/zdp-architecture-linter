@@ -165,6 +165,59 @@ describe('diagnostic explain report', () => {
     ]);
   });
 
+  test('matches normalized service contract diagnostics to original service.yaml paths', () => {
+    const graph = buildArchitectureGraph({
+      catalogs: {
+        repositories: {},
+        services: {},
+        datastores: {
+          datastores: [
+            {
+              id: 'privacy_credential_vault',
+              kind: 'secure-storage'
+            }
+          ]
+        },
+        dataClasses: {},
+        events: {},
+        externalProviders: {},
+        repositoryRules: {},
+        moneyRules: {},
+        providerRules: {},
+        aiDataAccessRules: {},
+        dataAccessRules: {},
+        tierRules: {}
+      },
+      repositoryServiceContract: {
+        service: {
+          id: 'connectors-telegram-bot'
+        },
+        data: {
+          datastores: ['privacy_credential_vault']
+        }
+      }
+    });
+
+    const report = createDiagnosticExplainReport({
+      graph,
+      validation: {
+        diagnostics: [
+          {
+            ruleId: 'ZDP-DATA-004',
+            severity: 'error',
+            file: 'service.yaml',
+            path: 'direct_datastore_access[0]',
+            message: '엣지 런타임은 상태 저장소를 직접 접근할 수 없다.'
+          }
+        ]
+      }
+    });
+
+    expect(report.diagnostics[0]?.relatedEdges.map((edge) => edge.path)).toEqual([
+      'data.datastores[0]'
+    ]);
+  });
+
   test('keeps diagnostics without matching graph context explicit', () => {
     const graph = buildArchitectureGraph({
       catalogs: {
