@@ -37,7 +37,10 @@ import {
   validateEventDataClassReferences,
   validateEventRepositoryReferences
 } from './event-rules.ts';
-import { validateEventCatalogSchema } from './event-schema-validation.ts';
+import {
+  validateEventCatalogSchema,
+  validateEventSchemaReferences
+} from './event-schema-validation.ts';
 import { validateFixtureExpectations } from './fixture-validation.ts';
 import {
   buildProviderContractPolicy,
@@ -264,6 +267,10 @@ export async function validateArchitecture(
         datastoreIndex
       ),
       ...(await validateEventCatalogSchema({
+        architectureRoot: input.architectureRoot,
+        value: catalogs.events
+      })),
+      ...(await validateEventSchemaReferences({
         architectureRoot: input.architectureRoot,
         value: catalogs.events
       })),

@@ -2,7 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { validateEventCatalogSchema } from '../src/event-schema-validation.ts';
+import {
+  validateEventCatalogSchema,
+  validateEventSchemaReferences
+} from '../src/event-schema-validation.ts';
 
 const schemaSource = JSON.stringify({
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -107,6 +110,86 @@ describe('event catalog schema validation', () => {
   });
 });
 
+describe('event schema references', () => {
+  test('passes when schema_ref points to an existing JSON file under schemas/events', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      await writeArchitectureFile(
+        architectureRoot,
+        'schemas/events/deletion-request-created.v1.json',
+        JSON.stringify({ $schema: 'https://json-schema.org/draft/2020-12/schema' })
+      );
+
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [
+            {
+              id: 'deletion.request.created',
+              schema_ref: 'schemas/events/deletion-request-created.v1.json'
+            }
+          ]
+        }
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
+  });
+
+  test('fails when schema_ref points outside schemas/events', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [
+            {
+              id: 'deletion.request.created',
+              schema_ref: '../events/deletion-request-created.v1.json'
+            }
+          ]
+        }
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-EVENT-002',
+          severity: 'error',
+          file: 'catalogs/events.yaml',
+          path: 'events[0:deletion.request.created].schema_ref',
+          message:
+            'Event schema_ref `../events/deletion-request-created.v1.json` must point to a JSON file under `schemas/events/`.'
+        }
+      ]);
+    });
+  });
+
+  test('fails when schema_ref target is missing', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [
+            {
+              id: 'deletion.request.created',
+              schema_ref: 'schemas/events/deletion-request-created.v1.json'
+            }
+          ]
+        }
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-EVENT-002',
+          severity: 'error',
+          file: 'catalogs/events.yaml',
+          path: 'events[0:deletion.request.created].schema_ref',
+          message:
+            'Event schema_ref target `schemas/events/deletion-request-created.v1.json` does not exist.'
+        }
+      ]);
+    });
+  });
+});
+
 async function withEventSchemaRoot(
   callback: (architectureRoot: string) => Promise<void>
 ): Promise<void> {
@@ -115,10 +198,20 @@ async function withEventSchemaRoot(
   try {
     const schemaPath = join(architectureRoot, 'schemas/event.schema.json');
 
-    await mkdir(dirname(schemaPath), { recursive: true });
-    await writeFile(schemaPath, schemaSource, 'utf8');
+    await writeArchitectureFile(architectureRoot, 'schemas/event.schema.json', schemaSource);
     await callback(architectureRoot);
   } finally {
     await rm(architectureRoot, { recursive: true, force: true });
   }
+}
+
+async function writeArchitectureFile(
+  architectureRoot: string,
+  relativePath: string,
+  source: string
+): Promise<void> {
+  const absolutePath = join(architectureRoot, relativePath);
+
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, source, 'utf8');
 }
