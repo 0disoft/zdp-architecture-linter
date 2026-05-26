@@ -111,7 +111,7 @@ export function validateRepositoryServiceContractRepositoryReference(
     ];
   }
 
-  if (isNonDeployableRepositoryStage(repository.repoStage)) {
+  if (isBlockedServiceOwnerRepository(repository)) {
     return [
       createRepositoryServiceContractDiagnostic(
         'ZDP-REPO-002',
@@ -246,7 +246,7 @@ function validateServiceRecord(
     ];
   }
 
-  if (isNonDeployableRepositoryStage(repository.repoStage)) {
+  if (isBlockedServiceOwnerRepository(repository)) {
     return [
       createServiceDiagnostic(
         'ZDP-REPO-002',
@@ -257,6 +257,17 @@ function validateServiceRecord(
   }
 
   return [];
+}
+
+function isBlockedServiceOwnerRepository(repository: {
+  readonly repoStage: string | null;
+  readonly kind: string | null;
+}): boolean {
+  if (repository.repoStage === 'lab_only' && repository.kind === 'lab') {
+    return false;
+  }
+
+  return isNonDeployableRepositoryStage(repository.repoStage);
 }
 
 function validateServiceDependencyRecord(

@@ -103,6 +103,32 @@ describe('service repository references', () => {
       }
     ]);
   });
+
+  test('passes when a service is owned by a lab-only lab repository', () => {
+    const repositories = {
+      repositories: [
+        createRepository({
+          name: 'zdp-labs-jiffy',
+          repo_stage: 'lab_only',
+          kind: 'lab'
+        })
+      ]
+    };
+
+    const diagnostics = validateServiceRepositoryReferences(
+      {
+        services: [
+          {
+            id: 'jiffy-runtime-lab',
+            repo: 'zdp-labs-jiffy'
+          }
+        ]
+      },
+      buildRepositoryIndex(repositories)
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
 });
 
 describe('repository service contract repository references', () => {
@@ -184,6 +210,30 @@ describe('repository service contract repository references', () => {
           'Service contract must not be owned by `zdp-ai-memory` because its repo_stage is `logical_only`.'
       }
     ]);
+  });
+
+  test('passes when service.yaml references a lab-only lab repository', () => {
+    const repositories = {
+      repositories: [
+        createRepository({
+          name: 'zdp-labs-jiffy',
+          repo_stage: 'lab_only',
+          kind: 'lab'
+        })
+      ]
+    };
+
+    const diagnostics = validateRepositoryServiceContractRepositoryReference(
+      {
+        service: {
+          id: 'jiffy-runtime-lab',
+          repo: 'zdp-labs-jiffy'
+        }
+      },
+      buildRepositoryIndex(repositories)
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 });
 
