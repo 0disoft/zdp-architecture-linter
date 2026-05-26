@@ -86,6 +86,8 @@ interface ParsedPackCommand {
   readonly architectureRoot: string;
   readonly repo: string;
   readonly task: string;
+  readonly out?: string;
+  readonly check: boolean;
   readonly json: boolean;
 }
 
@@ -199,6 +201,67 @@ async function main(argv: readonly string[]): Promise<number> {
         repo: command.repo,
         task: command.task
       });
+
+      if (command.out !== undefined) {
+        const contents = `${formatArchitecturePackReportText(report)}\n`;
+
+        if (command.check) {
+          const checkResult = await checkGeneratedArchitectureFile({
+            architectureRoot: command.architectureRoot,
+            outputPath: command.out,
+            contents
+          });
+
+          if (!checkResult.matches) {
+            console.error(
+              `Generated pack is stale: ${checkResult.path}\nRun \`zdp-arch pack --architecture <path> --repo ${command.repo} --task "${command.task}" --out ${command.out}\` to regenerate it.`
+            );
+            return 1;
+          }
+
+          if (command.json) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: 'up-to-date',
+                  path: checkResult.path,
+                  bytes: checkResult.bytes
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.log(`zdp-arch: generated pack is up to date (${checkResult.path})`);
+          }
+
+          return 0;
+        }
+
+        const writeResult = await writeGeneratedArchitectureFile({
+          architectureRoot: command.architectureRoot,
+          outputPath: command.out,
+          contents
+        });
+
+        if (command.json) {
+          console.log(
+            JSON.stringify(
+              {
+                status: 'written',
+                path: writeResult.path,
+                bytes: writeResult.bytes
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.log(`zdp-arch: wrote ${writeResult.path}`);
+        }
+
+        return 0;
+      }
 
       if (command.json) {
         console.log(JSON.stringify(report, null, 2));
@@ -439,11 +502,17 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       return null;
     }
 
+    if (rest.includes('--check') && readOption(rest, '--out') === null) {
+      return null;
+    }
+
     return {
       name: 'pack',
       architectureRoot: resolve(architecture),
       repo,
       task,
+      out: readOption(rest, '--out') ?? undefined,
+      check: rest.includes('--check'),
       json: rest.includes('--json')
     };
   }
@@ -549,7 +618,7 @@ function printUsage(): void {
       '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--json]',
+      '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
       '  zdp-arch check-split --architecture <path> [--json]',
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
       '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
