@@ -3,6 +3,10 @@ import { resolve } from 'node:path';
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import { loadArchitectureGraph } from './architecture-graph-loader.ts';
 import {
+  createArchitectureDoctorReport,
+  formatArchitectureDoctorReportText
+} from './architecture-doctor-report.ts';
+import {
   createArchitectureDiffReport,
   formatArchitectureDiffReportText
 } from './architecture-diff-report.ts';
@@ -32,7 +36,8 @@ type ParsedCommand =
   | ParsedExplainCommand
   | ParsedPackCommand
   | ParsedCheckSplitCommand
-  | ParsedDiffCommand;
+  | ParsedDiffCommand
+  | ParsedDoctorCommand;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -74,6 +79,13 @@ interface ParsedDiffCommand {
   readonly architectureRoot: string;
   readonly base: string;
   readonly head?: string;
+  readonly json: boolean;
+}
+
+interface ParsedDoctorCommand {
+  readonly name: 'doctor';
+  readonly architectureRoot: string;
+  readonly repositoryRoot?: string;
   readonly json: boolean;
 }
 
@@ -206,6 +218,21 @@ async function main(argv: readonly string[]): Promise<number> {
       }
     }
 
+    if (command.name === 'doctor') {
+      const report = await createArchitectureDoctorReport({
+        architectureRoot: command.architectureRoot,
+        repositoryRoot: command.repositoryRoot
+      });
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatArchitectureDoctorReportText(report));
+      }
+
+      return report.status === 'error' ? 1 : 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -228,7 +255,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     commandName !== 'explain' &&
     commandName !== 'pack' &&
     commandName !== 'check-split' &&
-    commandName !== 'diff'
+    commandName !== 'diff' &&
+    commandName !== 'doctor'
   ) {
     return null;
   }
@@ -326,7 +354,8 @@ function printUsage(): void {
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--json]',
       '  zdp-arch check-split --architecture <path> [--json]',
-      '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]'
+      '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
+      '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]'
     ].join('\n')
   );
 }
