@@ -4,6 +4,7 @@ import { parse } from 'yaml';
 
 export interface ArchitectureCatalogs {
   readonly repositories: RepositoriesCatalog;
+  readonly repositoryRoadmapText?: string;
   readonly services: ServicesCatalog;
   readonly datastores: DatastoresCatalog;
   readonly dataClasses: DataClassesCatalog;
@@ -73,6 +74,10 @@ export async function loadArchitectureCatalogs(
       architectureRoot,
       'catalogs/repositories.yaml'
     ),
+    repositoryRoadmapText: [
+      await loadTextFile(architectureRoot, 'ROADMAP.md'),
+      await loadTextFile(architectureRoot, 'docs/26-eighteen-month-roadmap.md')
+    ].join('\n'),
     services: await loadYamlFile<ServicesCatalog>(
       architectureRoot,
       'catalogs/services.yaml'
@@ -125,4 +130,8 @@ async function loadYamlFile<T>(root: string, relativePath: string): Promise<T> {
   const parsed = parse(source) as unknown;
 
   return parsed as T;
+}
+
+async function loadTextFile(root: string, relativePath: string): Promise<string> {
+  return readFile(join(root, relativePath), 'utf8');
 }

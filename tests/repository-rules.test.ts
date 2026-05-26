@@ -217,3 +217,60 @@ describe('conditional repository split triggers', () => {
     expect(diagnostics).toEqual([]);
   });
 });
+
+describe('reserved deploy unit roadmap evidence', () => {
+  test('warns when a reserved deploy unit is missing from roadmap evidence', () => {
+    const diagnostics = validateRepositoriesCatalog(
+      {
+        repositories: [
+          {
+            name: 'zdp-admin-console',
+            status: 'reserved',
+            repo_stage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'admin',
+            purpose: 'Admin console.',
+            owner: '0disoft',
+            risk_level: 'high'
+          }
+        ]
+      },
+      undefined,
+      { text: 'zdp-architecture-linter\nzdp-platform-infra\n' }
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-WARN-002',
+        severity: 'warning',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-admin-console].name',
+        message:
+          'Reserved deploy unit `zdp-admin-console` should appear in ROADMAP.md or docs/26-eighteen-month-roadmap.md.'
+      }
+    ]);
+  });
+
+  test('passes when a reserved deploy unit appears in roadmap evidence', () => {
+    const diagnostics = validateRepositoriesCatalog(
+      {
+        repositories: [
+          {
+            name: 'zdp-platform-infra',
+            status: 'reserved',
+            repo_stage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'platform',
+            purpose: 'Infrastructure baseline.',
+            owner: '0disoft',
+            risk_level: 'high'
+          }
+        ]
+      },
+      undefined,
+      { text: '0~30 days: zdp-platform-infra\n' }
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+});

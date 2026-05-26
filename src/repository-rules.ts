@@ -21,10 +21,17 @@ const NON_DEPLOYABLE_REPO_STAGES = new Set([
 ]);
 
 const CONDITIONAL_DEPLOY_UNIT_STAGE = 'conditional_deploy_unit';
+const RESERVED_STATUS = 'reserved';
+const DEPLOY_UNIT_KIND = 'deploy_unit';
+const DEPLOY_UNIT_STAGE = 'deploy_unit';
 
 const EMPTY_REPOSITORY_AREA_RULES: RepositoryAreaRules = {
   exact: new Map(),
   prefixes: []
+};
+
+const EMPTY_REPOSITORY_ROADMAP_EVIDENCE: RepositoryRoadmapEvidence = {
+  text: ''
 };
 
 export interface RepositoryCatalogRecord {
@@ -47,6 +54,10 @@ export interface RepositoryAreaPrefixRule {
 export interface RepositoryAreaRules {
   readonly exact: ReadonlyMap<string, string>;
   readonly prefixes: readonly RepositoryAreaPrefixRule[];
+}
+
+export interface RepositoryRoadmapEvidence {
+  readonly text: string;
 }
 
 export function buildRepositoryIndex(value: unknown): RepositoryIndex {
@@ -95,7 +106,8 @@ export function buildRepositoryAreaRules(value: unknown): RepositoryAreaRules {
 
 export function validateRepositoriesCatalog(
   value: unknown,
-  areaRules: RepositoryAreaRules = EMPTY_REPOSITORY_AREA_RULES
+  areaRules: RepositoryAreaRules = EMPTY_REPOSITORY_AREA_RULES,
+  roadmapEvidence: RepositoryRoadmapEvidence = EMPTY_REPOSITORY_ROADMAP_EVIDENCE
 ): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -118,14 +130,15 @@ export function validateRepositoriesCatalog(
   }
 
   return repositories.flatMap((repository, index) =>
-    validateRepositoryRecord(repository, index, areaRules)
+    validateRepositoryRecord(repository, index, areaRules, roadmapEvidence)
   );
 }
 
 function validateRepositoryRecord(
   value: unknown,
   index: number,
-  areaRules: RepositoryAreaRules
+  areaRules: RepositoryAreaRules,
+  roadmapEvidence: RepositoryRoadmapEvidence
 ): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -151,7 +164,12 @@ function validateRepositoryRecord(
     ),
     ...validateRepositoryStageKind(value, repositoryPath),
     ...validateRepositoryAreaPrefix(value, repositoryPath, areaRules),
-    ...validateConditionalDeployUnitTrigger(value, repositoryPath)
+    ...validateConditionalDeployUnitTrigger(value, repositoryPath),
+    ...validateReservedDeployUnitRoadmapEvidence(
+      value,
+      repositoryPath,
+      roadmapEvidence
+    )
   ];
 }
 
@@ -201,6 +219,37 @@ function validateConditionalDeployUnitTrigger(
       path: `${repositoryPath}.create_when`,
       message:
         'Repository with repo_stage `conditional_deploy_unit` should declare `create_when` evidence.'
+    }
+  ];
+}
+
+function validateReservedDeployUnitRoadmapEvidence(
+  value: Record<string, unknown>,
+  repositoryPath: string,
+  roadmapEvidence: RepositoryRoadmapEvidence
+): readonly Diagnostic[] {
+  const name = readStringField(value, 'name');
+
+  if (
+    name === null ||
+    roadmapEvidence.text.length === 0 ||
+    readStringField(value, 'status') !== RESERVED_STATUS ||
+    readStringField(value, 'repo_stage') !== DEPLOY_UNIT_STAGE ||
+    readStringField(value, 'kind') !== DEPLOY_UNIT_KIND ||
+    value.created === true ||
+    roadmapEvidence.text.includes(name)
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      ruleId: 'ZDP-REPO-WARN-002',
+      severity: 'warning',
+      file: REPOSITORIES_FILE,
+      path: `${repositoryPath}.name`,
+      message:
+        `Reserved deploy unit \`${name}\` should appear in ROADMAP.md or docs/26-eighteen-month-roadmap.md.`
     }
   ];
 }
