@@ -165,3 +165,55 @@ describe('repository area prefix compatibility', () => {
     ]);
   });
 });
+
+describe('conditional repository split triggers', () => {
+  test('warns when a conditional deploy unit omits create_when evidence', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        {
+          name: 'zdp-mobile-flutter',
+          status: 'reserved',
+          repo_stage: 'conditional_deploy_unit',
+          kind: 'deploy_unit',
+          area: 'mobile',
+          purpose: 'Mobile app shell.',
+          owner: '0disoft',
+          risk_level: 'medium'
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-mobile-flutter].create_when',
+        message:
+          'Repository with repo_stage `conditional_deploy_unit` should declare `create_when` evidence.'
+      }
+    ]);
+  });
+
+  test('passes when a conditional deploy unit declares create_when evidence', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        {
+          name: 'zdp-desktop-tauri',
+          status: 'reserved',
+          repo_stage: 'conditional_deploy_unit',
+          kind: 'deploy_unit',
+          area: 'desktop',
+          purpose: 'Desktop app shell.',
+          owner: '0disoft',
+          risk_level: 'medium',
+          create_when: [
+            'A product needs native desktop integration beyond a web app.'
+          ]
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+});

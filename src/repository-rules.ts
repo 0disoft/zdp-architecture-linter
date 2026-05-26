@@ -20,6 +20,8 @@ const NON_DEPLOYABLE_REPO_STAGES = new Set([
   'later_candidate'
 ]);
 
+const CONDITIONAL_DEPLOY_UNIT_STAGE = 'conditional_deploy_unit';
+
 const EMPTY_REPOSITORY_AREA_RULES: RepositoryAreaRules = {
   exact: new Map(),
   prefixes: []
@@ -148,7 +150,8 @@ function validateRepositoryRecord(
         ]
     ),
     ...validateRepositoryStageKind(value, repositoryPath),
-    ...validateRepositoryAreaPrefix(value, repositoryPath, areaRules)
+    ...validateRepositoryAreaPrefix(value, repositoryPath, areaRules),
+    ...validateConditionalDeployUnitTrigger(value, repositoryPath)
   ];
 }
 
@@ -176,6 +179,30 @@ function validateRepositoryStageKind(
   }
 
   return [];
+}
+
+function validateConditionalDeployUnitTrigger(
+  value: Record<string, unknown>,
+  repositoryPath: string
+): readonly Diagnostic[] {
+  if (readStringField(value, 'repo_stage') !== CONDITIONAL_DEPLOY_UNIT_STAGE) {
+    return [];
+  }
+
+  if (hasCreateWhenEvidence(value.create_when)) {
+    return [];
+  }
+
+  return [
+    {
+      ruleId: 'ZDP-REPO-WARN-001',
+      severity: 'warning',
+      file: REPOSITORIES_FILE,
+      path: `${repositoryPath}.create_when`,
+      message:
+        'Repository with repo_stage `conditional_deploy_unit` should declare `create_when` evidence.'
+    }
+  ];
 }
 
 function validateRepositoryAreaPrefix(
@@ -300,6 +327,18 @@ function hasUsableField(value: Record<string, unknown>, field: string): boolean 
   }
 
   return candidate !== null && candidate !== undefined;
+}
+
+function hasCreateWhenEvidence(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  return value.some((entry) => typeof entry === 'string' && entry.trim().length > 0);
 }
 
 function readStringField(value: Record<string, unknown>, field: string): string | null {

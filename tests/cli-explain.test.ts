@@ -1,14 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-
-const repoRoot = join(import.meta.dir, '..');
+import {
+  createMinimalArchitectureFiles,
+  runCli,
+  withArchitectureFiles
+} from './cli-test-helpers.ts';
 
 describe('explain CLI', () => {
   test('returns diagnostics with related graph context for a failing repository service contract', async () => {
-    await withArchitectureAndRepository(
-      {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
         'schemas/service.schema.json': JSON.stringify({
           $schema: 'https://json-schema.org/draft/2020-12/schema',
           type: 'object',
@@ -75,9 +75,16 @@ data:
   datastores:
     - privacy_credential_vault
 `
-      },
+      }),
       async ({ architectureRoot, repositoryRoot }) => {
-        const result = await runExplainCli(architectureRoot, repositoryRoot);
+        const result = await runCli([
+          'explain',
+          '--architecture',
+          architectureRoot,
+          '--repository',
+          repositoryRoot,
+          '--json'
+        ]);
 
         expect(result.exitCode).toBe(1);
         expect(result.stderr).toBe('');
@@ -125,63 +132,4 @@ data:
 
 interface ExplainCliReport {
   readonly diagnostics: readonly unknown[];
-}
-
-async function runExplainCli(
-  architectureRoot: string,
-  repositoryRoot: string
-): Promise<{
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}> {
-  const childProcess = Bun.spawn({
-    cmd: [
-      process.execPath,
-      'src/cli.ts',
-      'explain',
-      '--architecture',
-      architectureRoot,
-      '--repository',
-      repositoryRoot,
-      '--json'
-    ],
-    cwd: repoRoot,
-    stdout: 'pipe',
-    stderr: 'pipe'
-  });
-
-  const [exitCode, stdout, stderr] = await Promise.all([
-    childProcess.exited,
-    new Response(childProcess.stdout).text(),
-    new Response(childProcess.stderr).text()
-  ]);
-
-  return { exitCode, stdout, stderr };
-}
-
-async function withArchitectureAndRepository(
-  files: Record<string, string>,
-  callback: (paths: {
-    readonly architectureRoot: string;
-    readonly repositoryRoot: string;
-  }) => Promise<void>
-): Promise<void> {
-  const architectureRoot = await mkdtemp(join(tmpdir(), 'zdp-cli-explain-'));
-
-  try {
-    for (const [relativePath, source] of Object.entries(files)) {
-      const absolutePath = join(architectureRoot, relativePath);
-
-      await mkdir(dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, source.trimStart(), 'utf8');
-    }
-
-    await callback({
-      architectureRoot,
-      repositoryRoot: join(architectureRoot, 'repo')
-    });
-  } finally {
-    await rm(architectureRoot, { recursive: true, force: true });
-  }
 }
