@@ -2,6 +2,10 @@
 import { resolve } from 'node:path';
 import { loadArchitectureGraph } from './architecture-graph-loader.ts';
 import {
+  createArchitecturePackReport,
+  formatArchitecturePackReportText
+} from './architecture-pack-report.ts';
+import {
   createArchitectureGraphReport,
   formatArchitectureGraphReportText
 } from './architecture-graph-report.ts';
@@ -20,6 +24,7 @@ type ParsedCommand =
   | ParsedValidateCommand
   | ParsedGraphCommand
   | ParsedExplainCommand
+  | ParsedPackCommand
   | ParsedCheckSplitCommand;
 
 interface ParsedValidateCommand {
@@ -46,6 +51,14 @@ interface ParsedExplainCommand {
 interface ParsedCheckSplitCommand {
   readonly name: 'check-split';
   readonly architectureRoot: string;
+  readonly json: boolean;
+}
+
+interface ParsedPackCommand {
+  readonly name: 'pack';
+  readonly architectureRoot: string;
+  readonly repo: string;
+  readonly task: string;
   readonly json: boolean;
 }
 
@@ -114,6 +127,25 @@ async function main(argv: readonly string[]): Promise<number> {
       return hasErrors(splitResult) ? 1 : 0;
     }
 
+    if (command.name === 'pack') {
+      const graph = await loadArchitectureGraph({
+        architectureRoot: command.architectureRoot
+      });
+      const report = createArchitecturePackReport({
+        graph,
+        repo: command.repo,
+        task: command.task
+      });
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatArchitecturePackReportText(report));
+      }
+
+      return 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -134,6 +166,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     commandName !== 'validate' &&
     commandName !== 'graph' &&
     commandName !== 'explain' &&
+    commandName !== 'pack' &&
     commandName !== 'check-split'
   ) {
     return null;
@@ -143,6 +176,23 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
 
   if (architecture === null) {
     return null;
+  }
+
+  if (commandName === 'pack') {
+    const repo = readOption(rest, '--repo');
+    const task = readOption(rest, '--task');
+
+    if (repo === null || task === null) {
+      return null;
+    }
+
+    return {
+      name: 'pack',
+      architectureRoot: resolve(architecture),
+      repo,
+      task,
+      json: rest.includes('--json')
+    };
   }
 
   return {
@@ -197,6 +247,7 @@ function printUsage(): void {
       '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--json]',
       '  zdp-arch check-split --architecture <path> [--json]'
     ].join('\n')
   );
