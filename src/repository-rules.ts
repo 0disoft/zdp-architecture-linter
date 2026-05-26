@@ -34,6 +34,10 @@ const LATEST_REVIEW_NOTE_PATTERNS = [
   '최신 정책'
 ] as const;
 
+const EMPTY_REPOSITORY_POLICY_NOTE_RULES: RepositoryPolicyNoteRules = {
+  rules: []
+};
+
 const EMPTY_REPOSITORY_AREA_RULES: RepositoryAreaRules = {
   exact: new Map(),
   prefixes: []
@@ -67,6 +71,15 @@ export interface RepositoryAreaRules {
 
 export interface RepositoryRoadmapEvidence {
   readonly text: string;
+}
+
+export interface RepositoryPolicyNoteRule {
+  readonly targetField: string;
+  readonly notePatterns: readonly string[];
+}
+
+export interface RepositoryPolicyNoteRules {
+  readonly rules: readonly RepositoryPolicyNoteRule[];
 }
 
 export function buildRepositoryIndex(value: unknown): RepositoryIndex {
@@ -113,10 +126,34 @@ export function buildRepositoryAreaRules(value: unknown): RepositoryAreaRules {
   return { exact, prefixes };
 }
 
+export function buildRepositoryPolicyNoteRules(
+  value: unknown
+): RepositoryPolicyNoteRules {
+  if (!isRecord(value) || !Array.isArray(value.repository_note_machine_field_rules)) {
+    return EMPTY_REPOSITORY_POLICY_NOTE_RULES;
+  }
+
+  return {
+    rules: value.repository_note_machine_field_rules.flatMap((entry) => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+
+      const targetField = readStringField(entry, 'target_field');
+      const notePatterns = readStringArray(entry.note_patterns);
+
+      return targetField === null || notePatterns.length === 0
+        ? []
+        : [{ targetField, notePatterns }];
+    })
+  };
+}
+
 export function validateRepositoriesCatalog(
   value: unknown,
   areaRules: RepositoryAreaRules = EMPTY_REPOSITORY_AREA_RULES,
-  roadmapEvidence: RepositoryRoadmapEvidence = EMPTY_REPOSITORY_ROADMAP_EVIDENCE
+  roadmapEvidence: RepositoryRoadmapEvidence = EMPTY_REPOSITORY_ROADMAP_EVIDENCE,
+  policyNoteRules: RepositoryPolicyNoteRules = EMPTY_REPOSITORY_POLICY_NOTE_RULES
 ): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -139,7 +176,13 @@ export function validateRepositoriesCatalog(
   }
 
   return repositories.flatMap((repository, index) =>
-    validateRepositoryRecord(repository, index, areaRules, roadmapEvidence)
+    validateRepositoryRecord(
+      repository,
+      index,
+      areaRules,
+      roadmapEvidence,
+      policyNoteRules
+    )
   );
 }
 
@@ -147,7 +190,8 @@ function validateRepositoryRecord(
   value: unknown,
   index: number,
   areaRules: RepositoryAreaRules,
-  roadmapEvidence: RepositoryRoadmapEvidence
+  roadmapEvidence: RepositoryRoadmapEvidence,
+  policyNoteRules: RepositoryPolicyNoteRules
 ): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -179,7 +223,12 @@ function validateRepositoryRecord(
       repositoryPath,
       roadmapEvidence
     ),
-    ...validatePolicyNotesMachineFields(value, repositoryPath)
+    ...validateLatestReviewPolicyNotes(value, repositoryPath),
+    ...validateGeneralPolicyNotesMachineFields(
+      value,
+      repositoryPath,
+      policyNoteRules
+    )
   ];
 }
 
@@ -264,7 +313,7 @@ function validateReservedDeployUnitRoadmapEvidence(
   ];
 }
 
-function validatePolicyNotesMachineFields(
+function validateLatestReviewPolicyNotes(
   value: Record<string, unknown>,
   repositoryPath: string
 ): readonly Diagnostic[] {
@@ -284,15 +333,48 @@ function validatePolicyNotesMachineFields(
   ];
 }
 
-function hasLatestReviewPolicyNote(value: unknown): boolean {
-  if (!Array.isArray(value)) {
-    return false;
+function validateGeneralPolicyNotesMachineFields(
+  value: Record<string, unknown>,
+  repositoryPath: string,
+  policyNoteRules: RepositoryPolicyNoteRules
+): readonly Diagnostic[] {
+  const notes = readStringArray(value.notes);
+
+  if (notes.length === 0 || policyNoteRules.rules.length === 0) {
+    return [];
   }
 
-  return value.some(
-    (entry) =>
-      typeof entry === 'string' &&
-      LATEST_REVIEW_NOTE_PATTERNS.some((pattern) => entry.includes(pattern))
+  const diagnostics: Diagnostic[] = [];
+
+  for (const rule of policyNoteRules.rules) {
+    if (hasUsableField(value, rule.targetField)) {
+      continue;
+    }
+
+    const matchingNote = notes.find((note) =>
+      rule.notePatterns.some((pattern) => note.includes(pattern))
+    );
+
+    if (matchingNote === undefined) {
+      continue;
+    }
+
+    diagnostics.push({
+      ruleId: 'ZDP-NOTES-WARN-002',
+      severity: 'warning',
+      file: REPOSITORIES_FILE,
+      path: `${repositoryPath}.${rule.targetField}`,
+      message:
+        `Repository notes contain policy text that should be moved to machine field \`${rule.targetField}\`: ${matchingNote}`
+    });
+  }
+
+  return diagnostics;
+}
+
+function hasLatestReviewPolicyNote(value: unknown): boolean {
+  return readStringArray(value).some((entry) =>
+    LATEST_REVIEW_NOTE_PATTERNS.some((pattern) => entry.includes(pattern))
   );
 }
 
@@ -430,6 +512,16 @@ function hasCreateWhenEvidence(value: unknown): boolean {
   }
 
   return value.some((entry) => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function readStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
 }
 
 function readStringField(value: Record<string, unknown>, field: string): string | null {

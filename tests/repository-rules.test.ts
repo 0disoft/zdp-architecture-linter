@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildRepositoryAreaRules,
+  buildRepositoryPolicyNoteRules,
   validateRepositoriesCatalog
 } from '../src/repository-rules.ts';
 
@@ -15,6 +16,23 @@ const repositoryAreaRules = buildRepositoryAreaRules({
       { prefix: 'zdp-client-', area: 'frontend' }
     ]
   }
+});
+
+const repositoryPolicyNoteRules = buildRepositoryPolicyNoteRules({
+  repository_note_machine_field_rules: [
+    {
+      target_field: 'create_after',
+      note_patterns: ['안정화된 뒤']
+    },
+    {
+      target_field: 'create_when',
+      note_patterns: ['증거가 생기면', '완성되기 전까지']
+    },
+    {
+      target_field: 'forbidden',
+      note_patterns: ['직접 처리하지 않는다', '금지']
+    }
+  ]
 });
 
 describe('repository catalog required fields', () => {
@@ -348,6 +366,78 @@ describe('repository notes machine fields', () => {
         }
       ]
     });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('warns when policy notes have no matching machine field', () => {
+    const diagnostics = validateRepositoriesCatalog(
+      {
+        repositories: [
+          {
+            name: 'zdp-api-contracts',
+            status: 'reserved',
+            repo_stage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'architecture',
+            purpose: 'API contracts.',
+            owner: '0disoft',
+            risk_level: 'medium',
+            notes: ['zdp-architecture-linter가 안정화된 뒤 생성한다.']
+          }
+        ]
+      },
+      undefined,
+      undefined,
+      repositoryPolicyNoteRules
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-NOTES-WARN-002',
+        severity: 'warning',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-api-contracts].create_after',
+        message:
+          'Repository notes contain policy text that should be moved to machine field `create_after`: zdp-architecture-linter가 안정화된 뒤 생성한다.'
+      }
+    ]);
+  });
+
+  test('passes when policy notes have matching machine fields', () => {
+    const diagnostics = validateRepositoriesCatalog(
+      {
+        repositories: [
+          {
+            name: 'zdp-data-platform',
+            status: 'reserved',
+            repo_stage: 'later_candidate',
+            kind: 'candidate',
+            area: 'data',
+            purpose: 'Data platform.',
+            owner: '0disoft',
+            risk_level: 'medium',
+            create_when: ['PostgreSQL과 로그만으로 부족하다는 증거가 생긴다.'],
+            notes: ['PostgreSQL과 로그만으로 부족하다는 증거가 생기면 독립 배포 단위로 승격한다.']
+          },
+          {
+            name: 'zdp-money-platform',
+            status: 'reserved',
+            repo_stage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'money',
+            purpose: 'Money platform.',
+            owner: '0disoft',
+            risk_level: 'high',
+            forbidden: ['제품 저장소에서 결제·원장·크레딧을 직접 처리하지 않는다.'],
+            notes: ['결제·원장·크레딧·환불·차지백은 제품 저장소에서 직접 처리하지 않는다.']
+          }
+        ]
+      },
+      undefined,
+      undefined,
+      repositoryPolicyNoteRules
+    );
 
     expect(diagnostics).toEqual([]);
   });

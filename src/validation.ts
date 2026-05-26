@@ -56,6 +56,7 @@ import {
 } from './money-rules.ts';
 import {
   buildRepositoryAreaRules,
+  buildRepositoryPolicyNoteRules,
   type RepositoryRoadmapEvidence,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
@@ -113,6 +114,9 @@ export async function validateArchitecture(
     externalProviders: externalProviderIndex
   } = graph.indexes;
   const repositoryAreaRules = buildRepositoryAreaRules(catalogs.repositoryRules);
+  const repositoryPolicyNoteRules = buildRepositoryPolicyNoteRules(
+    catalogs.repositoryRules
+  );
   const repositoryRoadmapEvidence: RepositoryRoadmapEvidence = {
     text: catalogs.repositoryRoadmapText ?? ''
   };
@@ -250,7 +254,8 @@ export async function validateArchitecture(
       ...validateRepositoriesCatalog(
         catalogs.repositories,
         repositoryAreaRules,
-        repositoryRoadmapEvidence
+        repositoryRoadmapEvidence,
+        repositoryPolicyNoteRules
       ),
       ...validateDataClassCatalog(catalogs.dataClasses),
       ...validateDataClassAllowedDatastoreReferences(
