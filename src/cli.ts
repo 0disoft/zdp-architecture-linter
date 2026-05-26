@@ -36,7 +36,10 @@ import {
   hasErrors,
   type ValidationResult
 } from './diagnostics.ts';
-import { writeGeneratedArchitectureFile } from './generated-output.ts';
+import {
+  checkGeneratedArchitectureFile,
+  writeGeneratedArchitectureFile
+} from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { validateArchitecture } from './validation.ts';
 
@@ -106,6 +109,7 @@ interface ParsedNormalizeCommand {
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly out?: string;
+  readonly check: boolean;
   readonly json: boolean;
 }
 
@@ -284,12 +288,48 @@ async function main(argv: readonly string[]): Promise<number> {
       if (command.out !== undefined) {
         if (hasErrors(result)) {
           console.error(
-            'Refusing to write generated registry because validation has errors.'
+            command.check
+              ? 'Refusing to check generated registry because validation has errors.'
+              : 'Refusing to write generated registry because validation has errors.'
           );
           return 1;
         }
 
         const contents = `${JSON.stringify(report, null, 2)}\n`;
+
+        if (command.check) {
+          const checkResult = await checkGeneratedArchitectureFile({
+            architectureRoot: command.architectureRoot,
+            outputPath: command.out,
+            contents
+          });
+
+          if (!checkResult.matches) {
+            console.error(
+              `Generated registry is stale: ${checkResult.path}\nRun \`zdp-arch normalize --architecture <path> --out ${command.out}\` to regenerate it.`
+            );
+            return 1;
+          }
+
+          if (command.json) {
+            console.log(
+              JSON.stringify(
+                {
+                  status: 'up-to-date',
+                  path: checkResult.path,
+                  bytes: checkResult.bytes
+                },
+                null,
+                2
+              )
+            );
+          } else {
+            console.log(`zdp-arch: generated registry is up to date (${checkResult.path})`);
+          }
+
+          return 0;
+        }
+
         const writeResult = await writeGeneratedArchitectureFile({
           architectureRoot: command.architectureRoot,
           outputPath: command.out,
@@ -444,6 +484,14 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     };
   }
 
+  if (commandName === 'normalize' && rest.includes('--check')) {
+    const out = readOption(rest, '--out');
+
+    if (out === null) {
+      return null;
+    }
+  }
+
   return {
     name: commandName,
     architectureRoot: resolve(architecture),
@@ -455,6 +503,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       commandName === 'normalize'
         ? readOption(rest, '--out') ?? undefined
         : undefined,
+    check: commandName === 'normalize' && rest.includes('--check'),
     json: rest.includes('--json')
   };
 }
@@ -504,7 +553,7 @@ function printUsage(): void {
       '  zdp-arch check-split --architecture <path> [--json]',
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
       '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json] [--json]',
+      '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
       '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--json]',
       '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
     ].join('\n')

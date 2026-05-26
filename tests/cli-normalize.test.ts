@@ -79,6 +79,94 @@ describe('normalize CLI', () => {
     );
   });
 
+  test('checks that generated registry is up to date', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
+        ...createNormalizeCatalogFiles(),
+        'generated/README.md': '# Generated Outputs\n'
+      }),
+      async ({ architectureRoot }) => {
+        const writeResult = await runCli([
+          'normalize',
+          '--architecture',
+          architectureRoot,
+          '--out',
+          'generated/registry.json',
+          '--json'
+        ]);
+        const checkResult = await runCli([
+          'normalize',
+          '--architecture',
+          architectureRoot,
+          '--out',
+          'generated/registry.json',
+          '--check',
+          '--json'
+        ]);
+
+        expect(writeResult.exitCode).toBe(0);
+        expect(checkResult.exitCode).toBe(0);
+        expect(checkResult.stderr).toBe('');
+
+        const report = JSON.parse(checkResult.stdout) as NormalizeCheckCliReport;
+
+        expect(report.status).toBe('up-to-date');
+        expect(report.path).toBe(join(architectureRoot, 'generated/registry.json'));
+        expect(report.bytes).toBeGreaterThan(0);
+      }
+    );
+  });
+
+  test('fails check when generated registry is stale', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
+        ...createNormalizeCatalogFiles(),
+        'generated/README.md': '# Generated Outputs\n',
+        'generated/registry.json': '{}\n'
+      }),
+      async ({ architectureRoot }) => {
+        const result = await runCli([
+          'normalize',
+          '--architecture',
+          architectureRoot,
+          '--out',
+          'generated/registry.json',
+          '--check'
+        ]);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain('Generated registry is stale:');
+        expect(result.stderr).toContain(
+          'Run `zdp-arch normalize --architecture <path> --out generated/registry.json` to regenerate it.'
+        );
+      }
+    );
+  });
+
+  test('fails check when generated registry is missing', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
+        ...createNormalizeCatalogFiles(),
+        'generated/README.md': '# Generated Outputs\n'
+      }),
+      async ({ architectureRoot }) => {
+        const result = await runCli([
+          'normalize',
+          '--architecture',
+          architectureRoot,
+          '--out',
+          'generated/registry.json',
+          '--check'
+        ]);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain('Generated output file does not exist:');
+      }
+    );
+  });
+
   test('refuses to write outside the generated directory', async () => {
     await withArchitectureFiles(
       createMinimalArchitectureFiles({
@@ -130,7 +218,27 @@ describe('normalize CLI', () => {
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json] [--json]'
+      'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
+    );
+  });
+
+  test('prints usage when check is provided without out', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles(createNormalizeCatalogFiles()),
+      async ({ architectureRoot }) => {
+        const result = await runCli([
+          'normalize',
+          '--architecture',
+          architectureRoot,
+          '--check'
+        ]);
+
+        expect(result.exitCode).toBe(2);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain(
+          'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
+        );
+      }
     );
   });
 });
@@ -195,6 +303,12 @@ interface NormalizeCliReport {
 
 interface NormalizeWriteCliReport {
   readonly status: 'written';
+  readonly path: string;
+  readonly bytes: number;
+}
+
+interface NormalizeCheckCliReport {
+  readonly status: 'up-to-date';
   readonly path: string;
   readonly bytes: number;
 }

@@ -9,11 +9,57 @@ export interface GeneratedOutputWriteResult {
   readonly bytes: number;
 }
 
+export interface GeneratedOutputCheckResult {
+  readonly path: string;
+  readonly bytes: number;
+  readonly expectedBytes: number;
+  readonly matches: boolean;
+}
+
 export async function writeGeneratedArchitectureFile(input: {
   readonly architectureRoot: string;
   readonly outputPath: string;
   readonly contents: string;
 }): Promise<GeneratedOutputWriteResult> {
+  const { outputPath } = await resolveGeneratedOutputPath(input);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, input.contents, 'utf8');
+
+  return {
+    path: outputPath,
+    bytes: Buffer.byteLength(input.contents, 'utf8')
+  };
+}
+
+export async function checkGeneratedArchitectureFile(input: {
+  readonly architectureRoot: string;
+  readonly outputPath: string;
+  readonly contents: string;
+}): Promise<GeneratedOutputCheckResult> {
+  const { outputPath } = await resolveGeneratedOutputPath(input);
+  let currentContents: string;
+
+  try {
+    currentContents = await readFile(outputPath, 'utf8');
+  } catch {
+    throw new Error(`Generated output file does not exist: ${outputPath}`);
+  }
+
+  return {
+    path: outputPath,
+    bytes: Buffer.byteLength(currentContents, 'utf8'),
+    expectedBytes: Buffer.byteLength(input.contents, 'utf8'),
+    matches: currentContents === input.contents
+  };
+}
+
+async function resolveGeneratedOutputPath(input: {
+  readonly architectureRoot: string;
+  readonly outputPath: string;
+}): Promise<{
+  readonly outputPath: string;
+  readonly generatedRoot: string;
+}> {
   const architectureRoot = resolve(input.architectureRoot);
   const generatedRoot = resolve(architectureRoot, GENERATED_DIRECTORY);
   const outputPath = resolve(architectureRoot, input.outputPath);
@@ -25,13 +71,8 @@ export async function writeGeneratedArchitectureFile(input: {
   }
 
   await assertGeneratedBoundary(generatedRoot);
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, input.contents, 'utf8');
 
-  return {
-    path: outputPath,
-    bytes: Buffer.byteLength(input.contents, 'utf8')
-  };
+  return { outputPath, generatedRoot };
 }
 
 function isInsideDirectory(candidatePath: string, directoryPath: string): boolean {
