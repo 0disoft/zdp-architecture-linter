@@ -36,6 +36,7 @@ import {
   hasErrors,
   type ValidationResult
 } from './diagnostics.ts';
+import { writeGeneratedArchitectureFile } from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { validateArchitecture } from './validation.ts';
 
@@ -104,6 +105,7 @@ interface ParsedNormalizeCommand {
   readonly name: 'normalize';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly out?: string;
   readonly json: boolean;
 }
 
@@ -279,6 +281,40 @@ async function main(argv: readonly string[]): Promise<number> {
         validation: result
       });
 
+      if (command.out !== undefined) {
+        if (hasErrors(result)) {
+          console.error(
+            'Refusing to write generated registry because validation has errors.'
+          );
+          return 1;
+        }
+
+        const contents = `${JSON.stringify(report, null, 2)}\n`;
+        const writeResult = await writeGeneratedArchitectureFile({
+          architectureRoot: command.architectureRoot,
+          outputPath: command.out,
+          contents
+        });
+
+        if (command.json) {
+          console.log(
+            JSON.stringify(
+              {
+                status: 'written',
+                path: writeResult.path,
+                bytes: writeResult.bytes
+              },
+              null,
+              2
+            )
+          );
+        } else {
+          console.log(`zdp-arch: wrote ${writeResult.path}`);
+        }
+
+        return 0;
+      }
+
       if (command.json) {
         console.log(JSON.stringify(report, null, 2));
       } else {
@@ -415,6 +451,10 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       commandName === 'check-split'
         ? undefined
         : readOptionalResolvedPath(rest, '--repository'),
+    out:
+      commandName === 'normalize'
+        ? readOption(rest, '--out') ?? undefined
+        : undefined,
     json: rest.includes('--json')
   };
 }
@@ -464,7 +504,7 @@ function printUsage(): void {
       '  zdp-arch check-split --architecture <path> [--json]',
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
       '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch normalize --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json] [--json]',
       '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--json]',
       '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
     ].join('\n')
