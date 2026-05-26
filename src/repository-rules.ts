@@ -52,6 +52,7 @@ export interface RepositoryCatalogRecord {
   readonly repoStage: string | null;
   readonly kind: string | null;
   readonly area: string | null;
+  readonly purpose: string | null;
   readonly path: string;
 }
 
@@ -107,6 +108,7 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
         repoStage: readStringField(repository, 'repo_stage'),
         kind: readStringField(repository, 'kind'),
         area: readStringField(repository, 'area'),
+        purpose: readStringField(repository, 'purpose'),
         path: getRepositoryDiagnosticPath(repository, index)
       }
     ]);

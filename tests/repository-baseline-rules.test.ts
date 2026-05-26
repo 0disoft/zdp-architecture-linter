@@ -123,19 +123,128 @@ describe('repository root markdown rules', () => {
         repositoryRoot,
         repositoryServiceContract: {
           service: {
-            repo: 'zdp-architecture-linter'
+            repo: 'zdp-core-platform'
           }
         },
         repositoryIndex: createRepositoryIndex({
-          name: 'zdp-architecture-linter',
+          name: 'zdp-core-platform',
           repoStage: 'deploy_unit',
-          kind: 'tooling',
-          area: 'architecture'
+          kind: 'deploy_unit',
+          area: 'core'
         })
       });
 
       expect(diagnostics).toEqual([]);
     });
+  });
+
+  test('passes when a CLI repository includes CONTRIBUTING.md and CHANGELOG.md', async () => {
+    await withRepositoryRoot(
+      {
+        'CONTRIBUTING.md': '# Contributing\n',
+        'CHANGELOG.md': '# Changelog\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRootMarkdownFiles({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-architecture-linter'
+            },
+            runtime: {
+              core: 'local-cli'
+            }
+          },
+          repositoryIndex: createRepositoryIndex({
+            name: 'zdp-architecture-linter',
+            repoStage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'architecture',
+            purpose: 'Architecture policy validator.'
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('fails when a CLI repository is missing CONTRIBUTING.md and CHANGELOG.md', async () => {
+    await withRepositoryRoot({}, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryRootMarkdownFiles({
+        repositoryRoot,
+        repositoryServiceContract: {
+          service: {
+            repo: 'zdp-architecture-linter'
+          },
+          runtime: {
+            core: 'local-cli'
+          }
+        },
+        repositoryIndex: createRepositoryIndex({
+          name: 'zdp-architecture-linter',
+          repoStage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'architecture',
+          purpose: 'Architecture policy validator.'
+        })
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-REPO-MARKDOWN-002',
+          severity: 'error',
+          file: 'CONTRIBUTING.md',
+          path: 'repository.root',
+          message:
+            'Package, CLI, or template repository `zdp-architecture-linter` must include root `CONTRIBUTING.md`.'
+        },
+        {
+          ruleId: 'ZDP-REPO-MARKDOWN-002',
+          severity: 'error',
+          file: 'CHANGELOG.md',
+          path: 'repository.root',
+          message:
+            'Package, CLI, or template repository `zdp-architecture-linter` must include root `CHANGELOG.md`.'
+        }
+      ]);
+    });
+  });
+
+  test('treats package and template purpose text as package tooling', async () => {
+    await withRepositoryRoot(
+      {
+        'CONTRIBUTING.md': '# Contributing\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRootMarkdownFiles({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-libs-ts'
+            }
+          },
+          repositoryIndex: createRepositoryIndex({
+            name: 'zdp-libs-ts',
+            repoStage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'platform',
+            purpose: 'ZDP 계약 스키마, 이벤트 계약, SDK 공통 코드'
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-REPO-MARKDOWN-002',
+            severity: 'error',
+            file: 'CHANGELOG.md',
+            path: 'repository.root',
+            message:
+              'Package, CLI, or template repository `zdp-libs-ts` must include root `CHANGELOG.md`.'
+          }
+        ]);
+      }
+    );
   });
 });
 
@@ -164,6 +273,7 @@ function createRepositoryIndex(repository: {
   readonly repoStage: string;
   readonly kind: string;
   readonly area: string;
+  readonly purpose?: string;
 }): RepositoryIndex {
   return {
     byName: new Map([
@@ -171,6 +281,7 @@ function createRepositoryIndex(repository: {
         repository.name,
         {
           ...repository,
+          purpose: repository.purpose ?? null,
           path: `repositories[0:${repository.name}]`
         }
       ]
