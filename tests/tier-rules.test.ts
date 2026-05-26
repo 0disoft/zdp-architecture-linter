@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
+  buildTier3RiskyExperimentPolicy,
   validateTierCriticalControls,
-  validateTierOperationalContracts
+  validateTierOperationalContracts,
+  validateTier3RiskyExperimentContracts
 } from '../src/tier-rules.ts';
 
 const tierOperationalContractPolicy = buildTierOperationalContractPolicy({
@@ -45,6 +47,28 @@ const tierCriticalControlsPolicy = buildTierCriticalControlsPolicy({
         require_values: {
           'audit.immutable': true
         }
+      }
+    }
+  ]
+});
+
+const tier3RiskyExperimentPolicy = buildTier3RiskyExperimentPolicy({
+  rules: [
+    {
+      id: 'ZDP-TIER-WARN-001',
+      condition: {
+        all: [
+          'service.tier == tier3',
+          'risky_operational_surface == true'
+        ]
+      },
+      assertions: {
+        require_fields: [
+          'cost.cost_center',
+          'cost.monthly_budget_limit_usd',
+          'exit.kill_criteria',
+          'observability.otel.service_name'
+        ]
       }
     }
   ]
@@ -221,6 +245,121 @@ describe('tier operational contracts', () => {
         message: '`services` must be a YAML array.'
       }
     ]);
+  });
+});
+
+describe('tier3 risky experiment contracts', () => {
+  test('passes when a low-risk tier3 experiment omits operating fields', () => {
+    const diagnostics = validateTier3RiskyExperimentContracts(
+      {
+        services: [
+          {
+            id: 'static-prototype',
+            service: {
+              tier: 'tier3'
+            }
+          }
+        ]
+      },
+      tier3RiskyExperimentPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('warns when a risky tier3 experiment omits minimal operating fields', () => {
+    const diagnostics = validateTier3RiskyExperimentContracts(
+      {
+        services: [
+          {
+            id: 'lead-form-prototype',
+            service: {
+              tier: 'tier3'
+            },
+            api: {
+              exposure: 'public'
+            },
+            providers: [
+              {
+                id: 'resend'
+              }
+            ],
+            cost: {},
+            exit: {},
+            observability: {
+              otel: {}
+            }
+          }
+        ]
+      },
+      tier3RiskyExperimentPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:lead-form-prototype].cost.cost_center',
+        message:
+          'Risky tier3 service `lead-form-prototype` should set `cost.cost_center`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:lead-form-prototype].cost.monthly_budget_limit_usd',
+        message:
+          'Risky tier3 service `lead-form-prototype` should set `cost.monthly_budget_limit_usd`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:lead-form-prototype].exit.kill_criteria',
+        message:
+          'Risky tier3 service `lead-form-prototype` should set `exit.kill_criteria`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:lead-form-prototype].observability.otel.service_name',
+        message:
+          'Risky tier3 service `lead-form-prototype` should set `observability.otel.service_name`.'
+      }
+    ]);
+  });
+
+  test('passes when a risky tier3 experiment declares minimal operating fields', () => {
+    const diagnostics = validateTier3RiskyExperimentContracts(
+      {
+        services: [
+          {
+            id: 'lead-form-prototype',
+            tier: 'tier3',
+            api: {
+              exposure: 'public'
+            },
+            cost: {
+              cost_center: 'lab',
+              monthly_budget_limit_usd: 25
+            },
+            exit: {
+              kill_criteria: ['no qualified leads after 30 days']
+            },
+            observability: {
+              otel: {
+                service_name: 'lead-form-prototype'
+              }
+            }
+          }
+        ]
+      },
+      tier3RiskyExperimentPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 });
 

@@ -81,8 +81,10 @@ import {
 import {
   buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
+  buildTier3RiskyExperimentPolicy,
   validateTierCriticalControls,
-  validateTierOperationalContracts
+  validateTierOperationalContracts,
+  validateTier3RiskyExperimentContracts
 } from './tier-rules.ts';
 
 export interface ValidateArchitectureInput {
@@ -142,6 +144,9 @@ export async function validateArchitecture(
   const tierCriticalControlsPolicy = buildTierCriticalControlsPolicy(
     catalogs.tierRules
   );
+  const tier3RiskyExperimentPolicy = buildTier3RiskyExperimentPolicy(
+    catalogs.tierRules
+  );
   const publicApiContractPolicy = buildPublicApiContractPolicy(catalogs.tierRules);
 
   const fixtureDiagnostics = await validateFixtureExpectations({
@@ -158,6 +163,7 @@ export async function validateArchitecture(
     providerWebhookPolicy,
     tierOperationalContractPolicy,
     tierCriticalControlsPolicy,
+    tier3RiskyExperimentPolicy,
     publicApiContractPolicy
   });
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
@@ -228,6 +234,10 @@ export async function validateArchitecture(
           ...validateTierCriticalControls(
             repositoryServiceContractCatalog,
             tierCriticalControlsPolicy
+          ),
+          ...validateTier3RiskyExperimentContracts(
+            repositoryServiceContractCatalog,
+            tier3RiskyExperimentPolicy
           ),
           ...validatePublicApiContracts(
             repositoryServiceContractCatalog,
@@ -318,6 +328,10 @@ export async function validateArchitecture(
       ...validateTierCriticalControls(
         catalogs.services,
         tierCriticalControlsPolicy
+      ),
+      ...validateTier3RiskyExperimentContracts(
+        catalogs.services,
+        tier3RiskyExperimentPolicy
       ),
       ...validatePublicApiContracts(
         catalogs.services,

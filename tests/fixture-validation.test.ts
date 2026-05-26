@@ -19,7 +19,8 @@ import {
 import { buildRepositoryIndex } from '../src/repository-rules.ts';
 import {
   buildTierCriticalControlsPolicy,
-  buildTierOperationalContractPolicy
+  buildTierOperationalContractPolicy,
+  buildTier3RiskyExperimentPolicy
 } from '../src/tier-rules.ts';
 
 const emptyRules = { rules: [] };
@@ -184,6 +185,7 @@ function createFixtureContext(architectureRoot: string) {
     providerWebhookPolicy: buildProviderWebhookPolicy(emptyRules),
     tierOperationalContractPolicy: buildTierOperationalContractPolicy(emptyRules),
     tierCriticalControlsPolicy: buildTierCriticalControlsPolicy(emptyRules),
+    tier3RiskyExperimentPolicy: buildTier3RiskyExperimentPolicy(emptyRules),
     publicApiContractPolicy: buildPublicApiContractPolicy(publicApiRules)
   };
 }

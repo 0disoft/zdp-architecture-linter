@@ -3,6 +3,7 @@ import type { Diagnostic } from './diagnostics.ts';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const TIER_OPERATIONAL_CONTRACT_RULE_ID = 'ZDP-TIER-001';
 const TIER_CRITICAL_CONTROLS_RULE_ID = 'ZDP-TIER-002';
+const TIER3_RISKY_EXPERIMENT_RULE_ID = 'ZDP-TIER-WARN-001';
 
 const EMPTY_TIER_OPERATIONAL_CONTRACT_POLICY: TierOperationalContractPolicy = {
   enabled: false,
@@ -18,6 +19,12 @@ const EMPTY_TIER_CRITICAL_CONTROLS_POLICY: TierCriticalControlsPolicy = {
   requiredValues: new Map()
 };
 
+const EMPTY_TIER3_RISKY_EXPERIMENT_POLICY: Tier3RiskyExperimentPolicy = {
+  enabled: false,
+  requiredTier: null,
+  requiredFields: []
+};
+
 export interface TierOperationalContractPolicy {
   readonly enabled: boolean;
   readonly applicableTiers: readonly string[];
@@ -30,6 +37,12 @@ export interface TierCriticalControlsPolicy {
   readonly requiredTier: string | null;
   readonly requiredFields: readonly string[];
   readonly requiredValues: ReadonlyMap<string, unknown>;
+}
+
+export interface Tier3RiskyExperimentPolicy {
+  readonly enabled: boolean;
+  readonly requiredTier: string | null;
+  readonly requiredFields: readonly string[];
 }
 
 export function buildTierOperationalContractPolicy(
@@ -78,6 +91,28 @@ export function buildTierCriticalControlsPolicy(
     requiredTier: readServiceTierEqualityValue(tierRule.condition),
     requiredFields: readStringArray(assertions.require_fields),
     requiredValues: readValueMap(assertions.require_values)
+  };
+}
+
+export function buildTier3RiskyExperimentPolicy(
+  value: unknown
+): Tier3RiskyExperimentPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_TIER3_RISKY_EXPERIMENT_POLICY;
+  }
+
+  const tierRule = findRuleById(value.rules, TIER3_RISKY_EXPERIMENT_RULE_ID);
+
+  if (tierRule === undefined) {
+    return EMPTY_TIER3_RISKY_EXPERIMENT_POLICY;
+  }
+
+  const assertions = isRecord(tierRule.assertions) ? tierRule.assertions : {};
+
+  return {
+    enabled: true,
+    requiredTier: readServiceTierEqualityValue(tierRule.condition),
+    requiredFields: readStringArray(assertions.require_fields)
   };
 }
 
@@ -148,6 +183,23 @@ export function validateTierCriticalControls(
 
   return services.flatMap((service, index) =>
     validateServiceTierCriticalControls(service, index, policy)
+  );
+}
+
+export function validateTier3RiskyExperimentContracts(
+  value: unknown,
+  policy: Tier3RiskyExperimentPolicy
+): readonly Diagnostic[] {
+  if (!policy.enabled) {
+    return [];
+  }
+
+  if (!isRecord(value) || !Array.isArray(value.services)) {
+    return [];
+  }
+
+  return value.services.flatMap((service, index) =>
+    validateServiceTier3RiskyExperimentContract(service, index, policy)
   );
 }
 
@@ -271,6 +323,45 @@ function validateServiceTierCriticalControls(
   return diagnostics;
 }
 
+function validateServiceTier3RiskyExperimentContract(
+  value: unknown,
+  index: number,
+  policy: Tier3RiskyExperimentPolicy
+): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const tier = readStringAtPreferredPaths(value, ['service.tier', 'tier']);
+
+  if (
+    tier.value === null ||
+    policy.requiredTier === null ||
+    tier.value !== policy.requiredTier ||
+    !hasRiskyTier3OperationalSurface(value)
+  ) {
+    return [];
+  }
+
+  const servicePath = getServiceDiagnosticPath(value, index);
+  const serviceName = getServiceName(value, index);
+
+  return policy.requiredFields.flatMap((field) => {
+    if (hasUsableFieldAtPath(value, field)) {
+      return [];
+    }
+
+    return [
+      createTierDiagnostic(
+        TIER3_RISKY_EXPERIMENT_RULE_ID,
+        `${servicePath}.${field}`,
+        `Risky tier3 service \`${serviceName}\` should set \`${field}\`.`,
+        'warning'
+      )
+    ];
+  });
+}
+
 function readServiceTierConditionValues(condition: unknown): readonly string[] {
   const expression = readConditionExpressions(condition).find((entry) =>
     entry.startsWith('service.tier in [')
@@ -338,6 +429,35 @@ function hasUsableFieldAtPath(
   }
 
   return candidate !== null && candidate !== undefined;
+}
+
+function hasRiskyTier3OperationalSurface(value: Record<string, unknown>): boolean {
+  return (
+    readValueAtPath(value, 'domain.public_api') === true ||
+    hasPublicApiExposure(value) ||
+    hasNonEmptyArrayAtPath(value, 'direct_datastore_access') ||
+    hasNonEmptyArrayAtPath(value, 'data.classes') ||
+    hasNonEmptyArrayAtPath(value, 'data.datastores') ||
+    hasNonEmptyArrayAtPath(value, 'dependencies.datastores') ||
+    hasNonEmptyArrayAtPath(value, 'dependencies.queues') ||
+    hasNonEmptyArrayAtPath(value, 'providers') ||
+    hasNonEmptyArrayAtPath(value, 'external_dependencies')
+  );
+}
+
+function hasPublicApiExposure(value: Record<string, unknown>): boolean {
+  const exposure = readStringAtPath(value, 'api.exposure');
+
+  return exposure === 'partner' || exposure === 'public';
+}
+
+function hasNonEmptyArrayAtPath(
+  value: Record<string, unknown>,
+  path: string
+): boolean {
+  const candidate = readValueAtPath(value, path);
+
+  return Array.isArray(candidate) && candidate.length > 0;
 }
 
 function readStringAtPreferredPaths(
@@ -419,11 +539,12 @@ function getServiceName(value: Record<string, unknown>, index: number): string {
 function createTierDiagnostic(
   ruleId: string,
   path: string,
-  message: string
+  message: string,
+  severity: Diagnostic['severity'] = 'error'
 ): Diagnostic {
   return {
     ruleId,
-    severity: 'error',
+    severity,
     file: SERVICES_FILE,
     path,
     message

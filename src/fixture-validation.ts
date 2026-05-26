@@ -39,7 +39,9 @@ import {
   validateTierCriticalControls,
   validateTierOperationalContracts,
   type TierCriticalControlsPolicy,
-  type TierOperationalContractPolicy
+  type TierOperationalContractPolicy,
+  validateTier3RiskyExperimentContracts,
+  type Tier3RiskyExperimentPolicy
 } from './tier-rules.ts';
 
 const FIXTURE_INVALID_RULE_ID = 'ZDP-FIXTURE-001';
@@ -60,6 +62,7 @@ export interface FixtureValidationContext {
   readonly providerWebhookPolicy: ProviderWebhookPolicy;
   readonly tierOperationalContractPolicy: TierOperationalContractPolicy;
   readonly tierCriticalControlsPolicy: TierCriticalControlsPolicy;
+  readonly tier3RiskyExperimentPolicy: Tier3RiskyExperimentPolicy;
   readonly publicApiContractPolicy: PublicApiContractPolicy;
 }
 
@@ -251,6 +254,10 @@ function validateFixtureService(
       context.tierOperationalContractPolicy
     ),
     ...validateTierCriticalControls(services, context.tierCriticalControlsPolicy),
+    ...validateTier3RiskyExperimentContracts(
+      services,
+      context.tier3RiskyExperimentPolicy
+    ),
     ...validatePublicApiContracts(services, context.publicApiContractPolicy)
   ];
 }
