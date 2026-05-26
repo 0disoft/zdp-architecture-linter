@@ -1,6 +1,11 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
+import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import { loadArchitectureGraph } from './architecture-graph-loader.ts';
+import {
+  createArchitectureDiffReport,
+  formatArchitectureDiffReportText
+} from './architecture-diff-report.ts';
 import {
   createArchitecturePackReport,
   formatArchitecturePackReportText
@@ -18,6 +23,7 @@ import {
   hasErrors,
   type ValidationResult
 } from './diagnostics.ts';
+import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { validateArchitecture } from './validation.ts';
 
 type ParsedCommand =
@@ -25,7 +31,8 @@ type ParsedCommand =
   | ParsedGraphCommand
   | ParsedExplainCommand
   | ParsedPackCommand
-  | ParsedCheckSplitCommand;
+  | ParsedCheckSplitCommand
+  | ParsedDiffCommand;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -59,6 +66,14 @@ interface ParsedPackCommand {
   readonly architectureRoot: string;
   readonly repo: string;
   readonly task: string;
+  readonly json: boolean;
+}
+
+interface ParsedDiffCommand {
+  readonly name: 'diff';
+  readonly architectureRoot: string;
+  readonly base: string;
+  readonly head?: string;
   readonly json: boolean;
 }
 
@@ -146,6 +161,51 @@ async function main(argv: readonly string[]): Promise<number> {
       return 0;
     }
 
+    if (command.name === 'diff') {
+      const baseSnapshot = await loadArchitectureSnapshot({
+        architectureRoot: command.architectureRoot,
+        ref: command.base
+      });
+      const headSnapshot = await loadArchitectureSnapshot({
+        architectureRoot: command.architectureRoot,
+        ref: command.head
+      });
+
+      try {
+        const [
+          baseCatalogs,
+          headCatalogs,
+          baseValidation,
+          headValidation
+        ] = await Promise.all([
+          loadArchitectureCatalogs(baseSnapshot.root),
+          loadArchitectureCatalogs(headSnapshot.root),
+          validateArchitecture({
+            architectureRoot: baseSnapshot.root
+          }),
+          validateArchitecture({
+            architectureRoot: headSnapshot.root
+          })
+        ]);
+        const report = createArchitectureDiffReport({
+          baseCatalogs,
+          headCatalogs,
+          baseDiagnostics: baseValidation.diagnostics,
+          headDiagnostics: headValidation.diagnostics
+        });
+
+        if (command.json) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          console.log(formatArchitectureDiffReportText(report));
+        }
+
+        return 0;
+      } finally {
+        await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+      }
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -167,7 +227,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     commandName !== 'graph' &&
     commandName !== 'explain' &&
     commandName !== 'pack' &&
-    commandName !== 'check-split'
+    commandName !== 'check-split' &&
+    commandName !== 'diff'
   ) {
     return null;
   }
@@ -191,6 +252,22 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       repo,
       task,
+      json: rest.includes('--json')
+    };
+  }
+
+  if (commandName === 'diff') {
+    const base = readOption(rest, '--base');
+
+    if (base === null) {
+      return null;
+    }
+
+    return {
+      name: 'diff',
+      architectureRoot: resolve(architecture),
+      base,
+      head: readOption(rest, '--head') ?? undefined,
       json: rest.includes('--json')
     };
   }
@@ -248,7 +325,8 @@ function printUsage(): void {
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--json]',
-      '  zdp-arch check-split --architecture <path> [--json]'
+      '  zdp-arch check-split --architecture <path> [--json]',
+      '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]'
     ].join('\n')
   );
 }
