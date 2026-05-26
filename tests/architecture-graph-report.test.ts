@@ -19,6 +19,9 @@ describe('architecture graph report', () => {
             }
           ]
         },
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {
           services: [
             {

@@ -84,6 +84,10 @@ import {
   validateServiceSchemaFixtures
 } from './service-schema-validation.ts';
 import {
+  validateRepositorySplitCandidates,
+  validateSplitTriggerCatalog
+} from './split-rules.ts';
+import {
   buildTierCriticalControlsPolicy,
   buildTierOperationalContractPolicy,
   buildTier3RiskyExperimentPolicy,
@@ -261,6 +265,8 @@ export async function validateArchitecture(
         repositoryRoadmapEvidence,
         repositoryPolicyNoteRules
       ),
+      ...validateSplitTriggerCatalog(catalogs.splitTriggers, repositoryIndex),
+      ...validateRepositorySplitCandidates(catalogs.repositories),
       ...validateDataClassCatalog(catalogs.dataClasses),
       ...validateDataClassAllowedDatastoreReferences(
         catalogs.dataClasses,

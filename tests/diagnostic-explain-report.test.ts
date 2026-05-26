@@ -19,6 +19,9 @@ describe('diagnostic explain report', () => {
             }
           ]
         },
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {
           services: [
             {
@@ -116,6 +119,9 @@ describe('diagnostic explain report', () => {
     const graph = buildArchitectureGraph({
       catalogs: {
         repositories: {},
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {},
         datastores: {
           datastores: [
@@ -169,6 +175,9 @@ describe('diagnostic explain report', () => {
     const graph = buildArchitectureGraph({
       catalogs: {
         repositories: {},
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {},
         datastores: {
           datastores: [
@@ -222,6 +231,9 @@ describe('diagnostic explain report', () => {
     const graph = buildArchitectureGraph({
       catalogs: {
         repositories: {},
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {},
         datastores: {},
         dataClasses: {},

@@ -4,6 +4,7 @@ import { parse } from 'yaml';
 
 export interface ArchitectureCatalogs {
   readonly repositories: RepositoriesCatalog;
+  readonly splitTriggers: SplitTriggersCatalog;
   readonly repositoryRoadmapText?: string;
   readonly services: ServicesCatalog;
   readonly datastores: DatastoresCatalog;
@@ -20,6 +21,10 @@ export interface ArchitectureCatalogs {
 
 export interface RepositoriesCatalog {
   readonly repositories?: unknown;
+}
+
+export interface SplitTriggersCatalog {
+  readonly split_triggers?: unknown;
 }
 
 export interface ServicesCatalog {
@@ -73,6 +78,11 @@ export async function loadArchitectureCatalogs(
     repositories: await loadYamlFile<RepositoriesCatalog>(
       architectureRoot,
       'catalogs/repositories.yaml'
+    ),
+    splitTriggers: await loadOptionalYamlFile<SplitTriggersCatalog>(
+      architectureRoot,
+      'catalogs/split-triggers.yaml',
+      { split_triggers: [] }
     ),
     repositoryRoadmapText: [
       await loadTextFile(architectureRoot, 'ROADMAP.md'),
@@ -132,6 +142,30 @@ async function loadYamlFile<T>(root: string, relativePath: string): Promise<T> {
   return parsed as T;
 }
 
+async function loadOptionalYamlFile<T>(
+  root: string,
+  relativePath: string,
+  fallback: T
+): Promise<T> {
+  try {
+    return await loadYamlFile<T>(root, relativePath);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return fallback;
+    }
+
+    throw error;
+  }
+}
+
 async function loadTextFile(root: string, relativePath: string): Promise<string> {
   return readFile(join(root, relativePath), 'utf8');
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT'
+  );
 }

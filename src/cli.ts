@@ -16,7 +16,11 @@ import {
 } from './diagnostics.ts';
 import { validateArchitecture } from './validation.ts';
 
-type ParsedCommand = ParsedValidateCommand | ParsedGraphCommand | ParsedExplainCommand;
+type ParsedCommand =
+  | ParsedValidateCommand
+  | ParsedGraphCommand
+  | ParsedExplainCommand
+  | ParsedCheckSplitCommand;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -36,6 +40,12 @@ interface ParsedExplainCommand {
   readonly name: 'explain';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly json: boolean;
+}
+
+interface ParsedCheckSplitCommand {
+  readonly name: 'check-split';
+  readonly architectureRoot: string;
   readonly json: boolean;
 }
 
@@ -89,6 +99,21 @@ async function main(argv: readonly string[]): Promise<number> {
       return hasErrors(result) ? 1 : 0;
     }
 
+    if (command.name === 'check-split') {
+      const result = await validateArchitecture({
+        architectureRoot: command.architectureRoot
+      });
+      const splitResult: ValidationResult = {
+        diagnostics: result.diagnostics.filter(
+          (diagnostic) => diagnostic.ruleId === 'ZDP-SPLIT-001'
+        )
+      };
+
+      printResult(splitResult, command.json);
+
+      return hasErrors(splitResult) ? 1 : 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -108,7 +133,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   if (
     commandName !== 'validate' &&
     commandName !== 'graph' &&
-    commandName !== 'explain'
+    commandName !== 'explain' &&
+    commandName !== 'check-split'
   ) {
     return null;
   }
@@ -122,7 +148,10 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   return {
     name: commandName,
     architectureRoot: resolve(architecture),
-    repositoryRoot: readOptionalResolvedPath(rest, '--repository'),
+    repositoryRoot:
+      commandName === 'check-split'
+        ? undefined
+        : readOptionalResolvedPath(rest, '--repository'),
     json: rest.includes('--json')
   };
 }
@@ -167,7 +196,8 @@ function printUsage(): void {
       'Usage:',
       '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch explain --architecture <path> [--repository <path>] [--json]'
+      '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch check-split --architecture <path> [--json]'
     ].join('\n')
   );
 }

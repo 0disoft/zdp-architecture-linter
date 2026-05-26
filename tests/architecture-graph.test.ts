@@ -15,6 +15,9 @@ describe('architecture graph', () => {
             }
           ]
         },
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {
           services: [
             {
@@ -225,6 +228,9 @@ describe('architecture graph', () => {
     const graph = buildArchitectureGraph({
       catalogs: {
         repositories: {},
+        splitTriggers: {
+          split_triggers: []
+        },
         services: {
           services: [
             {

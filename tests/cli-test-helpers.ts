@@ -70,6 +70,7 @@ export function createMinimalArchitectureFiles(
     'ROADMAP.md': '# Roadmap\n',
     'docs/26-eighteen-month-roadmap.md': '# Eighteen month roadmap\n',
     'catalogs/repositories.yaml': 'repositories: []\n',
+    'catalogs/split-triggers.yaml': 'split_triggers: []\n',
     'catalogs/services.yaml': 'services: []\n',
     'catalogs/datastores.yaml': 'datastores: []\n',
     'catalogs/data-classes.yaml': 'data_classes: []\n',
