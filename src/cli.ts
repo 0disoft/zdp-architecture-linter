@@ -19,6 +19,11 @@ import {
   formatArchitectureNormalizeReportText
 } from './architecture-normalize-report.ts';
 import {
+  createArchitectureListReport,
+  formatArchitectureListReportText,
+  type ArchitectureListKind
+} from './architecture-list-report.ts';
+import {
   createArchitectureGraphReport,
   formatArchitectureGraphReportText
 } from './architecture-graph-report.ts';
@@ -42,7 +47,8 @@ type ParsedCommand =
   | ParsedCheckSplitCommand
   | ParsedDiffCommand
   | ParsedDoctorCommand
-  | ParsedNormalizeCommand;
+  | ParsedNormalizeCommand
+  | ParsedListCommand;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -98,6 +104,18 @@ interface ParsedNormalizeCommand {
   readonly name: 'normalize';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly json: boolean;
+}
+
+interface ParsedListCommand {
+  readonly name: 'list';
+  readonly architectureRoot: string;
+  readonly listKind: ArchitectureListKind;
+  readonly filters: {
+    readonly stage?: string;
+    readonly area?: string;
+    readonly repo?: string;
+  };
   readonly json: boolean;
 }
 
@@ -270,6 +288,37 @@ async function main(argv: readonly string[]): Promise<number> {
       return hasErrors(result) ? 1 : 0;
     }
 
+    if (command.name === 'list') {
+      const graph = await loadArchitectureGraph({
+        architectureRoot: command.architectureRoot
+      });
+      const report =
+        command.listKind === 'repos'
+          ? createArchitectureListReport({
+              graph,
+              kind: 'repos',
+              filters: {
+                stage: command.filters.stage,
+                area: command.filters.area
+              }
+            })
+          : createArchitectureListReport({
+              graph,
+              kind: 'services',
+              filters: {
+                repo: command.filters.repo
+              }
+            });
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatArchitectureListReportText(report));
+      }
+
+      return 0;
+    }
+
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
       repositoryRoot: command.repositoryRoot
@@ -294,7 +343,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     commandName !== 'check-split' &&
     commandName !== 'diff' &&
     commandName !== 'doctor' &&
-    commandName !== 'normalize'
+    commandName !== 'normalize' &&
+    commandName !== 'list'
   ) {
     return null;
   }
@@ -334,6 +384,26 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       base,
       head: readOption(rest, '--head') ?? undefined,
+      json: rest.includes('--json')
+    };
+  }
+
+  if (commandName === 'list') {
+    const [listKind] = rest;
+
+    if (listKind !== 'repos' && listKind !== 'services') {
+      return null;
+    }
+
+    return {
+      name: 'list',
+      architectureRoot: resolve(architecture),
+      listKind,
+      filters: {
+        stage: readOption(rest, '--stage') ?? undefined,
+        area: readOption(rest, '--area') ?? undefined,
+        repo: readOption(rest, '--repo') ?? undefined
+      },
       json: rest.includes('--json')
     };
   }
@@ -394,7 +464,9 @@ function printUsage(): void {
       '  zdp-arch check-split --architecture <path> [--json]',
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
       '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch normalize --architecture <path> [--repository <path>] [--json]'
+      '  zdp-arch normalize --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--json]',
+      '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
     ].join('\n')
   );
 }
