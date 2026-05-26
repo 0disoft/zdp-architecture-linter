@@ -8,6 +8,7 @@ const EVENTS_FILE = 'catalogs/events.yaml';
 export interface EventRecord {
   readonly id: string;
   readonly path: string;
+  readonly schemaRef: string | null;
 }
 
 export interface EventIndex {
@@ -36,7 +37,8 @@ export function buildEventIndex(value: unknown): EventIndex {
       id,
       {
         id,
-        path: getEventDiagnosticPath(event, index)
+        path: getEventDiagnosticPath(event, index),
+        schemaRef: readStringField(event, 'schema_ref')
       }
     ]);
   }

@@ -5,6 +5,7 @@ import type { EventIndex } from './event-rules.ts';
 import type { ExternalProviderIndex } from './provider-rules.ts';
 
 const SERVICE_CONTRACT_FILE = 'service.yaml';
+const PRODUCED_EVENT_SCHEMA_RULE_ID = 'ZDP-SERVICE-EVENT-001';
 
 export function validateRepositoryServiceContractDataReferences(
   value: unknown,
@@ -102,9 +103,34 @@ export function validateRepositoryServiceContractEventReferences(
   }
 
   return [
-    ...validateEventReferenceArray(value, 'events.produced'),
+    ...validateProducedEventReferences(value, 'events.produced'),
     ...validateEventReferenceArray(value, 'events.consumed')
   ];
+
+  function validateProducedEventReferences(
+    root: Record<string, unknown>,
+    path: string
+  ): readonly Diagnostic[] {
+    const candidate = readValueAtPath(root, path);
+
+    if (candidate === undefined) {
+      return [];
+    }
+
+    if (!Array.isArray(candidate)) {
+      return [
+        createServiceContractDiagnostic(
+          'ZDP-REF-007',
+          path,
+          `\`${path}\` must be a YAML array when present.`
+        )
+      ];
+    }
+
+    return candidate.flatMap((entry, index) =>
+      validateProducedEventReference(entry, `${path}[${index}]`)
+    );
+  }
 
   function validateEventReferenceArray(
     root: Record<string, unknown>,
@@ -152,6 +178,69 @@ export function validateRepositoryServiceContractEventReferences(
 
       return [];
     });
+  }
+
+  function validateProducedEventReference(
+    entry: unknown,
+    entryPath: string
+  ): readonly Diagnostic[] {
+    if (!isRecord(entry)) {
+      return [
+        createServiceContractDiagnostic(
+          PRODUCED_EVENT_SCHEMA_RULE_ID,
+          entryPath,
+          'Produced event reference must be an object with `id` and `schema_ref`.'
+        )
+      ];
+    }
+
+    const eventId = readStringField(entry, 'id');
+
+    if (eventId === null) {
+      return [
+        createServiceContractDiagnostic(
+          'ZDP-REF-007',
+          `${entryPath}.id`,
+          'Produced event reference is missing required field `id`.'
+        )
+      ];
+    }
+
+    const eventRecord = eventIndex.byId.get(eventId);
+
+    if (eventRecord === undefined) {
+      return [
+        createServiceContractDiagnostic(
+          'ZDP-REF-007',
+          entryPath,
+          `Service contract references unknown event \`${eventId}\`.`
+        )
+      ];
+    }
+
+    const schemaRef = readStringField(entry, 'schema_ref');
+
+    if (schemaRef === null) {
+      return [
+        createServiceContractDiagnostic(
+          PRODUCED_EVENT_SCHEMA_RULE_ID,
+          `${entryPath}.schema_ref`,
+          `Produced event \`${eventId}\` must declare \`schema_ref\`.`
+        )
+      ];
+    }
+
+    if (eventRecord.schemaRef !== schemaRef) {
+      return [
+        createServiceContractDiagnostic(
+          PRODUCED_EVENT_SCHEMA_RULE_ID,
+          `${entryPath}.schema_ref`,
+          `Produced event \`${eventId}\` schema_ref must match catalogs/events.yaml value \`${eventRecord.schemaRef ?? '<missing>'}\`.`
+        )
+      ];
+    }
+
+    return [];
   }
 }
 
@@ -238,7 +327,12 @@ function readStringField(value: Record<string, unknown>, field: string): string 
 }
 
 function createServiceContractDiagnostic(
-  ruleId: 'ZDP-DATA-003' | 'ZDP-REF-002' | 'ZDP-REF-005' | 'ZDP-REF-007',
+  ruleId:
+    | 'ZDP-DATA-003'
+    | 'ZDP-REF-002'
+    | 'ZDP-REF-005'
+    | 'ZDP-REF-007'
+    | typeof PRODUCED_EVENT_SCHEMA_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {

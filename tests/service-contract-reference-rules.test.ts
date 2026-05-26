@@ -122,7 +122,12 @@ describe('repository service contract event references', () => {
     const diagnostics = validateRepositoryServiceContractEventReferences(
       {
         events: {
-          produced: ['service.created'],
+          produced: [
+            {
+              id: 'service.created',
+              schema_ref: 'schemas/events/service.created.schema.json'
+            }
+          ],
           consumed: [
             {
               id: 'service.deleted',
@@ -132,7 +137,16 @@ describe('repository service contract event references', () => {
         }
       },
       buildEventIndex({
-        events: [{ id: 'service.created' }, { id: 'service.deleted' }]
+        events: [
+          {
+            id: 'service.created',
+            schema_ref: 'schemas/events/service.created.schema.json'
+          },
+          {
+            id: 'service.deleted',
+            schema_ref: 'schemas/events/service.deleted.schema.json'
+          }
+        ]
       })
     );
 
@@ -143,7 +157,12 @@ describe('repository service contract event references', () => {
     const diagnostics = validateRepositoryServiceContractEventReferences(
       {
         events: {
-          produced: ['ghost.produced'],
+          produced: [
+            {
+              id: 'ghost.produced',
+              schema_ref: 'schemas/events/ghost.produced.schema.json'
+            }
+          ],
           consumed: [
             {
               id: 'ghost.consumed',
@@ -169,6 +188,84 @@ describe('repository service contract event references', () => {
         file: 'service.yaml',
         path: 'events.consumed[0]',
         message: 'Service contract references unknown event `ghost.consumed`.'
+      }
+    ]);
+  });
+
+  test('fails when produced events use the string shortcut without schema_ref', () => {
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          produced: ['service.created']
+        }
+      },
+      buildEventIndex({
+        events: [
+          {
+            id: 'service.created',
+            schema_ref: 'schemas/events/service.created.schema.json'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-SERVICE-EVENT-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.produced[0]',
+        message:
+          'Produced event reference must be an object with `id` and `schema_ref`.'
+      }
+    ]);
+  });
+
+  test('fails when produced event schema_ref is missing or differs from the catalog', () => {
+    const eventIndex = buildEventIndex({
+      events: [
+        {
+          id: 'service.created',
+          schema_ref: 'schemas/events/service.created.schema.json'
+        },
+        {
+          id: 'service.deleted',
+          schema_ref: 'schemas/events/service.deleted.schema.json'
+        }
+      ]
+    });
+    const diagnostics = validateRepositoryServiceContractEventReferences(
+      {
+        events: {
+          produced: [
+            {
+              id: 'service.created'
+            },
+            {
+              id: 'service.deleted',
+              schema_ref: 'schemas/events/wrong.schema.json'
+            }
+          ]
+        }
+      },
+      eventIndex
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-SERVICE-EVENT-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.produced[0].schema_ref',
+        message: 'Produced event `service.created` must declare `schema_ref`.'
+      },
+      {
+        ruleId: 'ZDP-SERVICE-EVENT-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.produced[1].schema_ref',
+        message:
+          'Produced event `service.deleted` schema_ref must match catalogs/events.yaml value `schemas/events/service.deleted.schema.json`.'
       }
     ]);
   });
