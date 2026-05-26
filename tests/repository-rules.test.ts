@@ -274,3 +274,81 @@ describe('reserved deploy unit roadmap evidence', () => {
     expect(diagnostics).toEqual([]);
   });
 });
+
+describe('repository notes machine fields', () => {
+  test('warns when latest-review policy stays only in notes', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        {
+          name: 'zdp-money-platform',
+          status: 'reserved',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'money',
+          purpose: 'Money platform.',
+          owner: '0disoft',
+          risk_level: 'high',
+          notes: [
+            '실제 PSP, MoR, 암호화폐 수수료와 정책은 구현 전 최신 공식 문서 확인이 필요하다.'
+          ]
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-NOTES-WARN-001',
+        severity: 'warning',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-money-platform].requires_latest_review',
+        message:
+          'Repository notes require a latest external review marker; set `requires_latest_review: true`.'
+      }
+    ]);
+  });
+
+  test('passes when latest-review policy is also a machine field', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        {
+          name: 'zdp-labs-prasso',
+          status: 'reserved',
+          repo_stage: 'lab_only',
+          kind: 'lab',
+          area: 'labs',
+          purpose: 'Prasso lab.',
+          owner: '0disoft',
+          risk_level: 'low',
+          requires_latest_review: true,
+          notes: [
+            'Go 프레임워크와 표준 라이브러리 상태는 구현 전 최신 공식 문서 확인이 필요하다.'
+          ]
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('ignores descriptive notes without latest-review policy language', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        {
+          name: 'zdp-core-platform',
+          status: 'reserved',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'core',
+          purpose: 'Core platform.',
+          owner: '0disoft',
+          risk_level: 'high',
+          notes: [
+            '논리 경계는 분리해 설계하되 초기 실제 배포 단위는 작게 유지한다.'
+          ]
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+});

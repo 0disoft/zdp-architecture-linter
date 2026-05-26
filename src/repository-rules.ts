@@ -24,6 +24,15 @@ const CONDITIONAL_DEPLOY_UNIT_STAGE = 'conditional_deploy_unit';
 const RESERVED_STATUS = 'reserved';
 const DEPLOY_UNIT_KIND = 'deploy_unit';
 const DEPLOY_UNIT_STAGE = 'deploy_unit';
+const LATEST_REVIEW_FIELD = 'requires_latest_review';
+
+const LATEST_REVIEW_NOTE_PATTERNS = [
+  '최신 공식',
+  '최신 보안 모델',
+  '최신 GitHub',
+  '최신 문서',
+  '최신 정책'
+] as const;
 
 const EMPTY_REPOSITORY_AREA_RULES: RepositoryAreaRules = {
   exact: new Map(),
@@ -169,7 +178,8 @@ function validateRepositoryRecord(
       value,
       repositoryPath,
       roadmapEvidence
-    )
+    ),
+    ...validatePolicyNotesMachineFields(value, repositoryPath)
   ];
 }
 
@@ -252,6 +262,38 @@ function validateReservedDeployUnitRoadmapEvidence(
         `Reserved deploy unit \`${name}\` should appear in ROADMAP.md or docs/26-eighteen-month-roadmap.md.`
     }
   ];
+}
+
+function validatePolicyNotesMachineFields(
+  value: Record<string, unknown>,
+  repositoryPath: string
+): readonly Diagnostic[] {
+  if (!hasLatestReviewPolicyNote(value.notes) || value[LATEST_REVIEW_FIELD] === true) {
+    return [];
+  }
+
+  return [
+    {
+      ruleId: 'ZDP-NOTES-WARN-001',
+      severity: 'warning',
+      file: REPOSITORIES_FILE,
+      path: `${repositoryPath}.${LATEST_REVIEW_FIELD}`,
+      message:
+        'Repository notes require a latest external review marker; set `requires_latest_review: true`.'
+    }
+  ];
+}
+
+function hasLatestReviewPolicyNote(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  return value.some(
+    (entry) =>
+      typeof entry === 'string' &&
+      LATEST_REVIEW_NOTE_PATTERNS.some((pattern) => entry.includes(pattern))
+  );
 }
 
 function validateRepositoryAreaPrefix(
