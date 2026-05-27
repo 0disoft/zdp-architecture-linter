@@ -208,7 +208,7 @@ function validateRepositoryRecord(
 
   return [
     ...REPOSITORY_REQUIRED_FIELDS.flatMap((field) =>
-    hasUsableField(value, field)
+    hasRequiredRepositoryField(value, field)
       ? []
       : [
           createRepositoryDiagnostic(
@@ -492,6 +492,13 @@ function getRepositoryDiagnosticPath(value: Record<string, unknown>, index: numb
   return typeof name === 'string' && name.trim().length > 0
     ? `repositories[${index}:${name.trim()}]`
     : `repositories[${index}]`;
+}
+
+function hasRequiredRepositoryField(
+  value: Record<string, unknown>,
+  field: string
+): boolean {
+  return readStringField(value, field) !== null;
 }
 
 function hasUsableField(value: Record<string, unknown>, field: string): boolean {

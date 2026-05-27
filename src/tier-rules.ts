@@ -291,7 +291,7 @@ function validateServiceTierCriticalControls(
   const diagnostics: Diagnostic[] = [];
 
   for (const field of policy.requiredFields) {
-    if (hasUsableFieldAtPath(value, field)) {
+    if (hasMeaningfulFieldAtPath(value, field)) {
       continue;
     }
 
@@ -429,6 +429,25 @@ function hasUsableFieldAtPath(
   }
 
   return candidate !== null && candidate !== undefined;
+}
+
+function hasMeaningfulFieldAtPath(
+  value: Record<string, unknown>,
+  path: string
+): boolean {
+  const candidate = readValueAtPath(value, path);
+
+  if (typeof candidate === 'string') {
+    return candidate.trim().length > 0;
+  }
+
+  if (Array.isArray(candidate)) {
+    return candidate.some(
+      (entry) => typeof entry === 'string' && entry.trim().length > 0
+    );
+  }
+
+  return false;
 }
 
 function hasRiskyTier3OperationalSurface(value: Record<string, unknown>): boolean {

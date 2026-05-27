@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep, win32 } from 'node:path';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +28,7 @@ export async function loadArchitectureSnapshot(input: {
     const files = await listGitFiles(input.architectureRoot, input.ref);
 
     for (const file of files) {
-      const absolutePath = join(snapshotRoot, file);
+      const absolutePath = resolveSnapshotPath(snapshotRoot, file);
 
       await mkdir(dirname(absolutePath), { recursive: true });
       await writeFile(
@@ -47,6 +47,35 @@ export async function loadArchitectureSnapshot(input: {
     await rm(snapshotRoot, { recursive: true, force: true });
     throw error;
   }
+}
+
+export function resolveSnapshotPath(snapshotRoot: string, file: string): string {
+  const normalizedTreePath = file.trim().replaceAll('\\', '/');
+  const segments = normalizedTreePath.split('/');
+
+  if (
+    normalizedTreePath.length === 0 ||
+    isAbsolute(normalizedTreePath) ||
+    win32.isAbsolute(normalizedTreePath) ||
+    segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  ) {
+    throw new Error(`Unsafe git tree path "${file}": paths must be relative descendants of the snapshot root.`);
+  }
+
+  const snapshotRootPath = resolve(snapshotRoot);
+  const absolutePath = resolve(snapshotRootPath, ...segments);
+  const relativePath = relative(snapshotRootPath, absolutePath);
+
+  if (
+    relativePath === '' ||
+    relativePath.startsWith(`..${sep}`) ||
+    relativePath === '..' ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error(`Unsafe git tree path "${file}": resolved path escapes snapshot root.`);
+  }
+
+  return normalize(absolutePath);
 }
 
 async function listGitFiles(

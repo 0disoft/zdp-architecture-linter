@@ -89,6 +89,139 @@ repositories:
       }
     );
   });
+
+  test('loads public API policy from rules/api.rules.yaml', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
+        'catalogs/repositories.yaml': `
+repositories:
+  - name: zdp-core-platform
+    status: active
+    repo_stage: deploy_unit
+    kind: deploy_unit
+    area: core
+    purpose: Core platform.
+    owner: 0disoft
+    risk_level: high
+`,
+        'catalogs/services.yaml': `
+services:
+  - id: core-public-api
+    repo: zdp-core-platform
+    domain:
+      public_api: true
+    api:
+      openapi_required: false
+`,
+        'rules/api.rules.yaml': `
+rules:
+  - id: ZDP-API-001
+    condition:
+      expression: domain.public_api == true or api.exposure in [partner, public]
+    assertions:
+      require_values:
+        api.openapi_required: true
+      require_fields:
+        - api.versioning
+        - api.rate_limit_policy
+        - api.deprecation_policy
+`,
+        'rules/tier.rules.yaml': 'rules: []\n'
+      }),
+      async ({ architectureRoot }) => {
+        const result = await runCli([
+          'validate',
+          '--architecture',
+          architectureRoot,
+          '--json'
+        ]);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toBe('');
+
+        const report = JSON.parse(result.stdout) as ValidateCliReport;
+        expect(report.diagnostics).toEqual([
+          expect.objectContaining({
+            ruleId: 'ZDP-API-001',
+            path: 'services[0:core-public-api].api.versioning'
+          }),
+          expect.objectContaining({
+            ruleId: 'ZDP-API-001',
+            path: 'services[0:core-public-api].api.rate_limit_policy'
+          }),
+          expect.objectContaining({
+            ruleId: 'ZDP-API-001',
+            path: 'services[0:core-public-api].api.deprecation_policy'
+          }),
+          expect.objectContaining({
+            ruleId: 'ZDP-API-001',
+            path: 'services[0:core-public-api].api.openapi_required'
+          })
+        ]);
+      }
+    );
+  });
+
+  test('falls back to tier rules for public API policy when api rules file is absent', async () => {
+    const files = createMinimalArchitectureFiles({
+      'catalogs/repositories.yaml': `
+repositories:
+  - name: zdp-core-platform
+    status: active
+    repo_stage: deploy_unit
+    kind: deploy_unit
+    area: core
+    purpose: Core platform.
+    owner: 0disoft
+    risk_level: high
+`,
+      'catalogs/services.yaml': `
+services:
+  - id: core-public-api
+    repo: zdp-core-platform
+    domain:
+      public_api: true
+    api:
+      openapi_required: false
+`,
+      'rules/tier.rules.yaml': `
+rules:
+  - id: ZDP-API-001
+    condition:
+      expression: domain.public_api == true or api.exposure in [partner, public]
+    assertions:
+      require_values:
+        api.openapi_required: true
+      require_fields:
+        - api.versioning
+`
+    });
+    delete files['rules/api.rules.yaml'];
+
+    await withArchitectureFiles(files, async ({ architectureRoot }) => {
+      const result = await runCli([
+        'validate',
+        '--architecture',
+        architectureRoot,
+        '--json'
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toBe('');
+
+      const report = JSON.parse(result.stdout) as ValidateCliReport;
+      expect(report.diagnostics).toEqual([
+        expect.objectContaining({
+          ruleId: 'ZDP-API-001',
+          path: 'services[0:core-public-api].api.versioning'
+        }),
+        expect.objectContaining({
+          ruleId: 'ZDP-API-001',
+          path: 'services[0:core-public-api].api.openapi_required'
+        })
+      ]);
+    });
+  });
 });
 
 interface ValidateCliReport {

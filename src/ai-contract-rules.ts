@@ -156,7 +156,7 @@ function validateServiceAiUserDataContract(
   }
 
   for (const field of policy.requiredFields) {
-    if (!hasUsableFieldAtPath(value, field)) {
+    if (!hasRequiredAiUserFieldAtPath(value, field)) {
       diagnostics.push(
         createAiDiagnostic(
           AI_USER_DATA_RULE_ID,
@@ -170,7 +170,7 @@ function validateServiceAiUserDataContract(
   for (const [field, forbiddenValues] of policy.forbiddenValues.entries()) {
     const actualValue = readValueAtPath(value, field);
 
-    if (forbiddenValues.includes(actualValue)) {
+    if (containsForbiddenValue(actualValue, forbiddenValues)) {
       diagnostics.push(
         createAiDiagnostic(
           AI_USER_DATA_RULE_ID,
@@ -305,8 +305,40 @@ function hasAnyProviderPolicyField(
       return candidate === true;
     }
 
+    if (isBooleanProviderPolicyField(field)) {
+      return false;
+    }
+
     return hasUsableFieldAtPath(value, fieldPath);
   });
+}
+
+function hasRequiredAiUserFieldAtPath(
+  value: Record<string, unknown>,
+  path: string
+): boolean {
+  const candidate = readValueAtPath(value, path);
+
+  if (path === 'access.permission_model') {
+    return typeof candidate === 'string' && candidate.trim().length > 0;
+  }
+
+  return hasUsableFieldAtPath(value, path);
+}
+
+function containsForbiddenValue(
+  actualValue: unknown,
+  forbiddenValues: readonly unknown[]
+): boolean {
+  if (Array.isArray(actualValue)) {
+    return actualValue.some((entry) => forbiddenValues.includes(entry));
+  }
+
+  return forbiddenValues.includes(actualValue);
+}
+
+function isBooleanProviderPolicyField(field: string): boolean {
+  return field.endsWith('_required');
 }
 
 function readDependencyServices(value: Record<string, unknown>): {

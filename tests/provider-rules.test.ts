@@ -351,7 +351,7 @@ describe('service provider webhooks', () => {
         path:
           'services[0:payment-webhook-handler].providers[0].webhook.replay_supported',
         message:
-          'Provider webhook is missing required field `replay_supported`.'
+          'Provider webhook field `replay_supported` must be set to true when webhook is enabled.'
       },
       {
         ruleId: 'ZDP-PROVIDER-002',
@@ -360,7 +360,51 @@ describe('service provider webhooks', () => {
         path:
           'services[0:payment-webhook-handler].providers[0].webhook.signature_required',
         message:
-          'Provider webhook is missing required field `signature_required`.'
+          'Provider webhook field `signature_required` must be set to true when webhook is enabled.'
+      }
+    ]);
+  });
+
+  test('fails when enabled webhook sets replay and signature controls to false', () => {
+    const diagnostics = validateServiceProviderWebhooks(
+      {
+        services: [
+          {
+            id: 'payment-webhook-handler',
+            providers: [
+              {
+                id: 'stripe',
+                webhook: {
+                  enabled: true,
+                  replay_supported: false,
+                  signature_required: false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      providerWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-PROVIDER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:payment-webhook-handler].providers[0].webhook.replay_supported',
+        message:
+          'Provider webhook field `replay_supported` must be set to true when webhook is enabled.'
+      },
+      {
+        ruleId: 'ZDP-PROVIDER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path:
+          'services[0:payment-webhook-handler].providers[0].webhook.signature_required',
+        message:
+          'Provider webhook field `signature_required` must be set to true when webhook is enabled.'
       }
     ]);
   });

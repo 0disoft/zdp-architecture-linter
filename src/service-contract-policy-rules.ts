@@ -34,10 +34,6 @@ function normalizeRepositoryServiceContract(
   return {
     ...value,
     id: readStringField(service, 'id') ?? readStringField(value, 'id') ?? undefined,
-    component:
-      readStringField(service, 'component') ??
-      readStringField(value, 'component') ??
-      undefined,
     repo:
       readStringField(service, 'repo') ?? readStringField(value, 'repo') ?? undefined,
     status:

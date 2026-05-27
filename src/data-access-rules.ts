@@ -383,6 +383,9 @@ function validateServiceAiDirectNonOwnedDatastoreAccess(
 
   const servicePath = getServiceDiagnosticPath(value, index);
   const serviceComponent = readStringField(value, 'component');
+  const componentRepo =
+    serviceComponent === null ? undefined : repositoryIndex.byName.get(serviceComponent);
+  const isAiOwnedComponent = componentRepo?.area === AI_REPOSITORY_AREA;
 
   return directDatastoreAccess.flatMap((datastoreId, datastoreIndexInService) => {
     if (typeof datastoreId !== 'string') {
@@ -398,7 +401,7 @@ function validateServiceAiDirectNonOwnedDatastoreAccess(
 
     if (
       datastore.ownerRepo === serviceRepoName ||
-      (serviceComponent !== null && datastore.ownerRepo === serviceComponent)
+      (isAiOwnedComponent && datastore.ownerRepo === serviceComponent)
     ) {
       return [];
     }

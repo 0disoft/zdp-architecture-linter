@@ -7,6 +7,7 @@ import {
   validateMoneyMovementContracts,
   validatePaymentDataFrontendContracts
 } from '../src/money-rules.ts';
+import { buildRepositoryIndex } from '../src/repository-rules.ts';
 
 const moneyMovementPolicy = buildMoneyMovementPolicy({
   rules: [
@@ -137,6 +138,33 @@ describe('money movement contracts', () => {
     );
 
     expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when money movement marker uses a non-boolean type', () => {
+    const diagnostics = validateMoneyMovementContracts(
+      {
+        services: [
+          {
+            id: 'checkout-api',
+            domain: {
+              money_movement: 'true'
+            }
+          }
+        ]
+      },
+      moneyMovementPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:checkout-api].domain.money_movement',
+        message:
+          'Money movement marker `domain.money_movement` must be a boolean.'
+      }
+    ]);
   });
 
   test('fails when money movement omits required controls', () => {
@@ -296,6 +324,102 @@ describe('payment data frontend contracts', () => {
           'Payment data service `app-console` must not use forbidden repository `zdp-web-apps`.'
       }
     ]);
+  });
+
+  test('fails when top-level repo is forbidden even if nested service repo is allowed', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'checkout-bff',
+            repo: 'zdp-web-apps',
+            service: {
+              repo: 'zdp-money-platform'
+            },
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:checkout-bff].repo',
+        message:
+          'Payment data service `checkout-bff` must not use forbidden repository `zdp-web-apps`.'
+      }
+    ]);
+  });
+
+  test('fails when payment data service is owned by a lab_only lab repository not listed in forbid_values', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'new-lab-checkout',
+            repo: 'zdp-new-lab-payments',
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy,
+      buildRepositoryIndex({
+        repositories: [
+          {
+            name: 'zdp-new-lab-payments',
+            repo_stage: 'lab_only',
+            kind: 'lab'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-MONEY-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:new-lab-checkout].repo',
+        message:
+          'Payment data service `new-lab-checkout` must not use forbidden repository `zdp-new-lab-payments`.'
+      }
+    ]);
+  });
+
+  test('passes when payment data service repo is not forbidden and not lab_only lab', () => {
+    const diagnostics = validatePaymentDataFrontendContracts(
+      {
+        services: [
+          {
+            id: 'checkout-api',
+            repo: 'zdp-products-checkout',
+            data: {
+              payment_data: true
+            }
+          }
+        ]
+      },
+      paymentDataFrontendPolicy,
+      buildRepositoryIndex({
+        repositories: [
+          {
+            name: 'zdp-products-checkout',
+            repo_stage: 'deploy_unit',
+            kind: 'service'
+          }
+        ]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 
   test('supports nested service repo in service.yaml contracts', () => {

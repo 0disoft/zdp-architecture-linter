@@ -201,6 +201,86 @@ describe('AI user data contracts', () => {
       }
     ]);
   });
+
+  test('fails when the permission model is an object', () => {
+    const diagnostics = validateAiUserDataContracts(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            data: {
+              ai_user_data: true
+            },
+            dependencies: {
+              services: ['zdp-privacy-access-broker']
+            },
+            audit: {
+              required: true
+            },
+            access: {
+              permission_model: {}
+            }
+          }
+        ]
+      },
+      aiUserDataPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AI-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].access.permission_model',
+        message:
+          'AI user data service `ai-answer-engine` is missing required field `access.permission_model`.'
+      }
+    ]);
+  });
+
+  test('fails when the permission model wraps a forbidden value in an array', () => {
+    const diagnostics = validateAiUserDataContracts(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            data: {
+              ai_user_data: true
+            },
+            dependencies: {
+              services: ['zdp-privacy-access-broker']
+            },
+            audit: {
+              required: true
+            },
+            access: {
+              permission_model: ['none']
+            }
+          }
+        ]
+      },
+      aiUserDataPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AI-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].access.permission_model',
+        message:
+          'AI user data service `ai-answer-engine` is missing required field `access.permission_model`.'
+      },
+      {
+        ruleId: 'ZDP-AI-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].access.permission_model',
+        message:
+          'AI user data service `ai-answer-engine` must not set `access.permission_model` to `none`.'
+      }
+    ]);
+  });
 });
 
 describe('AI sensitive data contracts', () => {
@@ -298,6 +378,37 @@ describe('AI sensitive data contracts', () => {
         message:
           'AI sensitive data service `ai-answer-engine` must set `ai.provider_policy.no_prompt_training_required` to `true`.'
       },
+      {
+        ruleId: 'ZDP-AI-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ai-answer-engine].ai.provider_policy',
+        message:
+          'AI sensitive data service `ai-answer-engine` must set one of: `ai.provider_policy.zero_data_retention_required`, `ai.provider_policy.retention_exception_ref`.'
+      }
+    ]);
+  });
+
+  test('fails when zero retention is provided as a non-boolean value', () => {
+    const diagnostics = validateAiSensitiveDataContracts(
+      {
+        services: [
+          {
+            id: 'ai-answer-engine',
+            ai: {
+              sensitive_data: true,
+              provider_policy: {
+                no_prompt_training_required: true,
+                zero_data_retention_required: 'false'
+              }
+            }
+          }
+        ]
+      },
+      aiSensitiveDataPolicy
+    );
+
+    expect(diagnostics).toEqual([
       {
         ruleId: 'ZDP-AI-002',
         severity: 'error',

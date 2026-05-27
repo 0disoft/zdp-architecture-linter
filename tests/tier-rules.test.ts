@@ -497,6 +497,61 @@ describe('tier critical controls', () => {
     ]);
   });
 
+  test('fails when a tier0 service sets non-meaningful critical control values', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'payments-core',
+            service: {
+              tier: 'tier0'
+            },
+            release: {
+              change_approval: false
+            },
+            access: {
+              break_glass_policy: {}
+            },
+            data: {
+              encryption_key_owner: 0
+            },
+            audit: {
+              immutable: true
+            }
+          }
+        ]
+      },
+      tierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:payments-core].release.change_approval',
+        message:
+          'Tier `tier0` service `payments-core` must set `release.change_approval`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:payments-core].access.break_glass_policy',
+        message:
+          'Tier `tier0` service `payments-core` must set `access.break_glass_policy`.'
+      },
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:payments-core].data.encryption_key_owner',
+        message:
+          'Tier `tier0` service `payments-core` must set `data.encryption_key_owner`.'
+      }
+    ]);
+  });
+
   test('fails when services is not an array for tier0 controls', () => {
     const diagnostics = validateTierCriticalControls(
       { services: 'ledger-writer' },

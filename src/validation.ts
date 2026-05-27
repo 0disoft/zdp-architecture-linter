@@ -165,7 +165,9 @@ export async function validateArchitecture(
   const tier3RiskyExperimentPolicy = buildTier3RiskyExperimentPolicy(
     catalogs.tierRules
   );
-  const publicApiContractPolicy = buildPublicApiContractPolicy(catalogs.tierRules);
+  const publicApiContractPolicy = buildPublicApiContractPolicy(
+    catalogs.apiRules ?? catalogs.tierRules
+  );
 
   const fixtureDiagnostics = await validateFixtureExpectations({
     architectureRoot: input.architectureRoot,
@@ -257,7 +259,8 @@ export async function validateArchitecture(
           ),
           ...validatePaymentDataFrontendContracts(
             repositoryServiceContractCatalog,
-            paymentDataFrontendPolicy
+            paymentDataFrontendPolicy,
+            repositoryIndex
           ),
           ...validateCreditMonetizationContracts(
             repositoryServiceContractCatalog,
@@ -362,7 +365,8 @@ export async function validateArchitecture(
       ...validateMoneyMovementContracts(catalogs.services, moneyMovementPolicy),
       ...validatePaymentDataFrontendContracts(
         catalogs.services,
-        paymentDataFrontendPolicy
+        paymentDataFrontendPolicy,
+        repositoryIndex
       ),
       ...validateCreditMonetizationContracts(
         catalogs.services,

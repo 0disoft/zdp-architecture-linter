@@ -13,6 +13,7 @@ describe('datastore owner references', () => {
         datastores: [
           {
             id: 'core_postgres',
+            kind: 'postgresql',
             owner_repo: 'zdp-core-platform'
           }
         ]
@@ -31,6 +32,7 @@ describe('datastore owner references', () => {
         datastores: [
           {
             id: 'ghost_postgres',
+            kind: 'postgresql',
             owner_repo: 'zdp-ghost-platform'
           }
         ]
@@ -48,6 +50,60 @@ describe('datastore owner references', () => {
         path: 'datastores[0:ghost_postgres].owner_repo',
         message:
           'Datastore references unknown owner repository `zdp-ghost-platform`.'
+      }
+    ]);
+  });
+
+  test('fails when kind is missing', () => {
+    const diagnostics = validateDatastoreOwnerReferences(
+      {
+        datastores: [
+          {
+            id: 'core_postgres',
+            owner_repo: 'zdp-core-platform'
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-platform' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-003',
+        severity: 'error',
+        file: 'catalogs/datastores.yaml',
+        path: 'datastores[0:core_postgres].kind',
+        message: 'Datastore entry is missing required field `kind`.'
+      }
+    ]);
+  });
+
+  test('fails when kind is not a canonical value', () => {
+    const diagnostics = validateDatastoreOwnerReferences(
+      {
+        datastores: [
+          {
+            id: 'core_postgres',
+            kind: 'postgres',
+            owner_repo: 'zdp-core-platform'
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-core-platform' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-003',
+        severity: 'error',
+        file: 'catalogs/datastores.yaml',
+        path: 'datastores[0:core_postgres].kind',
+        message:
+          'Datastore kind must be one of: `clickhouse`, `postgresql`, `search-engine`, `secure-storage`, `object-storage`, `vector-database`.'
       }
     ]);
   });

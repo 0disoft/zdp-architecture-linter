@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildHardenedGitArgs,
   createArchitectureDoctorReport,
   formatArchitectureDoctorReportText
 } from '../src/architecture-doctor-report.ts';
@@ -61,5 +62,20 @@ describe('architecture doctor report', () => {
     expect(text).toContain('- diagnostics: 1 (0 errors, 1 warnings)');
     expect(text).toContain('- [warning] architecture.git: Git work tree has 1 pending change(s)');
     expect(text).toContain('  - M README.md');
+  });
+
+  test('hardens git status checks against repository-local helper execution', () => {
+    expect(buildHardenedGitArgs('/tmp/arch', ['status', '--porcelain'])).toEqual([
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'core.hooksPath=',
+      '-c',
+      'credential.helper=',
+      '-C',
+      '/tmp/arch',
+      'status',
+      '--porcelain'
+    ]);
   });
 });

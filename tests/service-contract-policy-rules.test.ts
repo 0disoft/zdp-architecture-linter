@@ -316,12 +316,12 @@ describe('repository service contract policy rules', () => {
     ]);
   });
 
-  test('maps service.yaml component into AI datastore ownership checks', () => {
+  test('does not trust service.yaml component for AI datastore ownership checks', () => {
     const catalog = buildRepositoryServiceContractCatalog({
       service: {
         id: 'ai-answer-engine',
         repo: 'zdp-ai-platform',
-        component: 'zdp-ai-answer-engine'
+        component: 'zdp-ai-retrieval'
       },
       data: {
         datastores: ['vector_qdrant']

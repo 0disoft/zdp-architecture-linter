@@ -3,6 +3,14 @@ import type { RepositoryIndex } from './repository-rules.ts';
 
 const DATASTORES_FILE = 'catalogs/datastores.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
+const ALLOWED_DATASTORE_KINDS = new Set([
+  'clickhouse',
+  'postgresql',
+  'search-engine',
+  'secure-storage',
+  'object-storage',
+  'vector-database'
+]);
 
 export interface DatastoreCatalogRecord {
   readonly id: string;
@@ -117,7 +125,28 @@ function validateDatastoreRecord(
   }
 
   const datastorePath = getDatastoreDiagnosticPath(value, index);
+  const kind = readStringField(value, 'kind');
   const ownerRepo = readStringField(value, 'owner_repo');
+
+  if (kind === null) {
+    return [
+      createDatastoreDiagnostic(
+        `${datastorePath}.kind`,
+        'Datastore entry is missing required field `kind`.'
+      )
+    ];
+  }
+
+  if (!ALLOWED_DATASTORE_KINDS.has(kind)) {
+    return [
+      createDatastoreDiagnostic(
+        `${datastorePath}.kind`,
+        `Datastore kind must be one of: ${[...ALLOWED_DATASTORE_KINDS]
+          .map((allowedKind) => `\`${allowedKind}\``)
+          .join(', ')}.`
+      )
+    ];
+  }
 
   if (ownerRepo === null) {
     return [

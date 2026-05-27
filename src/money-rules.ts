@@ -1,4 +1,5 @@
 import type { Diagnostic } from './diagnostics.ts';
+import type { RepositoryIndex } from './repository-rules.ts';
 
 const SERVICES_FILE = 'catalogs/services.yaml';
 const MONEY_MOVEMENT_RULE_ID = 'ZDP-MONEY-001';
@@ -182,11 +183,23 @@ function validateServiceMoneyMovementContract(
     ];
   }
 
-  if (!hasMoneyMovement(value)) {
+  const moneyMovementMarker = readMoneyMovementMarker(value);
+  const servicePath = getServiceDiagnosticPath(value, index);
+
+  if (moneyMovementMarker.invalidPath !== null) {
+    return [
+      createMoneyDiagnostic(
+        MONEY_MOVEMENT_RULE_ID,
+        `${servicePath}.${moneyMovementMarker.invalidPath}`,
+        `Money movement marker \`${moneyMovementMarker.invalidPath}\` must be a boolean.`
+      )
+    ];
+  }
+
+  if (!moneyMovementMarker.enabled) {
     return [];
   }
 
-  const servicePath = getServiceDiagnosticPath(value, index);
   const diagnostics: Diagnostic[] = [];
 
   if (policy.expectedTier !== null) {
@@ -259,7 +272,8 @@ function validateServiceMoneyMovementContract(
 
 export function validatePaymentDataFrontendContracts(
   value: unknown,
-  policy: PaymentDataFrontendPolicy
+  policy: PaymentDataFrontendPolicy,
+  repositoryIndex?: RepositoryIndex
 ): readonly Diagnostic[] {
   if (!policy.enabled) {
     return [];
@@ -288,7 +302,12 @@ export function validatePaymentDataFrontendContracts(
   }
 
   return services.flatMap((service, index) =>
-    validateServicePaymentDataFrontendContract(service, index, policy)
+    validateServicePaymentDataFrontendContract(
+      service,
+      index,
+      policy,
+      repositoryIndex
+    )
   );
 }
 
@@ -330,7 +349,8 @@ export function validateCreditMonetizationContracts(
 function validateServicePaymentDataFrontendContract(
   value: unknown,
   index: number,
-  policy: PaymentDataFrontendPolicy
+  policy: PaymentDataFrontendPolicy,
+  repositoryIndex?: RepositoryIndex
 ): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
@@ -346,9 +366,17 @@ function validateServicePaymentDataFrontendContract(
     return [];
   }
 
-  const repo = readStringAtPreferredPaths(value, ['service.repo', 'repo']);
+  const repo = readStringAtPreferredPaths(value, ['repo', 'service.repo']);
 
-  if (repo.value === null || !policy.forbiddenRepos.includes(repo.value)) {
+  if (repo.value === null) {
+    return [];
+  }
+
+  const forbidden =
+    policy.forbiddenRepos.includes(repo.value) ||
+    isLabOnlyLabRepository(repo.value, repositoryIndex);
+
+  if (!forbidden) {
     return [];
   }
 
@@ -359,6 +387,15 @@ function validateServicePaymentDataFrontendContract(
       `Payment data service \`${getServiceName(value, index)}\` must not use forbidden repository \`${repo.value}\`.`
     )
   ];
+}
+
+function isLabOnlyLabRepository(
+  repo: string,
+  repositoryIndex?: RepositoryIndex
+): boolean {
+  const repository = repositoryIndex?.byName.get(repo);
+
+  return repository?.repoStage === 'lab_only' && repository.kind === 'lab';
 }
 
 function validateServiceCreditMonetizationContract(
@@ -418,11 +455,29 @@ function validateServiceCreditMonetizationContract(
   return diagnostics;
 }
 
-function hasMoneyMovement(value: Record<string, unknown>): boolean {
-  return (
-    readBooleanAtPath(value, 'domain.money_movement') === true ||
-    readBooleanAtPath(value, 'data.money_movement') === true
-  );
+function readMoneyMovementMarker(value: Record<string, unknown>): {
+  readonly enabled: boolean;
+  readonly invalidPath: string | null;
+} {
+  const markerPaths = ['domain.money_movement', 'data.money_movement'] as const;
+
+  for (const markerPath of markerPaths) {
+    const markerValue = readValueAtPath(value, markerPath);
+
+    if (typeof markerValue === 'boolean') {
+      if (markerValue) {
+        return { enabled: true, invalidPath: null };
+      }
+
+      continue;
+    }
+
+    if (markerValue !== undefined) {
+      return { enabled: false, invalidPath: markerPath };
+    }
+  }
+
+  return { enabled: false, invalidPath: null };
 }
 
 function hasCreditMonetization(value: Record<string, unknown>): boolean {

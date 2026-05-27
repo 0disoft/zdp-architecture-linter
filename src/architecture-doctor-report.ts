@@ -25,7 +25,8 @@ const REQUIRED_ARCHITECTURE_FILES = [
   'rules/provider.rules.yaml',
   'rules/ai-data-access.rules.yaml',
   'rules/data-access.rules.yaml',
-  'rules/tier.rules.yaml'
+  'rules/tier.rules.yaml',
+  'rules/api.rules.yaml'
 ] as const;
 
 export type DoctorStatus = 'ok' | 'warning' | 'error';
@@ -323,7 +324,10 @@ async function runGit(
   readonly stderr: string;
 }> {
   try {
-    const result = await execFileAsync('git', ['-C', repositoryRoot, ...args], {
+    const result = await execFileAsync('git', buildHardenedGitArgs(
+      repositoryRoot,
+      args
+    ), {
       encoding: 'utf8'
     });
 
@@ -343,6 +347,23 @@ async function runGit(
 
     throw error;
   }
+}
+
+export function buildHardenedGitArgs(
+  repositoryRoot: string,
+  args: readonly string[]
+): readonly string[] {
+  return [
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'core.hooksPath=',
+      '-c',
+      'credential.helper=',
+      '-C',
+      repositoryRoot,
+      ...args
+  ];
 }
 
 function formatError(error: unknown): string {

@@ -82,6 +82,7 @@ export function createMinimalArchitectureFiles(
     'rules/ai-data-access.rules.yaml': 'rules: []\n',
     'rules/data-access.rules.yaml': 'rules: []\n',
     'rules/tier.rules.yaml': 'rules: []\n',
+    'rules/api.rules.yaml': 'rules: []\n',
     ...files
   };
 }

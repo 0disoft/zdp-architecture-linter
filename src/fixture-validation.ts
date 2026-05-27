@@ -241,7 +241,8 @@ function validateFixtureService(
     ...validateMoneyMovementContracts(services, context.moneyMovementPolicy),
     ...validatePaymentDataFrontendContracts(
       services,
-      context.paymentDataFrontendPolicy
+      context.paymentDataFrontendPolicy,
+      context.repositoryIndex
     ),
     ...validateCreditMonetizationContracts(
       services,

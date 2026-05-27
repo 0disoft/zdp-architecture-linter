@@ -452,16 +452,33 @@ function validateProviderWebhookEntry(
     return [];
   }
 
-  return policy.requiredWebhookFields.flatMap((field) =>
-    hasUsableProviderField(webhook, field)
+  return policy.requiredWebhookFields.flatMap((field) => {
+    const candidate = readValueAtPath(webhook, field);
+
+    if (isWebhookBooleanControlField(field)) {
+      return candidate === true
+        ? []
+        : [
+            createServiceProviderWebhookDiagnostic(
+              `${providerPath}.webhook.${field}`,
+              `Provider webhook field \`${field}\` must be set to true when webhook is enabled.`
+            )
+          ];
+    }
+
+    return hasUsableProviderField(webhook, field)
       ? []
       : [
           createServiceProviderWebhookDiagnostic(
             `${providerPath}.webhook.${field}`,
             `Provider webhook is missing required field \`${field}\`.`
           )
-        ]
-  );
+        ];
+  });
+}
+
+function isWebhookBooleanControlField(field: string): boolean {
+  return field === 'replay_supported' || field === 'signature_required';
 }
 
 function hasUsableProviderField(

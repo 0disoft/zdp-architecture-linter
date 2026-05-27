@@ -421,6 +421,28 @@ describe('repository stage and kind compatibility', () => {
       }
     ]);
   });
+
+  test('fails when repo_stage is malformed even if kind is deploy_unit', () => {
+    const diagnostics = validateRepositoriesCatalog({
+      repositories: [
+        createRepository({
+          name: 'zdp-ai-memory',
+          repo_stage: ['logical_only'],
+          kind: 'deploy_unit'
+        })
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-ai-memory].repo_stage',
+        message: 'Repository entry is missing required field `repo_stage`.'
+      }
+    ]);
+  });
 });
 
 function createRepository(
