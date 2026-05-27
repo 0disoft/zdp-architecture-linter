@@ -100,6 +100,7 @@ import {
   validateTierOperationalContracts,
   validateTier3RiskyExperimentContracts
 } from './tier-rules.ts';
+import { validateRepositoryWebpubContract } from './webpub-rules.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -203,6 +204,13 @@ export async function validateArchitecture(
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null,
           repositoryIndex
+        });
+  const repositoryWebpubDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryWebpubContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
   const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
   const repositoryServicePolicyDiagnostics =
@@ -380,6 +388,7 @@ export async function validateArchitecture(
       ...serviceSchemaDiagnostics,
       ...repositoryBaselineDiagnostics,
       ...repositoryMarkdownDiagnostics,
+      ...repositoryWebpubDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
         ? []
