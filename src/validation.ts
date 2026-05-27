@@ -82,6 +82,7 @@ import {
 import {
   mapServiceCatalogDiagnosticsToRepositoryServiceContract
 } from './service-contract-policy-rules.ts';
+import { validateRepositoryServiceDomainContract } from './service-domain-rules.ts';
 import {
   loadRepositoryServiceContract,
   validateRepositoryServiceContract,
@@ -411,6 +412,9 @@ export async function validateArchitecture(
             repositoryServiceContract.value,
             eventIndex
           )),
+      ...(repositoryServiceContract === null
+        ? []
+        : validateRepositoryServiceDomainContract(repositoryServiceContract.value)),
       ...repositoryServicePolicyDiagnostics
     ]
   };
