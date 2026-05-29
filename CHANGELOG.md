@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.24.0
+
+- `ZDP-APP-001`을 추가했다.
+- `zdp-web-apps` 저장소의 app shell 계약 파일과 SvelteKit route skeleton을 검사한다.
+- app shell 소스가 직접 DB 접근, refresh token 저장, UI 최종 권한 판단 같은 platform truth 소유 패턴을 포함하지 못하도록 차단한다.
+
 ## 0.23.2
 
 - provider webhook, AI, money movement, 데이터 저장소, repository stage 검증에서 존재 여부만으로 보안 통제가 통과하던 경로를 차단했다.

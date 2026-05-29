@@ -89,6 +89,7 @@ import {
   validateServiceSchemaFixtures
 } from './service-schema-validation.ts';
 import { validateRepositoryCoreContract } from './core-contract-rules.ts';
+import { validateRepositoryAppShellContract } from './app-shell-rules.ts';
 import {
   validateRepositorySplitCandidates,
   validateSplitTriggerCatalog
@@ -219,6 +220,13 @@ export async function validateArchitecture(
     input.repositoryRoot === undefined
       ? []
       : await validateRepositoryCoreContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
+  const repositoryAppShellContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryAppShellContract({
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
@@ -402,6 +410,7 @@ export async function validateArchitecture(
       ...repositoryMarkdownDiagnostics,
       ...repositoryWebpubDiagnostics,
       ...repositoryCoreContractDiagnostics,
+      ...repositoryAppShellContractDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
         ? []
