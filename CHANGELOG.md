@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.26.0
+
+- `ZDP-EDGE-001`을 추가했다.
+- `zdp-edge-workers` 저장소의 request boundary, webhook ingress, queue envelope 계약 파일을 검사한다.
+- edge가 request_id와 trace_id 전파, webhook 검증, queue envelope 경계를 유지하고 최종 권한·원장·개인정보 판단을 소유하지 않도록 검증한다.
+
 ## 0.25.0
 
 - `ZDP-RUNTIME-001`을 추가했다.
