@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.25.0
+
+- `ZDP-RUNTIME-001`을 추가했다.
+- `zdp-platform-runtime` 저장소의 health/readiness, smoke target, deployment template, rollback 계약 파일을 검사한다.
+- `core-api`와 `app-console`의 초기 runtime smoke target이 production runtime template 전 기준으로 유지되는지 검증한다.
+
 ## 0.24.0
 
 - `ZDP-APP-001`을 추가했다.
