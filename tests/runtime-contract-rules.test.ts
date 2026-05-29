@@ -45,7 +45,20 @@ describe('runtime smoke contract rules', () => {
         path: 'repository.root',
         message: 'Runtime repository must include `contracts/healthcheck.yaml`.'
       });
-      expect(diagnostics).toHaveLength(4);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-RUNTIME-001',
+        severity: 'error',
+        file: 'package.json',
+        path: 'repository.root',
+        message: 'Runtime repository must include `package.json`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-RUNTIME-001',
+        severity: 'error',
+        file: 'scripts/smoke-runner.ts',
+        path: 'repository.root',
+        message: 'Runtime repository must include `scripts/smoke-runner.ts`.'
+      });
     });
   });
 
@@ -328,6 +341,65 @@ rollback:
       }
     );
   });
+
+  test('fails when smoke runner files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun test"
+  }
+}
+`,
+        'src/smoke-runner/runner.ts': `
+export function runSmokeTargets(): void {}
+`,
+        'tests/smoke-runner.test.ts': `
+import { test } from 'bun:test';
+test('smoke runner placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Runtime package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.smoke:plan',
+          message: 'Runtime package must declare `smoke:plan` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'src/smoke-runner/runner.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include `base_url_not_provided`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'tests/smoke-runner.test.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include `fails closed when run mode has no base URL`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -422,6 +494,41 @@ rollback:
     - actor
     - reason
     - trace_id
+`,
+    'package.json': `
+{
+  "scripts": {
+    "check": "bun test",
+    "test": "bun test",
+    "smoke:plan": "bun scripts/smoke-runner.ts plan",
+    "smoke:run": "bun scripts/smoke-runner.ts run"
+  }
+}
+`,
+    'scripts/smoke-runner.ts': `
+import { runSmokeRunnerCli } from '../src/smoke-runner/cli';
+await runSmokeRunnerCli([]);
+`,
+    'src/smoke-runner/contract.ts': `
+export function parseSmokeTargetsContract(source: string): unknown {
+  if (!source.includes('targets')) {
+    throw new Error('contracts/smoke-targets.yaml must declare targets');
+  }
+  return {};
+}
+`,
+    'src/smoke-runner/runner.ts': `
+export const failClosedReason = 'base_url_not_provided';
+export const missingRequestHeader = 'x-request-id_not_propagated';
+export const missingTraceHeader = 'traceparent_not_propagated';
+`,
+    'tests/smoke-runner.test.ts': `
+import { test } from 'bun:test';
+test('fails closed when run mode has no base URL', () => {
+  const reason = 'base_url_not_provided';
+  const malformed = 'malformed_json_response';
+  return [reason, malformed];
+});
 `
   };
 }

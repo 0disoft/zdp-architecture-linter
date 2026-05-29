@@ -10,6 +10,25 @@ const HEALTHCHECK_FILE = 'contracts/healthcheck.yaml';
 const SMOKE_TARGETS_FILE = 'contracts/smoke-targets.yaml';
 const DEPLOYMENT_TEMPLATE_FILE = 'contracts/deployment-template.yaml';
 const ROLLBACK_FILE = 'contracts/rollback.yaml';
+const PACKAGE_FILE = 'package.json';
+const SMOKE_RUNNER_SCRIPT_FILE = 'scripts/smoke-runner.ts';
+const SMOKE_RUNNER_CONTRACT_FILE = 'src/smoke-runner/contract.ts';
+const SMOKE_RUNNER_RUNNER_FILE = 'src/smoke-runner/runner.ts';
+const SMOKE_RUNNER_TEST_FILE = 'tests/smoke-runner.test.ts';
+
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'test',
+  'smoke:plan',
+  'smoke:run'
+] as const;
+
+const REQUIRED_SMOKE_RUNNER_FILES = [
+  SMOKE_RUNNER_SCRIPT_FILE,
+  SMOKE_RUNNER_CONTRACT_FILE,
+  SMOKE_RUNNER_RUNNER_FILE,
+  SMOKE_RUNNER_TEST_FILE
+] as const;
 
 const REQUIRED_DEPLOYMENT_FIELDS = [
   'service_id',
@@ -48,12 +67,13 @@ export async function validateRepositoryRuntimeContract(input: {
     return [];
   }
 
-  const [healthcheck, smokeTargets, deploymentTemplate, rollback] =
+  const [healthcheck, smokeTargets, deploymentTemplate, rollback, packageJson] =
     await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, HEALTHCHECK_FILE),
       readRequiredYamlContract(input.repositoryRoot, SMOKE_TARGETS_FILE),
       readRequiredYamlContract(input.repositoryRoot, DEPLOYMENT_TEMPLATE_FILE),
-      readRequiredYamlContract(input.repositoryRoot, ROLLBACK_FILE)
+      readRequiredYamlContract(input.repositoryRoot, ROLLBACK_FILE),
+      readRequiredJsonFile(input.repositoryRoot, PACKAGE_FILE)
     ]);
 
   return [
@@ -61,6 +81,7 @@ export async function validateRepositoryRuntimeContract(input: {
     ...smokeTargets.diagnostics,
     ...deploymentTemplate.diagnostics,
     ...rollback.diagnostics,
+    ...packageJson.diagnostics,
     ...(healthcheck.value === null ? [] : validateHealthcheckContract(healthcheck.value)),
     ...(smokeTargets.value === null
       ? []
@@ -68,7 +89,9 @@ export async function validateRepositoryRuntimeContract(input: {
     ...(deploymentTemplate.value === null
       ? []
       : validateDeploymentTemplateContract(deploymentTemplate.value)),
-    ...(rollback.value === null ? [] : validateRollbackContract(rollback.value))
+    ...(rollback.value === null ? [] : validateRollbackContract(rollback.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...(await validateSmokeRunnerSurface(input.repositoryRoot))
   ];
 }
 
@@ -116,6 +139,83 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createRuntimeDiagnostic(
+            file,
+            'repository.root',
+            `Runtime repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createRuntimeDiagnostic(
+          file,
+          'json',
+          `Runtime contract \`${file}\` must be valid JSON: ${formatError(error)}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createRuntimeDiagnostic(
+            file,
+            'repository.root',
+            `Runtime repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -636,6 +736,103 @@ function validateRollbackContract(value: unknown): readonly Diagnostic[] {
       requiredEntries: REQUIRED_ROLLBACK_RECORD_FIELDS
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Runtime package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateSmokeRunnerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [script, contractSource, runnerSource, testSource] = await Promise.all(
+    REQUIRED_SMOKE_RUNNER_FILES.map((file) => readOptionalTextFile(repositoryRoot, file))
+  );
+
+  return [
+    ...script.diagnostics,
+    ...contractSource.diagnostics,
+    ...runnerSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: SMOKE_RUNNER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runSmokeRunnerCli']
+        })),
+    ...(contractSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: SMOKE_RUNNER_CONTRACT_FILE,
+          source: contractSource.source,
+          requiredFragments: ['contracts/smoke-targets.yaml', 'targets']
+        })),
+    ...(runnerSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: SMOKE_RUNNER_RUNNER_FILE,
+          source: runnerSource.source,
+          requiredFragments: [
+            'base_url_not_provided',
+            'x-request-id_not_propagated',
+            'traceparent_not_propagated'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: SMOKE_RUNNER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails closed when run mode has no base URL',
+            'base_url_not_provided',
+            'malformed_json_response'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        input.file,
+        'source',
+        `Runtime smoke runner source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredStringArrayEntries(input: {

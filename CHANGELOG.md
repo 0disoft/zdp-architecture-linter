@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.26.2
+
+- `ZDP-RUNTIME-001`이 `zdp-platform-runtime`의 smoke runner skeleton까지 검사하도록 강화했다.
+- runtime package scripts와 `scripts/smoke-runner.ts`, runner source, runner test 표면을 검증한다.
+
 ## 0.26.1
 
 - `ZDP-RUNTIME-001`이 `edge-webhook-ingress` smoke target을 필수로 검사하도록 강화했다.
