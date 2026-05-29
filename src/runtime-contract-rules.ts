@@ -274,7 +274,10 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
 
   diagnostics.push(
     ...validateCoreApiSmokeTarget(targetById.get('core-api')),
-    ...validateAppConsoleSmokeTarget(targetById.get('app-console'))
+    ...validateAppConsoleSmokeTarget(targetById.get('app-console')),
+    ...validateEdgeWebhookIngressSmokeTarget(
+      targetById.get('edge-webhook-ingress')
+    )
   );
 
   return diagnostics;
@@ -433,6 +436,82 @@ function validateAppConsoleSmokeTarget(
         'ZDP_CORE_API_BASE_URL is missing',
         'readyz does not report core-api as an upstream',
         'app shell attempts direct core, money, privacy, or credential datastore access'
+      ]
+    })
+  ];
+}
+
+function validateEdgeWebhookIngressSmokeTarget(
+  target: Record<string, unknown> | undefined
+): readonly Diagnostic[] {
+  if (target === undefined) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'targets.edge-webhook-ingress',
+        'Runtime smoke contract must declare `edge-webhook-ingress` target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateTargetIdentity(
+      target,
+      'edge-webhook-ingress',
+      'zdp-edge-workers'
+    ),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.process',
+      field: 'process',
+      expected: 'edge-worker',
+      message:
+        'Runtime `edge-webhook-ingress` smoke target must declare process `edge-worker`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.healthz.expect_json.ok',
+      field: 'healthz.expect_json.ok',
+      expected: true,
+      message:
+        'Runtime `edge-webhook-ingress` healthz smoke target must expect `ok: true`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.healthz.expect_json.service',
+      field: 'healthz.expect_json.service',
+      expected: 'edge-webhook-ingress',
+      message:
+        'Runtime `edge-webhook-ingress` healthz smoke target must expect service `edge-webhook-ingress`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.readyz.expect_json.ready',
+      field: 'readyz.expect_json.ready',
+      expected: true,
+      message:
+        'Runtime `edge-webhook-ingress` readyz smoke target must expect `ready: true`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.readyz.expect_json.checks',
+      field: 'readyz.expect_json.checks',
+      requiredEntries: ['contracts']
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'x-request-id is not propagated',
+        'traceparent is not propagated when present',
+        'edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions'
       ]
     })
   ];

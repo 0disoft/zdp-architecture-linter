@@ -180,6 +180,14 @@ targets:
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
           file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress',
+          message:
+            'Runtime smoke contract must declare `edge-webhook-ingress` target.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
           path: 'targets.core-api.readyz.expect_json.ready',
           message:
             'Runtime `core-api` readyz smoke target must expect `ready: true`.'
@@ -191,6 +199,77 @@ targets:
           path: 'targets.core-api.readyz.expect_json.checks',
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `contracts` in `readyz.expect_json.checks`.'
+        });
+      }
+    );
+  });
+
+  test('fails when the edge webhook ingress smoke target drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: web
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: wrong-edge-service
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: false
+        checks: []
+    blocked_production_when:
+      - x-request-id is not propagated
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.process',
+          message:
+            'Runtime `edge-webhook-ingress` smoke target must declare process `edge-worker`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.healthz.expect_json.service',
+          message:
+            'Runtime `edge-webhook-ingress` healthz smoke target must expect service `edge-webhook-ingress`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.readyz.expect_json.ready',
+          message:
+            'Runtime `edge-webhook-ingress` readyz smoke target must expect `ready: true`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `traceparent is not propagated when present` in `blocked_production_when`.'
         });
       }
     );
@@ -312,7 +391,75 @@ headers:
     - traceparent
     - x-request-id
 `,
-    'contracts/smoke-targets.yaml': `
+    'contracts/smoke-targets.yaml': createSmokeTargetsYaml(),
+    'contracts/deployment-template.yaml': `
+deployment_template:
+  required_fields:
+    - service_id
+    - service_repo
+    - environment
+    - image_ref
+    - deploy_id
+    - healthcheck
+    - rollback
+    - env_schema_ref
+  forbidden_fields:
+    - secret_values
+    - product_business_logic
+    - database_migration_body
+process_model:
+  web_process_required: true
+  state_in_process_memory_allowed: false
+  graceful_shutdown_required: true
+`,
+    'contracts/rollback.yaml': `
+rollback:
+  required: true
+  record_fields:
+    - deploy_id
+    - previous_image_ref
+    - target_image_ref
+    - actor
+    - reason
+    - trace_id
+`
+  };
+}
+
+function createSmokeTargetsYaml(
+  overrides: {
+    readonly edgeWebhookIngress?: string;
+  } = {}
+): string {
+  const edgeWebhookIngress =
+    overrides.edgeWebhookIngress ??
+    `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - x-request-id is not propagated
+      - traceparent is not propagated when present
+      - edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+`;
+
+  return `
 targets:
   - id: core-api
     repo: zdp-core-platform
@@ -365,37 +512,5 @@ targets:
       - ZDP_CORE_API_BASE_URL is missing
       - readyz does not report core-api as an upstream
       - app shell attempts direct core, money, privacy, or credential datastore access
-`,
-    'contracts/deployment-template.yaml': `
-deployment_template:
-  required_fields:
-    - service_id
-    - service_repo
-    - environment
-    - image_ref
-    - deploy_id
-    - healthcheck
-    - rollback
-    - env_schema_ref
-  forbidden_fields:
-    - secret_values
-    - product_business_logic
-    - database_migration_body
-process_model:
-  web_process_required: true
-  state_in_process_memory_allowed: false
-  graceful_shutdown_required: true
-`,
-    'contracts/rollback.yaml': `
-rollback:
-  required: true
-  record_fields:
-    - deploy_id
-    - previous_image_ref
-    - target_image_ref
-    - actor
-    - reason
-    - trace_id
-`
-  };
+${edgeWebhookIngress}`;
 }
