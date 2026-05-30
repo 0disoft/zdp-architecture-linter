@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.27.0
+
+- `ZDP-OBS-001`을 추가했다.
+- `zdp-platform-observability` 저장소의 telemetry convention, dashboard inventory, alert rule 계약 파일을 검사한다.
+- request/trace 공통 식별자, 민감 속성 redaction, dashboard-only 변경 금지, 초기 alert rule 목록이 provider 연결 전 gate로 유지되는지 검증한다.
+
 ## 0.26.2
 
 - `ZDP-RUNTIME-001`이 `zdp-platform-runtime`의 smoke runner skeleton까지 검사하도록 강화했다.
