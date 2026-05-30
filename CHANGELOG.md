@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.29.1
+
+- `ZDP-EDGE-001`이 `zdp-edge-workers`의 analytics ingress 계약까지 검사하도록 강화했다.
+- edge가 analytics 이벤트를 `zdp-data-platform`으로 넘기되 ClickHouse 직접 쓰기나 최종 판단을 소유하지 않도록 검증한다.
+
 ## 0.29.0
 
 - `ZDP-DATA-PLATFORM-001`을 추가했다.

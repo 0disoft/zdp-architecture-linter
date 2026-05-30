@@ -9,6 +9,7 @@ const EDGE_CONTRACT_RULE_ID = 'ZDP-EDGE-001';
 const REQUEST_BOUNDARY_FILE = 'contracts/request-boundary.yaml';
 const WEBHOOK_INGRESS_FILE = 'contracts/webhook-ingress.yaml';
 const QUEUE_ENVELOPE_FILE = 'contracts/queue-envelope.yaml';
+const ANALYTICS_INGRESS_FILE = 'contracts/analytics-ingress.yaml';
 
 const REQUIRED_FORBIDDEN_LOG_VALUES = [
   'authorization',
@@ -63,6 +64,55 @@ const REQUIRED_QUEUE_FORBIDDEN_FIELDS = [
   'payment payload bodies'
 ] as const;
 
+const REQUIRED_ANALYTICS_EVENTS = [
+  'web.page-viewed',
+  'product.signup-started',
+  'product.signup-completed',
+  'product.activation-completed',
+  'experiment.exposure-recorded',
+  'billing.checkout-started'
+] as const;
+
+const REQUIRED_ANALYTICS_PRECHECKS = [
+  'malformed request',
+  'event name allowlist',
+  'schema version present',
+  'request id present',
+  'trace id propagation',
+  'idempotency key present'
+] as const;
+
+const REQUIRED_ANALYTICS_FIELDS = [
+  'event_id',
+  'event_name',
+  'schema_version',
+  'source',
+  'product_id',
+  'occurred_at',
+  'request_id',
+  'trace_id',
+  'idempotency_key'
+] as const;
+
+const REQUIRED_ANALYTICS_FORBIDDEN_LOG_VALUES = [
+  'raw customer payload',
+  'form body',
+  'prompt body',
+  'authorization',
+  'cookie',
+  'secret',
+  'token',
+  'payment payload'
+] as const;
+
+const REQUIRED_ANALYTICS_FORBIDDEN_DECISIONS = [
+  'final authorization',
+  'entitlement',
+  'ledger or credit mutation',
+  'identity truth',
+  'consent truth'
+] as const;
+
 export async function validateRepositoryEdgeContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -74,16 +124,19 @@ export async function validateRepositoryEdgeContract(input: {
     return [];
   }
 
-  const [requestBoundary, webhookIngress, queueEnvelope] = await Promise.all([
-    readRequiredYamlContract(input.repositoryRoot, REQUEST_BOUNDARY_FILE),
-    readRequiredYamlContract(input.repositoryRoot, WEBHOOK_INGRESS_FILE),
-    readRequiredYamlContract(input.repositoryRoot, QUEUE_ENVELOPE_FILE)
-  ]);
+  const [requestBoundary, webhookIngress, queueEnvelope, analyticsIngress] =
+    await Promise.all([
+      readRequiredYamlContract(input.repositoryRoot, REQUEST_BOUNDARY_FILE),
+      readRequiredYamlContract(input.repositoryRoot, WEBHOOK_INGRESS_FILE),
+      readRequiredYamlContract(input.repositoryRoot, QUEUE_ENVELOPE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, ANALYTICS_INGRESS_FILE)
+    ]);
 
   return [
     ...requestBoundary.diagnostics,
     ...webhookIngress.diagnostics,
     ...queueEnvelope.diagnostics,
+    ...analyticsIngress.diagnostics,
     ...(requestBoundary.value === null
       ? []
       : validateRequestBoundaryContract(requestBoundary.value)),
@@ -92,7 +145,10 @@ export async function validateRepositoryEdgeContract(input: {
       : validateWebhookIngressContract(webhookIngress.value)),
     ...(queueEnvelope.value === null
       ? []
-      : validateQueueEnvelopeContract(queueEnvelope.value))
+      : validateQueueEnvelopeContract(queueEnvelope.value)),
+    ...(analyticsIngress.value === null
+      ? []
+      : validateAnalyticsIngressContract(analyticsIngress.value))
   ];
 }
 
@@ -233,6 +289,102 @@ function validateQueueEnvelopeContract(value: unknown): readonly Diagnostic[] {
       path: 'queue_envelope.forbidden_fields',
       field: 'queue_envelope.forbidden_fields',
       requiredEntries: REQUIRED_QUEUE_FORBIDDEN_FIELDS
+    })
+  ];
+}
+
+function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.status',
+      expected: 'contract-only',
+      message:
+        'Edge analytics ingress must remain `contract-only` before collector route implementation.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.accepted_events',
+      field: 'analytics_ingress.accepted_events',
+      requiredEntries: REQUIRED_ANALYTICS_EVENTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.edge_prechecks',
+      field: 'analytics_ingress.edge_prechecks',
+      requiredEntries: REQUIRED_ANALYTICS_PRECHECKS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.required_fields',
+      field: 'analytics_ingress.required_fields',
+      requiredEntries: REQUIRED_ANALYTICS_FIELDS
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.target',
+      expected: 'zdp-data-platform',
+      message:
+        'Edge analytics ingress must hand off analytics events to `zdp-data-platform`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.service_id',
+      expected: 'data-platform',
+      message:
+        'Edge analytics ingress must hand off analytics events to `data-platform` service.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.queue',
+      expected: 'analytics-events',
+      message:
+        'Edge analytics ingress must enqueue accepted analytics events to `analytics-events`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.dead_letter_queue',
+      expected: 'analytics-events-dlq',
+      message:
+        'Edge analytics ingress must declare `analytics-events-dlq` as dead-letter handoff.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.direct_clickhouse_write',
+      expected: 'forbidden',
+      message:
+        'Edge analytics ingress must forbid direct ClickHouse writes.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.final_truth_owner',
+      expected: 'zdp-data-platform',
+      message:
+        'Edge analytics ingress must keep analytics truth ownership in `zdp-data-platform`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.forbidden_in_logs',
+      field: 'analytics_ingress.forbidden_in_logs',
+      requiredEntries: REQUIRED_ANALYTICS_FORBIDDEN_LOG_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.forbidden_decisions',
+      field: 'analytics_ingress.forbidden_decisions',
+      requiredEntries: REQUIRED_ANALYTICS_FORBIDDEN_DECISIONS
     })
   ];
 }

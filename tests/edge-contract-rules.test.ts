@@ -46,7 +46,15 @@ describe('edge worker contract rules', () => {
         message:
           'Edge worker repository must include `contracts/request-boundary.yaml`.'
       });
-      expect(diagnostics).toHaveLength(3);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-EDGE-001',
+        severity: 'error',
+        file: 'contracts/analytics-ingress.yaml',
+        path: 'repository.root',
+        message:
+          'Edge worker repository must include `contracts/analytics-ingress.yaml`.'
+      });
+      expect(diagnostics).toHaveLength(4);
     });
   });
 
@@ -186,6 +194,90 @@ queue_envelope:
       }
     );
   });
+
+  test('fails when analytics ingress contract drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidEdgeFiles(),
+        'contracts/analytics-ingress.yaml': `
+analytics_ingress:
+  status: live
+  accepted_events:
+    - web.page-viewed
+  edge_prechecks:
+    - malformed request
+  required_fields:
+    - event_id
+  handoff:
+    target: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    queue: analytics-events
+    dead_letter_queue: analytics-events-error
+  direct_clickhouse_write: allowed
+  final_truth_owner: zdp-edge-workers
+  forbidden_in_logs:
+    - token
+  forbidden_decisions:
+    - final authorization
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryEdgeContract({
+          repositoryRoot,
+          repositoryServiceContract: createEdgeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.status',
+          message:
+            'Edge analytics ingress must remain `contract-only` before collector route implementation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.accepted_events',
+          message:
+            'Edge worker contract `contracts/analytics-ingress.yaml` must include `billing.checkout-started` in `analytics_ingress.accepted_events`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.required_fields',
+          message:
+            'Edge worker contract `contracts/analytics-ingress.yaml` must include `trace_id` in `analytics_ingress.required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.handoff.target',
+          message:
+            'Edge analytics ingress must hand off analytics events to `zdp-data-platform`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.direct_clickhouse_write',
+          message:
+            'Edge analytics ingress must forbid direct ClickHouse writes.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.forbidden_in_logs',
+          message:
+            'Edge worker contract `contracts/analytics-ingress.yaml` must include `payment payload` in `analytics_ingress.forbidden_in_logs`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -273,6 +365,57 @@ queue_envelope:
     - authorization headers
     - cookies
     - payment payload bodies
+`,
+    'contracts/analytics-ingress.yaml': `
+analytics_ingress:
+  status: contract-only
+  endpoint_candidate: POST /v1/events
+  accepted_events:
+    - web.page-viewed
+    - product.signup-started
+    - product.signup-completed
+    - product.activation-completed
+    - experiment.exposure-recorded
+    - billing.checkout-started
+  edge_prechecks:
+    - malformed request
+    - event name allowlist
+    - schema version present
+    - request id present
+    - trace id propagation
+    - idempotency key present
+  required_fields:
+    - event_id
+    - event_name
+    - schema_version
+    - source
+    - product_id
+    - occurred_at
+    - request_id
+    - trace_id
+    - idempotency_key
+  handoff:
+    target: zdp-data-platform
+    service_id: data-platform
+    queue: analytics-events
+    dead_letter_queue: analytics-events-dlq
+  direct_clickhouse_write: forbidden
+  final_truth_owner: zdp-data-platform
+  forbidden_in_logs:
+    - raw customer payload
+    - form body
+    - prompt body
+    - authorization
+    - cookie
+    - secret
+    - token
+    - payment payload
+  forbidden_decisions:
+    - final authorization
+    - entitlement
+    - ledger or credit mutation
+    - identity truth
+    - consent truth
 `
   };
 }
