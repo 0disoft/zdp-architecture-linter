@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.30.1
+
+- `ZDP-GROWTH-001`이 `zdp-growth-lab`의 repo-local checker skeleton까지 검사하도록 강화했다.
+- growth lab package scripts와 `scripts/check-growth-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.30.0
 
 - `ZDP-GROWTH-001`을 추가했다.

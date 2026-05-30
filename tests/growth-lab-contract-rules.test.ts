@@ -285,6 +285,65 @@ Ship more experiments.
       }
     );
   });
+
+  test('fails when growth checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidGrowthLabFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit"
+  }
+}
+`,
+        'src/growth-contracts/validator.ts': `
+export function checkGrowthContracts(): void {}
+`,
+        'tests/growth-contracts.test.ts': `
+import { test } from 'bun:test';
+test('growth placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryGrowthLabContract({
+          repositoryRoot,
+          repositoryServiceContract: createGrowthLabServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-GROWTH-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Growth lab package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-GROWTH-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message: 'Growth lab package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-GROWTH-001',
+          severity: 'error',
+          file: 'src/growth-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Growth lab checker source must include `contracts/funnel-metrics.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-GROWTH-001',
+          severity: 'error',
+          file: 'tests/growth-contracts.test.ts',
+          path: 'source',
+          message:
+            'Growth lab checker source must include `fails when service contract starts owning platform truth`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -426,6 +485,84 @@ dark pattern, 숨은 결제, 가짜 긴급성, 미고지 추적을 사용하지 
 제품 DB, money DB, core DB, privacy vault를 직접 읽지 않는다.
 
 raw event export를 이 저장소에 보관하지 않는다.
+`,
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-growth-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-growth-contracts.ts': `
+import { runGrowthContractCheckCli } from '../src/growth-contracts/cli';
+
+await runGrowthContractCheckCli(process.cwd(), process.argv.slice(2));
+`,
+    'src/growth-contracts/cli.ts': `
+import { checkGrowthContracts } from './validator';
+
+export async function runGrowthContractCheckCli(): Promise<number> {
+  await checkGrowthContracts(process.cwd());
+  console.log('Usage: bun scripts/check-growth-contracts.ts');
+  return 0;
+}
+`,
+    'src/growth-contracts/parser.ts': `
+import { parse } from 'yaml';
+
+export function readYamlFile(source: string): unknown {
+  return parse(source);
+}
+
+export function readTextFile(source: string): string {
+  return source;
+}
+`,
+    'src/growth-contracts/types.ts': `
+export type ContractDiagnostic = {
+  file: string;
+};
+
+export type ContractCheckResult = {
+  ok: boolean;
+};
+`,
+    'src/growth-contracts/validator.ts': `
+const FUNNEL_METRICS_FILE = 'contracts/funnel-metrics.yaml';
+const GROWTH_EXPERIMENTS_FILE = 'contracts/growth-experiments.yaml';
+const SERVICE_FILE = 'service.yaml';
+const SOURCE_EVENTS = ['web.page-viewed'];
+const FORBIDDEN_INPUTS = ['raw_clickstream_export'];
+const FORBIDDEN_USES = ['ledger_or_credit_mutation'];
+const EXPERIMENT_SAFETY_FRAGMENTS = ['raw event export'];
+
+export function checkGrowthContracts(): void {
+  console.log(FUNNEL_METRICS_FILE, GROWTH_EXPERIMENTS_FILE, SERVICE_FILE);
+  console.log(SOURCE_EVENTS, FORBIDDEN_INPUTS, FORBIDDEN_USES);
+  console.log(EXPERIMENT_SAFETY_FRAGMENTS, 'ZDP-GROWTH-001');
+}
+`,
+    'tests/growth-contracts.test.ts': `
+import { test } from 'bun:test';
+
+test('fails when funnel source events drift', () => {});
+test('fails when growth experiment safety boundaries drift', () => {});
+test('fails when service contract starts owning platform truth', () => {});
+test('fails when EXPERIMENT.md omits safety text', () => {});
 `
   };
 }

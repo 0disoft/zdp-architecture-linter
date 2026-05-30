@@ -9,6 +9,28 @@ const GROWTH_LAB_CONTRACT_RULE_ID = 'ZDP-GROWTH-001';
 const FUNNEL_METRICS_FILE = 'contracts/funnel-metrics.yaml';
 const GROWTH_EXPERIMENTS_FILE = 'contracts/growth-experiments.yaml';
 const EXPERIMENT_FILE = 'EXPERIMENT.md';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-growth-contracts.ts';
+const CHECKER_CLI_FILE = 'src/growth-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/growth-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/growth-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/growth-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/growth-contracts.test.ts';
+
+const REQUIRED_GROWTH_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_SOURCE_EVENTS = [
   'web.page-viewed',
@@ -109,11 +131,16 @@ export async function validateRepositoryGrowthLabContract(input: {
     readRequiredYamlContract(input.repositoryRoot, GROWTH_EXPERIMENTS_FILE),
     readRequiredTextFile(input.repositoryRoot, EXPERIMENT_FILE)
   ]);
+  const packageJson = await readRequiredJsonContract(
+    input.repositoryRoot,
+    PACKAGE_FILE
+  );
 
   return [
     ...funnelMetrics.diagnostics,
     ...growthExperiments.diagnostics,
     ...experimentDoc.diagnostics,
+    ...packageJson.diagnostics,
     ...(funnelMetrics.value === null
       ? []
       : validateFunnelMetricsContract(funnelMetrics.value)),
@@ -123,8 +150,10 @@ export async function validateRepositoryGrowthLabContract(input: {
     ...(experimentDoc.source === null
       ? []
       : validateExperimentDocSurface(experimentDoc.source)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
-    ...validateRequiredLinterRule(input.repositoryServiceContract)
+    ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -177,7 +206,86 @@ async function readRequiredYamlContract(
   }
 }
 
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createGrowthLabDiagnostic(
+            file,
+            'repository.root',
+            `Growth lab repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createGrowthLabDiagnostic(
+          file,
+          'json',
+          `Growth lab contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
 async function readRequiredTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createGrowthLabDiagnostic(
+            file,
+            'repository.root',
+            `Growth lab repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalTextFile(
   repositoryRoot: string,
   file: string
 ): Promise<{
@@ -368,6 +476,138 @@ function validateRequiredLinterRule(
       `Growth lab service contract must require \`${GROWTH_LAB_CONTRACT_RULE_ID}\`.`
     )
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createGrowthLabDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Growth lab package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_GROWTH_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runGrowthContractCheckCli']
+        })),
+    ...(cliSource.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_CLI_FILE,
+          source: cliSource.source,
+          requiredFragments: ['checkGrowthContracts', 'Usage: bun scripts/check-growth-contracts.ts']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: ['readYamlFile', 'parse(source)', 'readTextFile']
+        })),
+    ...(typesSource.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_TYPES_FILE,
+          source: typesSource.source,
+          requiredFragments: ['ContractDiagnostic', 'ContractCheckResult']
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            FUNNEL_METRICS_FILE,
+            GROWTH_EXPERIMENTS_FILE,
+            'service.yaml',
+            'SOURCE_EVENTS',
+            'FORBIDDEN_INPUTS',
+            'FORBIDDEN_USES',
+            'EXPERIMENT_SAFETY_FRAGMENTS',
+            'ZDP-GROWTH-001'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateCheckerSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when funnel source events drift',
+            'fails when growth experiment safety boundaries drift',
+            'fails when service contract starts owning platform truth',
+            'fails when EXPERIMENT.md omits safety text'
+          ]
+        }))
+  ];
+}
+
+function validateCheckerSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createGrowthLabDiagnostic(
+        input.file,
+        'source',
+        `Growth lab checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredIds(input: {
