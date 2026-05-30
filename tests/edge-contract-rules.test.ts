@@ -54,7 +54,22 @@ describe('edge worker contract rules', () => {
         message:
           'Edge worker repository must include `contracts/analytics-ingress.yaml`.'
       });
-      expect(diagnostics).toHaveLength(4);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-EDGE-001',
+        severity: 'error',
+        file: 'src/analytics/ingress.ts',
+        path: 'repository.root',
+        message:
+          'Edge worker repository must include `src/analytics/ingress.ts`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-EDGE-001',
+        severity: 'error',
+        file: 'tests/app.test.ts',
+        path: 'repository.root',
+        message: 'Edge worker repository must include `tests/app.test.ts`.'
+      });
+      expect(diagnostics).toHaveLength(6);
     });
   });
 
@@ -213,6 +228,7 @@ analytics_ingress:
     service_id: edge-webhook-ingress
     queue: analytics-events
     dead_letter_queue: analytics-events-error
+    runtime_validator: edge-runtime.ts
   direct_clickhouse_write: allowed
   final_truth_owner: zdp-edge-workers
   forbidden_in_logs:
@@ -247,6 +263,14 @@ analytics_ingress:
           ruleId: 'ZDP-EDGE-001',
           severity: 'error',
           file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.edge_prechecks',
+          message:
+            'Edge worker contract `contracts/analytics-ingress.yaml` must include `idempotency key equals event_id` in `analytics_ingress.edge_prechecks`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
           path: 'analytics_ingress.required_fields',
           message:
             'Edge worker contract `contracts/analytics-ingress.yaml` must include `trace_id` in `analytics_ingress.required_fields`.'
@@ -263,6 +287,14 @@ analytics_ingress:
           ruleId: 'ZDP-EDGE-001',
           severity: 'error',
           file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.handoff.runtime_validator',
+          message:
+            'Edge analytics ingress must document the data-platform runtime validator handoff.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
           path: 'analytics_ingress.direct_clickhouse_write',
           message:
             'Edge analytics ingress must forbid direct ClickHouse writes.'
@@ -274,6 +306,54 @@ analytics_ingress:
           path: 'analytics_ingress.forbidden_in_logs',
           message:
             'Edge worker contract `contracts/analytics-ingress.yaml` must include `payment payload` in `analytics_ingress.forbidden_in_logs`.'
+        });
+      }
+    );
+  });
+
+  test('fails when analytics ingress source and tests drift from data runtime handoff', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidEdgeFiles(),
+        'src/analytics/ingress.ts': `
+export function precheckAnalyticsIngress(): void {
+  const job = 'analytics.event.ingest';
+  void job;
+}
+`,
+        'tests/app.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryEdgeContract({
+          repositoryRoot,
+          repositoryServiceContract: createEdgeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'src/analytics/ingress.ts',
+          path: 'source',
+          message:
+            'Edge worker source must include `input.payload.schema_version !== 1`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'src/analytics/ingress.ts',
+          path: 'source',
+          message: 'Edge worker source must include `idempotency_mismatch`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'tests/app.test.ts',
+          path: 'source',
+          message:
+            'Edge worker source must include `rejects analytics events with schema_version that data runtime will reject`.'
         });
       }
     );
@@ -381,9 +461,11 @@ analytics_ingress:
     - malformed request
     - event name allowlist
     - schema version present
+    - schema version pinned to numeric 1
     - request id present
     - trace id propagation
     - idempotency key present
+    - idempotency key equals event_id
   required_fields:
     - event_id
     - event_name
@@ -399,6 +481,7 @@ analytics_ingress:
     service_id: data-platform
     queue: analytics-events
     dead_letter_queue: analytics-events-dlq
+    runtime_validator: zdp-data-platform/src/analytics-ingest/runtime.ts
   direct_clickhouse_write: forbidden
   final_truth_owner: zdp-data-platform
   forbidden_in_logs:
@@ -416,6 +499,37 @@ analytics_ingress:
     - ledger or credit mutation
     - identity truth
     - consent truth
+`,
+    'src/analytics/ingress.ts': `
+export function precheckAnalyticsIngress(input: { payload: { schema_version: unknown } }): unknown {
+  if (input.payload.schema_version !== 1) {
+    return { code: 'invalid_schema_version' };
+  }
+  const idempotencyKey = 'evt_123';
+  const eventId = 'evt_123';
+  if (idempotencyKey !== eventId) {
+    return { code: 'idempotency_mismatch' };
+  }
+  const jobType = 'analytics.event.ingest';
+  const payloadRef = 'analytics-event://evt_123';
+  return {
+    target: 'zdp-data-platform',
+    queue: 'analytics-events',
+    jobType,
+    payloadRef
+  };
+}
+`,
+    'tests/app.test.ts': `
+const tests = [
+  'accepts an allowlisted analytics event and builds a queue handoff envelope',
+  'rejects analytics events with schema_version that data runtime will reject',
+  'rejects analytics events whose idempotency key would fail data runtime consistency',
+  'invalid_schema_version',
+  'idempotency_mismatch',
+  'prechecks analytics events without owning final analytics storage'
+];
+export { tests };
 `
   };
 }

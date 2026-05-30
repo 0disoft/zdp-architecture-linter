@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.29.5
+
+- `ZDP-EDGE-001`이 edge analytics ingress의 data-platform runtime-compatible precheck 표면까지 검사하도록 강화했다.
+- `/v1/events` source/test가 numeric `schema_version`과 `event_id`/`idempotency_key` consistency를 fail-closed로 유지하는지 검증한다.
+
 ## 0.29.4
 
 - `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 validator-only analytics ingest runtime skeleton 표면까지 검사하도록 강화했다.

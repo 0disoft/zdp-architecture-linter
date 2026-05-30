@@ -10,6 +10,8 @@ const REQUEST_BOUNDARY_FILE = 'contracts/request-boundary.yaml';
 const WEBHOOK_INGRESS_FILE = 'contracts/webhook-ingress.yaml';
 const QUEUE_ENVELOPE_FILE = 'contracts/queue-envelope.yaml';
 const ANALYTICS_INGRESS_FILE = 'contracts/analytics-ingress.yaml';
+const EDGE_ANALYTICS_SOURCE_FILE = 'src/analytics/ingress.ts';
+const EDGE_APP_TEST_FILE = 'tests/app.test.ts';
 
 const REQUIRED_FORBIDDEN_LOG_VALUES = [
   'authorization',
@@ -77,9 +79,11 @@ const REQUIRED_ANALYTICS_PRECHECKS = [
   'malformed request',
   'event name allowlist',
   'schema version present',
+  'schema version pinned to numeric 1',
   'request id present',
   'trace id propagation',
-  'idempotency key present'
+  'idempotency key present',
+  'idempotency key equals event_id'
 ] as const;
 
 const REQUIRED_ANALYTICS_FIELDS = [
@@ -131,12 +135,18 @@ export async function validateRepositoryEdgeContract(input: {
       readRequiredYamlContract(input.repositoryRoot, QUEUE_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, ANALYTICS_INGRESS_FILE)
     ]);
+  const [analyticsSource, appTestSource] = await Promise.all([
+    readRequiredTextFile(input.repositoryRoot, EDGE_ANALYTICS_SOURCE_FILE),
+    readRequiredTextFile(input.repositoryRoot, EDGE_APP_TEST_FILE)
+  ]);
 
   return [
     ...requestBoundary.diagnostics,
     ...webhookIngress.diagnostics,
     ...queueEnvelope.diagnostics,
     ...analyticsIngress.diagnostics,
+    ...analyticsSource.diagnostics,
+    ...appTestSource.diagnostics,
     ...(requestBoundary.value === null
       ? []
       : validateRequestBoundaryContract(requestBoundary.value)),
@@ -148,7 +158,13 @@ export async function validateRepositoryEdgeContract(input: {
       : validateQueueEnvelopeContract(queueEnvelope.value)),
     ...(analyticsIngress.value === null
       ? []
-      : validateAnalyticsIngressContract(analyticsIngress.value))
+      : validateAnalyticsIngressContract(analyticsIngress.value)),
+    ...(analyticsSource.source === null
+      ? []
+      : validateAnalyticsSourceSurface(analyticsSource.source)),
+    ...(appTestSource.source === null
+      ? []
+      : validateAnalyticsTestSurface(appTestSource.source))
   ];
 }
 
@@ -198,6 +214,36 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createEdgeDiagnostic(
+            file,
+            'repository.root',
+            `Edge worker repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -359,6 +405,14 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
     ...validateExactValue({
       value,
       file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.runtime_validator',
+      expected: 'zdp-data-platform/src/analytics-ingest/runtime.ts',
+      message:
+        'Edge analytics ingress must document the data-platform runtime validator handoff.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
       path: 'analytics_ingress.direct_clickhouse_write',
       expected: 'forbidden',
       message:
@@ -387,6 +441,64 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
       requiredEntries: REQUIRED_ANALYTICS_FORBIDDEN_DECISIONS
     })
   ];
+}
+
+function validateAnalyticsSourceSurface(source: string): readonly Diagnostic[] {
+  return validateSourceIncludes({
+    file: EDGE_ANALYTICS_SOURCE_FILE,
+    source,
+    requiredFragments: [
+      'precheckAnalyticsIngress',
+      'schema_version',
+      'input.payload.schema_version !== 1',
+      'invalid_schema_version',
+      'idempotencyKey !== eventId',
+      'idempotency_mismatch',
+      'analytics.event.ingest',
+      'analytics-event://',
+      "target: 'zdp-data-platform'",
+      "queue: 'analytics-events'"
+    ]
+  });
+}
+
+function validateAnalyticsTestSurface(source: string): readonly Diagnostic[] {
+  return validateSourceIncludes({
+    file: EDGE_APP_TEST_FILE,
+    source,
+    requiredFragments: [
+      'accepts an allowlisted analytics event and builds a queue handoff envelope',
+      'rejects analytics events with schema_version that data runtime will reject',
+      'rejects analytics events whose idempotency key would fail data runtime consistency',
+      'invalid_schema_version',
+      'idempotency_mismatch',
+      'prechecks analytics events without owning final analytics storage'
+    ]
+  });
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createEdgeDiagnostic(
+        input.file,
+        'source',
+        `Edge worker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredStringArrayEntries(input: {
