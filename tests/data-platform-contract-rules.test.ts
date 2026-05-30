@@ -287,6 +287,65 @@ fallback:
       });
     });
   });
+
+  test('fails when data platform checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidDataPlatformFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit"
+  }
+}
+`,
+        'src/analytics-ingest/validator.ts': `
+export function validateAnalyticsQueueEnvelope(): void {}
+`,
+        'tests/analytics-ingest.test.ts': `
+import { test } from 'bun:test';
+test('data platform placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryDataPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createDataPlatformServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Data platform package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message: 'Data platform package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'src/analytics-ingest/validator.ts',
+          path: 'source',
+          message:
+            'Data platform checker source must include `contracts/analytics-ingest.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'tests/analytics-ingest.test.ts',
+          path: 'source',
+          message:
+            'Data platform checker source must include `rejects nested sensitive fields in queue envelopes`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -325,6 +384,7 @@ function createDataPlatformServiceContract(): unknown {
 
 function createValidDataPlatformFiles(): Record<string, string> {
   return {
+    ...createValidDataPlatformCheckerFiles(),
     'contracts/analytics-ingest.yaml': `
 source_of_truth:
   event_catalog: zdp-architecture/catalogs/events.yaml
@@ -410,6 +470,83 @@ does_not_own:
   - final_consent_state
 fallback:
   - suppress subject in query layer until batch anonymization catches up
+`
+  };
+}
+
+function createValidDataPlatformCheckerFiles(): Record<string, string> {
+  return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-data-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-data-contracts.ts': `
+import { runContractCheckCli } from '../src/analytics-ingest/cli';
+const exitCode = await runContractCheckCli(process.cwd());
+process.exit(exitCode);
+`,
+    'src/analytics-ingest/cli.ts': `
+export async function runContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/analytics-ingest/parser.ts': `
+import { parse } from 'yaml';
+export function readYamlFile(source: string): unknown {
+  return parse(source);
+}
+`,
+    'src/analytics-ingest/types.ts': `
+export interface AnalyticsQueueEnvelope {
+  readonly payload_ref: string;
+}
+`,
+    'src/analytics-ingest/validator.ts': `
+const ANALYTICS_INGEST_FILE = 'contracts/analytics-ingest.yaml';
+const CLICKHOUSE_STORAGE_FILE = 'contracts/clickhouse-storage.yaml';
+const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
+const SERVICE_FILE = 'service.yaml';
+const FORBIDDEN_ENVELOPE_FIELDS = [];
+export function validateAnalyticsQueueEnvelope(): void {
+  const jobType = 'analytics.event.ingest';
+  const payload_ref = 'analytics-event://evt';
+  void jobType;
+  void payload_ref;
+}
+export {
+  ANALYTICS_INGEST_FILE,
+  CLICKHOUSE_STORAGE_FILE,
+  DELETION_ANONYMIZATION_FILE,
+  SERVICE_FILE,
+  FORBIDDEN_ENVELOPE_FIELDS
+};
+`,
+    'tests/analytics-ingest.test.ts': `
+const cases = [
+  'fails when required analytics contract fields drift',
+  'fails when ClickHouse is treated as final truth',
+  'fails when deletion ownership boundaries drift',
+  'rejects queue envelopes with raw payloads or missing trace fields',
+  'rejects nested sensitive fields in queue envelopes'
+];
+export { cases };
 `
   };
 }

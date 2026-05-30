@@ -9,6 +9,28 @@ const DATA_PLATFORM_CONTRACT_RULE_ID = 'ZDP-DATA-PLATFORM-001';
 const ANALYTICS_INGEST_FILE = 'contracts/analytics-ingest.yaml';
 const CLICKHOUSE_STORAGE_FILE = 'contracts/clickhouse-storage.yaml';
 const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-data-contracts.ts';
+const CHECKER_CLI_FILE = 'src/analytics-ingest/cli.ts';
+const CHECKER_PARSER_FILE = 'src/analytics-ingest/parser.ts';
+const CHECKER_TYPES_FILE = 'src/analytics-ingest/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/analytics-ingest/validator.ts';
+const CHECKER_TEST_FILE = 'tests/analytics-ingest.test.ts';
+
+const REQUIRED_DATA_PLATFORM_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_INGEST_ENVELOPE_FIELDS = [
   'event_id',
@@ -103,11 +125,13 @@ export async function validateRepositoryDataPlatformContract(input: {
       readRequiredYamlContract(input.repositoryRoot, CLICKHOUSE_STORAGE_FILE),
       readRequiredYamlContract(input.repositoryRoot, DELETION_ANONYMIZATION_FILE)
     ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...analyticsIngest.diagnostics,
     ...clickhouseStorage.diagnostics,
     ...deletionAnonymization.diagnostics,
+    ...packageJson.diagnostics,
     ...(analyticsIngest.value === null
       ? []
       : validateAnalyticsIngestContract(analyticsIngest.value)),
@@ -117,7 +141,9 @@ export async function validateRepositoryDataPlatformContract(input: {
     ...(deletionAnonymization.value === null
       ? []
       : validateDeletionAnonymizationContract(deletionAnonymization.value)),
-    ...validateRequiredLinterRule(input.repositoryServiceContract)
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -167,6 +193,85 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createDataPlatformDiagnostic(
+            file,
+            'repository.root',
+            `Data platform repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createDataPlatformDiagnostic(
+          file,
+          'json',
+          `Data platform contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createDataPlatformDiagnostic(
+            file,
+            'repository.root',
+            `Data platform repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -360,6 +465,125 @@ function validateRequiredLinterRule(
       `Data platform service contract must require \`${DATA_PLATFORM_CONTRACT_RULE_ID}\`.`
     )
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Data platform package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_DATA_PLATFORM_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: ['readYamlFile', 'parse(source)']
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            ANALYTICS_INGEST_FILE,
+            CLICKHOUSE_STORAGE_FILE,
+            DELETION_ANONYMIZATION_FILE,
+            'service.yaml',
+            'validateAnalyticsQueueEnvelope',
+            'analytics.event.ingest',
+            'FORBIDDEN_ENVELOPE_FIELDS',
+            'payload_ref'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when required analytics contract fields drift',
+            'fails when ClickHouse is treated as final truth',
+            'fails when deletion ownership boundaries drift',
+            'rejects queue envelopes with raw payloads or missing trace fields',
+            'rejects nested sensitive fields in queue envelopes'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        input.file,
+        'source',
+        `Data platform checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredStringArrayEntries(input: {

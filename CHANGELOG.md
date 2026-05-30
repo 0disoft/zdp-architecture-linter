@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.29.2
+
+- `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 analytics ingest checker skeleton까지 검사하도록 강화했다.
+- data platform package scripts와 `scripts/check-data-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.29.1
 
 - `ZDP-EDGE-001`이 `zdp-edge-workers`의 analytics ingress 계약까지 검사하도록 강화했다.
