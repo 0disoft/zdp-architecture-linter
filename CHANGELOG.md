@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.31.0
+
+- `ZDP-PRIVACY-001`을 추가했다.
+- `zdp-privacy-access-broker` 저장소의 privacy access policy, capability grant, data minimization, access capability 계약 파일을 검사한다.
+- privacy broker가 raw token, raw source payload, subject-level analytics stream, product authorization, entitlement, ledger decision을 소유하지 않도록 검증한다.
+
 ## 0.30.1
 
 - `ZDP-GROWTH-001`이 `zdp-growth-lab`의 repo-local checker skeleton까지 검사하도록 강화했다.
