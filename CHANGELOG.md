@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.30.0
+
+- `ZDP-GROWTH-001`을 추가했다.
+- `zdp-growth-lab` 저장소의 funnel metric, growth experiment, experiment safety 계약 파일을 검사한다.
+- growth lab이 CAC/LTV/CLV 정본, raw PII, 직접 DB 조회, money/core/privacy 최종 판단을 소유하지 않도록 검증한다.
+
 ## 0.29.5
 
 - `ZDP-EDGE-001`이 edge analytics ingress의 data-platform runtime-compatible precheck 표면까지 검사하도록 강화했다.
