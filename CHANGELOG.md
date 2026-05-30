@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.29.4
+
+- `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 validator-only analytics ingest runtime skeleton 표면까지 검사하도록 강화했다.
+- data platform runtime source와 queue/event idempotency, sensitive field, architecture schema drift 실패 테스트 표면을 검증한다.
+
 ## 0.29.3
 
 - `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 architecture-aware event schema compatibility checker 표면까지 검사하도록 강화했다.

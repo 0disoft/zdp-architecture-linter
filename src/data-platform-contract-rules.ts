@@ -17,6 +17,7 @@ const CHECKER_CLI_FILE = 'src/analytics-ingest/cli.ts';
 const CHECKER_PARSER_FILE = 'src/analytics-ingest/parser.ts';
 const CHECKER_TYPES_FILE = 'src/analytics-ingest/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/analytics-ingest/validator.ts';
+const CHECKER_RUNTIME_FILE = 'src/analytics-ingest/runtime.ts';
 const CHECKER_TEST_FILE = 'tests/analytics-ingest.test.ts';
 
 const REQUIRED_DATA_PLATFORM_CHECKER_FILES = [
@@ -27,6 +28,7 @@ const REQUIRED_DATA_PLATFORM_CHECKER_FILES = [
   CHECKER_PARSER_FILE,
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
+  CHECKER_RUNTIME_FILE,
   CHECKER_TEST_FILE
 ] as const;
 
@@ -500,6 +502,7 @@ async function validateCheckerSurface(
     parserSource,
     typesSource,
     validatorSource,
+    runtimeSource,
     testSource
   ] = await Promise.all(
     REQUIRED_DATA_PLATFORM_CHECKER_FILES.map((file) =>
@@ -515,6 +518,7 @@ async function validateCheckerSurface(
     ...parserSource.diagnostics,
     ...typesSource.diagnostics,
     ...validatorSource.diagnostics,
+    ...runtimeSource.diagnostics,
     ...testSource.diagnostics,
     ...(script.source === null
       ? []
@@ -570,6 +574,28 @@ async function validateCheckerSurface(
             'initial_events'
           ]
         })),
+    ...(runtimeSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_RUNTIME_FILE,
+          source: runtimeSource.source,
+          requiredFragments: [
+            'validateAnalyticsIngestRuntime',
+            'validateAnalyticsQueueEnvelope',
+            'repositoryRoot',
+            'architectureRoot',
+            'validateRepositoryEventContract',
+            'validateArchitectureEventSchema',
+            'initial_events',
+            'catalogs/events.yaml',
+            'schemas/events/',
+            'FORBIDDEN_EVENT_FIELDS',
+            'validateQueueEventConsistency',
+            'idempotency_key',
+            'payload_ref',
+            'must not include raw or sensitive field'
+          ]
+        })),
     ...(testSource.source === null
       ? []
       : validateSourceIncludes({
@@ -586,7 +612,12 @@ async function validateCheckerSurface(
             'fails when an architecture event schema file is missing',
             'fails when an architecture event schema id drifts',
             'fails when an architecture event schema omits required envelope fields',
-            'fails when an architecture event schema is malformed JSON'
+            'fails when an architecture event schema is malformed JSON',
+            'validates a runtime ingest candidate without writing to storage',
+            'rejects runtime events with nested sensitive fields',
+            'rejects runtime events that are not registered before ingest',
+            'rejects runtime events when architecture schema drifts',
+            'rejects runtime queue and event idempotency drift'
           ]
         }))
   ];

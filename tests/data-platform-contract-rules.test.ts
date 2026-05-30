@@ -307,6 +307,9 @@ export async function runContractCheckCli(): Promise<number> {
         'src/analytics-ingest/validator.ts': `
 export function validateAnalyticsQueueEnvelope(): void {}
 `,
+        'src/analytics-ingest/runtime.ts': `
+export function validateAnalyticsIngestRuntime(): void {}
+`,
         'tests/analytics-ingest.test.ts': `
 import { test } from 'bun:test';
 test('data platform placeholder', () => {});
@@ -346,6 +349,14 @@ test('data platform placeholder', () => {});
           file: 'src/analytics-ingest/cli.ts',
           path: 'source',
           message: 'Data platform checker source must include `--architecture`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'src/analytics-ingest/runtime.ts',
+          path: 'source',
+          message:
+            'Data platform checker source must include `validateAnalyticsQueueEnvelope`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-DATA-PLATFORM-001',
@@ -573,6 +584,42 @@ export {
   validateArchitectureEventCompatibility
 };
 `,
+    'src/analytics-ingest/runtime.ts': `
+import { validateAnalyticsQueueEnvelope } from './validator';
+const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
+const FORBIDDEN_EVENT_FIELDS = [];
+export async function validateAnalyticsIngestRuntime(input: {
+  repositoryRoot?: string;
+  architectureRoot?: string;
+}): Promise<void> {
+  validateAnalyticsQueueEnvelope();
+  validateRepositoryEventContract(input.repositoryRoot ?? '.', 'web.page-viewed');
+  validateArchitectureEventSchema(input.architectureRoot ?? '.', 'web.page-viewed');
+  validateQueueEventConsistency({ idempotency_key: 'evt_123', payload_ref: 'analytics-event://evt_123' });
+  const initialEvents = 'initial_events';
+  const schemaRoot = 'schemas/events/';
+  const message = 'must not include raw or sensitive field';
+  void EVENT_CATALOG_FILE;
+  void FORBIDDEN_EVENT_FIELDS;
+  void initialEvents;
+  void schemaRoot;
+  void message;
+}
+function validateRepositoryEventContract(repositoryRoot: string, eventId: string): void {
+  void repositoryRoot;
+  void eventId;
+}
+function validateArchitectureEventSchema(architectureRoot: string, eventId: string): void {
+  void architectureRoot;
+  void eventId;
+}
+function validateQueueEventConsistency(value: {
+  idempotency_key: string;
+  payload_ref: string;
+}): void {
+  void value;
+}
+`,
     'tests/analytics-ingest.test.ts': `
 const cases = [
   'fails when required analytics contract fields drift',
@@ -585,7 +632,12 @@ const cases = [
   'fails when an architecture event schema file is missing',
   'fails when an architecture event schema id drifts',
   'fails when an architecture event schema omits required envelope fields',
-  'fails when an architecture event schema is malformed JSON'
+  'fails when an architecture event schema is malformed JSON',
+  'validates a runtime ingest candidate without writing to storage',
+  'rejects runtime events with nested sensitive fields',
+  'rejects runtime events that are not registered before ingest',
+  'rejects runtime events when architecture schema drifts',
+  'rejects runtime queue and event idempotency drift'
 ];
 export { cases };
 `
