@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.29.0
+
+- `ZDP-DATA-PLATFORM-001`을 추가했다.
+- `zdp-data-platform` 저장소의 analytics ingest, ClickHouse storage, deletion/anonymization 계약 파일을 검사한다.
+- GA4 대체 분석 기반이 직접 ClickHouse write, 최종 truth 소유, raw customer payload 저장으로 흐르지 않도록 검증한다.
+
 ## 0.28.1
 
 - `ZDP-OBS-001`이 `zdp-platform-observability`의 checker skeleton까지 검사하도록 강화했다.
