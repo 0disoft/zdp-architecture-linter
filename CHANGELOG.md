@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.28.1
+
+- `ZDP-OBS-001`이 `zdp-platform-observability`의 checker skeleton까지 검사하도록 강화했다.
+- observability package scripts와 `scripts/check-observability-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.28.0
 
 - `ZDP-INFRA-001`을 추가했다.

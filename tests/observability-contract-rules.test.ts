@@ -220,6 +220,66 @@ alerts:
       }
     );
   });
+
+  test('fails when observability checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun test"
+  }
+}
+`,
+        'src/observability-contracts/validator.ts': `
+export function validateObservabilityContracts(): void {}
+`,
+        'tests/observability-contracts.test.ts': `
+import { test } from 'bun:test';
+test('observability placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Observability package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Observability package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'src/observability-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Observability checker source must include `REQUIRED_SERVICE_ATTRIBUTES`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'tests/observability-contracts.test.ts',
+          path: 'source',
+          message:
+            'Observability checker source must include `fails when traceparent propagation is missing`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -252,6 +312,7 @@ function createObservabilityServiceContract(): unknown {
 
 function createValidObservabilityFiles(): Record<string, string> {
   return {
+    ...createValidObservabilityCheckerFiles(),
     'contracts/telemetry-conventions.yaml': `
 required_attributes:
   all_services:
@@ -294,6 +355,79 @@ alerts:
     status: draft
   - id: provider-ingest-failing
     status: draft
+`
+  };
+}
+
+function createValidObservabilityCheckerFiles(): Record<string, string> {
+  return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-observability-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-observability-contracts.ts': `
+import { runObservabilityContractCheckCli } from '../src/observability-contracts/cli';
+const exitCode = await runObservabilityContractCheckCli(process.argv.slice(2));
+process.exit(exitCode);
+`,
+    'src/observability-contracts/cli.ts': `
+export async function runObservabilityContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/observability-contracts/parser.ts': `
+const files = [
+  'contracts/telemetry-conventions.yaml',
+  'contracts/dashboard-inventory.yaml',
+  'contracts/alert-rules.yaml'
+];
+export { files };
+`,
+    'src/observability-contracts/types.ts': `
+export interface ObservabilityDiagnostic {
+  readonly code: string;
+}
+`,
+    'src/observability-contracts/validator.ts': `
+const REQUIRED_SERVICE_ATTRIBUTES = [];
+const REQUIRED_PROPAGATION_HEADERS = [];
+const FORBIDDEN_SENSITIVE_FIELDS = [];
+const OBS_DASHBOARD_ONLY_CHANGES_ALLOWED = 'OBS_DASHBOARD_ONLY_CHANGES_ALLOWED';
+const OBS_ALERT_FIELD_MISSING = 'OBS_ALERT_FIELD_MISSING';
+export {
+  REQUIRED_SERVICE_ATTRIBUTES,
+  REQUIRED_PROPAGATION_HEADERS,
+  FORBIDDEN_SENSITIVE_FIELDS,
+  OBS_DASHBOARD_ONLY_CHANGES_ALLOWED,
+  OBS_ALERT_FIELD_MISSING
+};
+`,
+    'tests/observability-contracts.test.ts': `
+const cases = [
+  'fails when a required service attribute is missing',
+  'fails when traceparent propagation is missing',
+  'fails when sensitive fields are not redacted',
+  'fails when dashboard-only changes are allowed',
+  'fails when an alert rule misses a required field'
+];
+export { cases };
 `
   };
 }

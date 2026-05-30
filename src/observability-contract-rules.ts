@@ -9,6 +9,28 @@ const OBSERVABILITY_CONTRACT_RULE_ID = 'ZDP-OBS-001';
 const TELEMETRY_CONVENTIONS_FILE = 'contracts/telemetry-conventions.yaml';
 const DASHBOARD_INVENTORY_FILE = 'contracts/dashboard-inventory.yaml';
 const ALERT_RULES_FILE = 'contracts/alert-rules.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-observability-contracts.ts';
+const CHECKER_CLI_FILE = 'src/observability-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/observability-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/observability-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/observability-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/observability-contracts.test.ts';
+
+const REQUIRED_OBSERVABILITY_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_ALL_SERVICE_ATTRIBUTES = [
   'service_id',
@@ -60,18 +82,22 @@ export async function validateRepositoryObservabilityContract(input: {
     readRequiredYamlContract(input.repositoryRoot, DASHBOARD_INVENTORY_FILE),
     readRequiredYamlContract(input.repositoryRoot, ALERT_RULES_FILE)
   ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...telemetryConventions.diagnostics,
     ...dashboardInventory.diagnostics,
     ...alertRules.diagnostics,
+    ...packageJson.diagnostics,
     ...(telemetryConventions.value === null
       ? []
       : validateTelemetryConventionsContract(telemetryConventions.value)),
     ...(dashboardInventory.value === null
       ? []
       : validateDashboardInventoryContract(dashboardInventory.value)),
-    ...(alertRules.value === null ? [] : validateAlertRulesContract(alertRules.value))
+    ...(alertRules.value === null ? [] : validateAlertRulesContract(alertRules.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -121,6 +147,85 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createObservabilityDiagnostic(
+            file,
+            'repository.root',
+            `Observability repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createObservabilityDiagnostic(
+          file,
+          'json',
+          `Observability contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createObservabilityDiagnostic(
+            file,
+            'repository.root',
+            `Observability repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -198,6 +303,126 @@ function validateAlertRulesContract(value: unknown): readonly Diagnostic[] {
       requiredEntries: REQUIRED_ALERT_IDS
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createObservabilityDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Observability package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_OBSERVABILITY_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runObservabilityContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: [
+            TELEMETRY_CONVENTIONS_FILE,
+            DASHBOARD_INVENTORY_FILE,
+            ALERT_RULES_FILE
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'REQUIRED_SERVICE_ATTRIBUTES',
+            'REQUIRED_PROPAGATION_HEADERS',
+            'FORBIDDEN_SENSITIVE_FIELDS',
+            'OBS_DASHBOARD_ONLY_CHANGES_ALLOWED',
+            'OBS_ALERT_FIELD_MISSING'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when a required service attribute is missing',
+            'fails when traceparent propagation is missing',
+            'fails when sensitive fields are not redacted',
+            'fails when dashboard-only changes are allowed',
+            'fails when an alert rule misses a required field'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createObservabilityDiagnostic(
+        input.file,
+        'source',
+        `Observability checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredStringArrayEntries(input: {
