@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.29.3
+
+- `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 architecture-aware event schema compatibility checker 표면까지 검사하도록 강화했다.
+- data platform checker의 `--architecture` 옵션, JSON Schema reader, event catalog/schema compatibility 검증, 관련 실패 테스트 표면을 검증한다.
+
 ## 0.29.2
 
 - `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 analytics ingest checker skeleton까지 검사하도록 강화했다.

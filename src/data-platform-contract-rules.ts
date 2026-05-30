@@ -521,14 +521,32 @@ async function validateCheckerSurface(
       : validateSourceIncludes({
           file: CHECKER_SCRIPT_FILE,
           source: script.source,
-          requiredFragments: ['runContractCheckCli']
+          requiredFragments: ['runContractCheckCli', 'process.argv.slice(2)']
+        })),
+    ...(cliSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_CLI_FILE,
+          source: cliSource.source,
+          requiredFragments: [
+            '--architecture',
+            'architectureRoot',
+            'checkDataContracts(repositoryRoot'
+          ]
         })),
     ...(parserSource.source === null
       ? []
       : validateSourceIncludes({
           file: CHECKER_PARSER_FILE,
           source: parserSource.source,
-          requiredFragments: ['readYamlFile', 'parse(source)']
+          requiredFragments: ['readYamlFile', 'parse(source)', 'readJsonFile', 'JSON.parse(source)']
+        })),
+    ...(typesSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TYPES_FILE,
+          source: typesSource.source,
+          requiredFragments: ['DataContractCheckOptions', 'architectureRoot']
         })),
     ...(validatorSource.source === null
       ? []
@@ -543,7 +561,13 @@ async function validateCheckerSurface(
             'validateAnalyticsQueueEnvelope',
             'analytics.event.ingest',
             'FORBIDDEN_ENVELOPE_FIELDS',
-            'payload_ref'
+            'payload_ref',
+            'validateArchitectureEventCompatibility',
+            'catalogs/events.yaml',
+            'schemas/events/',
+            '$id',
+            'properties.schema_version.const',
+            'initial_events'
           ]
         })),
     ...(testSource.source === null
@@ -556,7 +580,13 @@ async function validateCheckerSurface(
             'fails when ClickHouse is treated as final truth',
             'fails when deletion ownership boundaries drift',
             'rejects queue envelopes with raw payloads or missing trace fields',
-            'rejects nested sensitive fields in queue envelopes'
+            'rejects nested sensitive fields in queue envelopes',
+            'passes current repository contracts against architecture event schemas',
+            'fails when an initial event is missing from the architecture catalog',
+            'fails when an architecture event schema file is missing',
+            'fails when an architecture event schema id drifts',
+            'fails when an architecture event schema omits required envelope fields',
+            'fails when an architecture event schema is malformed JSON'
           ]
         }))
   ];

@@ -299,6 +299,11 @@ fallback:
   }
 }
 `,
+        'src/analytics-ingest/cli.ts': `
+export async function runContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
         'src/analytics-ingest/validator.ts': `
 export function validateAnalyticsQueueEnvelope(): void {}
 `,
@@ -334,6 +339,13 @@ test('data platform placeholder', () => {});
           path: 'source',
           message:
             'Data platform checker source must include `contracts/analytics-ingest.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'src/analytics-ingest/cli.ts',
+          path: 'source',
+          message: 'Data platform checker source must include `--architecture`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-DATA-PLATFORM-001',
@@ -499,11 +511,15 @@ function createValidDataPlatformCheckerFiles(): Record<string, string> {
 `,
     'scripts/check-data-contracts.ts': `
 import { runContractCheckCli } from '../src/analytics-ingest/cli';
-const exitCode = await runContractCheckCli(process.cwd());
+const exitCode = await runContractCheckCli(process.cwd(), process.argv.slice(2));
 process.exit(exitCode);
 `,
     'src/analytics-ingest/cli.ts': `
-export async function runContractCheckCli(): Promise<number> {
+export async function runContractCheckCli(repositoryRoot: string): Promise<number> {
+  const architectureFlag = '--architecture';
+  const architectureRoot = 'zdp-architecture';
+  await checkDataContracts(repositoryRoot, { architectureRoot });
+  void architectureFlag;
   return 0;
 }
 `,
@@ -512,8 +528,14 @@ import { parse } from 'yaml';
 export function readYamlFile(source: string): unknown {
   return parse(source);
 }
+export function readJsonFile(source: string): unknown {
+  return JSON.parse(source);
+}
 `,
     'src/analytics-ingest/types.ts': `
+export interface DataContractCheckOptions {
+  readonly architectureRoot?: string;
+}
 export interface AnalyticsQueueEnvelope {
   readonly payload_ref: string;
 }
@@ -524,18 +546,31 @@ const CLICKHOUSE_STORAGE_FILE = 'contracts/clickhouse-storage.yaml';
 const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
 const SERVICE_FILE = 'service.yaml';
 const FORBIDDEN_ENVELOPE_FIELDS = [];
+const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
 export function validateAnalyticsQueueEnvelope(): void {
   const jobType = 'analytics.event.ingest';
   const payload_ref = 'analytics-event://evt';
   void jobType;
   void payload_ref;
 }
+function validateArchitectureEventCompatibility(): void {
+  const schemaRoot = 'schemas/events/';
+  const idField = '$id';
+  const schemaVersion = 'properties.schema_version.const';
+  const initialEvents = 'initial_events';
+  void schemaRoot;
+  void idField;
+  void schemaVersion;
+  void initialEvents;
+}
 export {
   ANALYTICS_INGEST_FILE,
   CLICKHOUSE_STORAGE_FILE,
   DELETION_ANONYMIZATION_FILE,
   SERVICE_FILE,
-  FORBIDDEN_ENVELOPE_FIELDS
+  FORBIDDEN_ENVELOPE_FIELDS,
+  EVENT_CATALOG_FILE,
+  validateArchitectureEventCompatibility
 };
 `,
     'tests/analytics-ingest.test.ts': `
@@ -544,7 +579,13 @@ const cases = [
   'fails when ClickHouse is treated as final truth',
   'fails when deletion ownership boundaries drift',
   'rejects queue envelopes with raw payloads or missing trace fields',
-  'rejects nested sensitive fields in queue envelopes'
+  'rejects nested sensitive fields in queue envelopes',
+  'passes current repository contracts against architecture event schemas',
+  'fails when an initial event is missing from the architecture catalog',
+  'fails when an architecture event schema file is missing',
+  'fails when an architecture event schema id drifts',
+  'fails when an architecture event schema omits required envelope fields',
+  'fails when an architecture event schema is malformed JSON'
 ];
 export { cases };
 `
