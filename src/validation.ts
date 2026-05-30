@@ -93,6 +93,7 @@ import { validateRepositoryAppShellContract } from './app-shell-rules.ts';
 import { validateRepositoryRuntimeContract } from './runtime-contract-rules.ts';
 import { validateRepositoryEdgeContract } from './edge-contract-rules.ts';
 import { validateRepositoryObservabilityContract } from './observability-contract-rules.ts';
+import { validateRepositoryInfraContract } from './infra-contract-rules.ts';
 import {
   validateRepositorySplitCandidates,
   validateSplitTriggerCatalog
@@ -251,6 +252,13 @@ export async function validateArchitecture(
     input.repositoryRoot === undefined
       ? []
       : await validateRepositoryObservabilityContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
+  const repositoryInfraContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryInfraContract({
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
@@ -438,6 +446,7 @@ export async function validateArchitecture(
       ...repositoryRuntimeContractDiagnostics,
       ...repositoryEdgeContractDiagnostics,
       ...repositoryObservabilityContractDiagnostics,
+      ...repositoryInfraContractDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
         ? []

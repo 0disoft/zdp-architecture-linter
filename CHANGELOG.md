@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.28.0
+
+- `ZDP-INFRA-001`을 추가했다.
+- `zdp-platform-infra` 저장소의 resource inventory, environment schema, backup/restore 계약 파일을 검사한다.
+- provider 연결 전 Cloudflare/Hetzner 리소스 인벤토리 자리, 환경별 접근 경계, restore drill evidence와 비밀값 금지 정책이 유지되는지 검증한다.
+
 ## 0.27.0
 
 - `ZDP-OBS-001`을 추가했다.
