@@ -19,6 +19,15 @@ const CHECKER_PARSER_FILE = 'src/connectors-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/connectors-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/connectors-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/connectors-contracts.test.ts';
+const CARGO_FILE = 'Cargo.toml';
+const CARGO_LOCK_FILE = 'Cargo.lock';
+const RUNTIME_LIB_FILE = 'src/lib.rs';
+const RUNTIME_MAIN_FILE = 'src/main.rs';
+const RUNTIME_BOUNDARY_MOD_FILE = 'src/boundaries/mod.rs';
+const RUNTIME_PROVIDER_REGISTRY_FILE = 'src/boundaries/provider_registry.rs';
+const RUNTIME_SYNC_STATE_FILE = 'src/boundaries/sync_state.rs';
+const RUNTIME_WEBHOOK_REPLAY_FILE = 'src/boundaries/webhook_replay.rs';
+const RUNTIME_PROVIDER_BOUNDARIES_FILE = 'src/boundaries/provider_boundaries.rs';
 
 const REQUIRED_CONNECTORS_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -29,6 +38,18 @@ const REQUIRED_CONNECTORS_CHECKER_FILES = [
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
   CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_CONNECTORS_RUNTIME_FILES = [
+  CARGO_FILE,
+  CARGO_LOCK_FILE,
+  RUNTIME_LIB_FILE,
+  RUNTIME_MAIN_FILE,
+  RUNTIME_BOUNDARY_MOD_FILE,
+  RUNTIME_PROVIDER_REGISTRY_FILE,
+  RUNTIME_SYNC_STATE_FILE,
+  RUNTIME_WEBHOOK_REPLAY_FILE,
+  RUNTIME_PROVIDER_BOUNDARIES_FILE
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
@@ -196,7 +217,8 @@ export async function validateRepositoryConnectorsContract(input: {
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
-    ...(await validateCheckerSurface(input.repositoryRoot))
+    ...(await validateCheckerSurface(input.repositoryRoot)),
+    ...(await validateRuntimeSurface(input.repositoryRoot))
   ];
 }
 
@@ -713,6 +735,29 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
     ...validateExactValue({
       value,
       file: 'service.yaml',
+      path: 'runtime.core',
+      expected: 'axum',
+      message: 'Connectors platform service runtime core must remain axum.'
+    }),
+    ...validateExactValue({
+      value,
+      file: 'service.yaml',
+      path: 'runtime.framework',
+      expected: 'rust-axum-contracts',
+      message:
+        'Connectors platform service runtime framework must remain rust-axum-contracts.'
+    }),
+    ...validateExactValue({
+      value,
+      file: 'service.yaml',
+      path: 'runtime.database',
+      expected: 'none',
+      message:
+        'Connectors platform service runtime must not declare a database before storage ownership is designed.'
+    }),
+    ...validateExactValue({
+      value,
+      file: 'service.yaml',
       path: 'access.auth_required',
       expected: true,
       message: 'Connectors platform service must require auth.'
@@ -875,6 +920,191 @@ async function validateCheckerSurface(
             'fails when webhook replay drops signature verification',
             'fails when webhook replay stores raw payloads instead of payload references',
             'fails when provider boundaries allow final authorization ownership'
+          ]
+        }))
+  ];
+}
+
+async function validateRuntimeSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    cargo,
+    cargoLock,
+    libSource,
+    mainSource,
+    boundaryModSource,
+    providerRegistrySource,
+    syncStateSource,
+    webhookReplaySource,
+    providerBoundariesSource
+  ] = await Promise.all(
+    REQUIRED_CONNECTORS_RUNTIME_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...cargo.diagnostics,
+    ...cargoLock.diagnostics,
+    ...libSource.diagnostics,
+    ...mainSource.diagnostics,
+    ...boundaryModSource.diagnostics,
+    ...providerRegistrySource.diagnostics,
+    ...syncStateSource.diagnostics,
+    ...webhookReplaySource.diagnostics,
+    ...providerBoundariesSource.diagnostics,
+    ...(cargo.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CARGO_FILE,
+          source: cargo.source,
+          requiredFragments: ['axum', 'tokio', 'serde', 'serde_json', 'tower']
+        })),
+    ...(libSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_LIB_FILE,
+          source: libSource.source,
+          requiredFragments: [
+            'pub const SERVICE_ID',
+            '"connectors-platform"',
+            'pub const DEFAULT_BIND_ADDR',
+            '"127.0.0.1:3006"',
+            'ZDP_CONNECTORS_BIND_ADDR',
+            '.route("/healthz", get(healthz))',
+            '.route("/readyz", get(readyz))',
+            'ready: true',
+            'checks:',
+            '"contracts"',
+            'healthz_returns_connectors_platform_identity',
+            'readyz_reports_contract_readiness_only',
+            'connector_boundaries_do_not_store_credentials_or_own_final_decisions',
+            'can_store_plaintext_credential',
+            'can_store_raw_source_payload',
+            'can_make_final_product_decision'
+          ]
+        })),
+    ...(mainSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_MAIN_FILE,
+          source: mainSource.source,
+          requiredFragments: ['bind_addr_from_env', 'serve']
+        })),
+    ...(boundaryModSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_BOUNDARY_MOD_FILE,
+          source: boundaryModSource.source,
+          requiredFragments: [
+            'provider_registry',
+            'sync_state',
+            'webhook_replay',
+            'provider_boundaries',
+            'can_store_plaintext_credential',
+            'can_store_raw_source_payload',
+            'can_make_final_product_decision'
+          ]
+        })),
+    ...(providerRegistrySource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_PROVIDER_REGISTRY_FILE,
+          source: providerRegistrySource.source,
+          requiredFragments: [
+            'id: "provider_registry"',
+            'can_store_plaintext_credential: false',
+            'can_store_raw_source_payload: false',
+            'can_make_final_product_decision: false',
+            'REQUIRED_PROVIDER_FIELDS',
+            'provider_id',
+            'credential_capability_required',
+            'privacy_scope_required',
+            'webhook_replay_policy',
+            'sync_state_policy',
+            'FORBIDDEN_PROVIDER_VALUES',
+            'refresh_token_plaintext',
+            'webhook_secret_plaintext',
+            'provider_api_key_plaintext',
+            'authorization_header',
+            'cookie'
+          ]
+        })),
+    ...(syncStateSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_SYNC_STATE_FILE,
+          source: syncStateSource.source,
+          requiredFragments: [
+            'id: "sync_state"',
+            'can_store_plaintext_credential: false',
+            'can_store_raw_source_payload: false',
+            'can_make_final_product_decision: false',
+            'ALLOWED_SYNC_STATE_FIELDS',
+            'provider_id',
+            'tenant_id',
+            'cursor',
+            'schema_version',
+            'retry_count',
+            'next_retry_at',
+            'request_id',
+            'trace_id',
+            'FORBIDDEN_SYNC_STATE_VALUES',
+            'raw_mail_body',
+            'raw_message_body',
+            'raw_file_body',
+            'raw_contact_body',
+            'raw_provider_payload',
+            'credential_plaintext'
+          ]
+        })),
+    ...(webhookReplaySource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_WEBHOOK_REPLAY_FILE,
+          source: webhookReplaySource.source,
+          requiredFragments: [
+            'id: "webhook_replay"',
+            'can_store_plaintext_credential: false',
+            'can_store_raw_source_payload: false',
+            'can_make_final_product_decision: false',
+            'REQUIRED_WEBHOOK_FIELDS',
+            'provider_id',
+            'provider_event_id',
+            'signature_verified',
+            'idempotency_key',
+            'payload_ref',
+            'request_id',
+            'trace_id',
+            'dead_letter_policy',
+            'FORBIDDEN_WEBHOOK_VALUES',
+            'raw_provider_payload',
+            'raw_payment_payload',
+            'authorization_header',
+            'cookie',
+            'webhook_secret_plaintext'
+          ]
+        })),
+    ...(providerBoundariesSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_PROVIDER_BOUNDARIES_FILE,
+          source: providerBoundariesSource.source,
+          requiredFragments: [
+            'id: "provider_boundaries"',
+            'can_store_plaintext_credential: false',
+            'can_store_raw_source_payload: false',
+            'can_make_final_product_decision: false',
+            'INITIAL_PROVIDER_BOUNDARIES',
+            'google',
+            'microsoft',
+            'telegram',
+            'DELEGATED_DECISIONS',
+            'final_authorization',
+            'entitlement',
+            'ledger_or_credit_mutation',
+            'privacy_data_access_policy'
           ]
         }))
   ];

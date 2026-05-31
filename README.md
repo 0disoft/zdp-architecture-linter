@@ -33,7 +33,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-growth-lab` 저장소 루트의 funnel metric, growth experiment, experiment safety 계약과 checker skeleton이 CAC/LTV/CLV 정본이나 직접 DB 조회로 번지지 않는지 검사한다.
 - `zdp-privacy-access-broker` 저장소 루트의 privacy access policy, capability grant, data minimization 계약, checker skeleton, 최소 Rust/Axum runtime skeleton이 raw token, raw source payload, subject-level analytics stream, 제품 권한·이용권·원장 판단으로 번지지 않는지 검사한다.
 - `zdp-privacy-credential-vault` 저장소 루트의 credential boundary, capability issuance, access audit, storage boundary 계약, checker skeleton, 최소 Rust/Axum runtime skeleton이 connector/product/AI/analytics 경계로 raw credential을 새게 만들거나 audit/restore/log에 raw secret을 남기지 않는지 검사한다.
-- `zdp-connectors-platform` 저장소 루트의 provider registry, sync-state, webhook replay, provider boundary 계약과 checker skeleton이 credential vault capability·privacy broker scope·idempotency 없이 provider 연동을 열거나 raw token/source payload, final authorization, entitlement, ledger, privacy policy 판단으로 번지지 않는지 검사한다.
+- `zdp-connectors-platform` 저장소 루트의 provider registry, sync-state, webhook replay, provider boundary 계약, checker skeleton, 최소 Rust/Axum runtime skeleton이 credential vault capability·privacy broker scope·idempotency 없이 provider 연동을 열거나 raw token/source payload, final authorization, entitlement, ledger, privacy policy 판단으로 번지지 않는지 검사한다.
 - `zdp-money-platform` 저장소 루트의 billing/payments/ledger/risk boundary, money command envelope, append-only ledger entry, ledger storage, payment webhook, entitlement-credit 계약, checker skeleton, 최소 Rust/Axum API skeleton, 순수 Rust ledger core, command-to-ledger admission layer, payment webhook-to-command handoff layer, payment webhook processing state/outbox skeleton, payment webhook processing storage port skeleton이 제품 저장소의 잔액 변경, 중복 웹훅 반영, raw 결제 데이터 저장으로 번지지 않는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
@@ -114,6 +114,8 @@ fixtures/fail/**
 ## 개발 명령
 
 `ZDP-CREDENTIAL-001`은 0.37.5부터 `zdp-privacy-credential-vault`의 credential 계약과 checker skeleton뿐 아니라 최소 Rust/Axum runtime skeleton도 검사한다.
+
+`ZDP-CONNECTORS-001`은 0.37.6부터 `zdp-connectors-platform`의 provider 계약과 checker skeleton뿐 아니라 최소 Rust/Axum runtime skeleton도 검사한다.
 
 ```txt
 bun install

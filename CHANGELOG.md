@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.6
+
+- `ZDP-CONNECTORS-001`이 `zdp-connectors-platform`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.
+- `/healthz`, `/readyz`, `ZDP_CONNECTORS_BIND_ADDR`, provider registry/sync-state/webhook replay/provider boundary marker, plaintext credential/raw source/final product decision 금지 표면을 검증한다.
+
 ## 0.37.5
 
 - `ZDP-CREDENTIAL-001`이 `zdp-privacy-credential-vault`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.
