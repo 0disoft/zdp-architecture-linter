@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.32.2
+
+- `ZDP-MONEY-PLATFORM-001`이 `contracts/ledger-storage.yaml`까지 검사하도록 강화했다.
+- money ledger storage의 append-only row, double-entry balance, idempotency scope, rebuildable projection, forbidden storage pattern을 검증한다.
+- money platform checker skeleton이 ledger storage 계약과 실패 테스트를 계속 포함하는지 검사한다.
+
 ## 0.32.1
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 checker skeleton까지 검사하도록 강화했다.

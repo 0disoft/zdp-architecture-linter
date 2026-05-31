@@ -65,6 +65,14 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'contracts/ledger-storage.yaml',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `contracts/ledger-storage.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'contracts/payment-webhook.yaml',
         path: 'repository.root',
         message:
@@ -299,6 +307,92 @@ reconciliation:
           file: 'contracts/ledger-entry.yaml',
           path: 'double_entry.required',
           message: 'Ledger contract must require double-entry posting.'
+        });
+      }
+    );
+  });
+
+  test('fails when ledger storage can update rows or treat projections as truth', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'contracts/ledger-storage.yaml': `
+contract:
+  version: 1
+storage:
+  engine: sqlite
+  migration_required_before_writes: false
+  schema_owner: billing
+  product_repo_direct_access_allowed: true
+tables:
+  ledger_entries:
+    append_only: false
+    update_allowed: true
+    delete_allowed: true
+    required_columns:
+      - ledger_entry_id
+    amount:
+      integer_minor_units_required: false
+      floating_point_allowed: true
+double_entry:
+  required: false
+  balance_group_key: tenant_id
+  debit_credit_sum_must_balance: false
+  imbalance_policy: accept_and_reconcile_later
+idempotency:
+  unique_scope:
+    - idempotency_key
+  payload_hash_required: false
+  duplicate_same_payload: rerun
+  duplicate_different_payload: overwrite
+corrections:
+  method: update_entry
+  update_delete_corrections_allowed: true
+  reversal_required_fields:
+    - reason
+projections:
+  source_of_truth: true
+  rebuildable_from_ledger_entries: false
+  direct_mutation_allowed: true
+forbidden:
+  - ledger_entry_update
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/ledger-storage.yaml',
+          path: 'tables.ledger_entries.update_allowed',
+          message: 'Ledger storage table must not allow updates.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/ledger-storage.yaml',
+          path: 'idempotency.unique_scope',
+          message:
+            'Money platform contract `contracts/ledger-storage.yaml` must include `tenant_id` in `idempotency.unique_scope`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/ledger-storage.yaml',
+          path: 'projections.source_of_truth',
+          message: 'Ledger projections must not be source of truth.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/ledger-storage.yaml',
+          path: 'forbidden',
+          message:
+            'Money platform contract `contracts/ledger-storage.yaml` must include `balance_projection_as_truth` in `forbidden`.'
         });
       }
     );
@@ -690,6 +784,74 @@ forbidden:
 reconciliation:
   required: true
 `,
+    'contracts/ledger-storage.yaml': `
+contract:
+  version: 1
+storage:
+  engine: postgresql
+  migration_required_before_writes: true
+  schema_owner: ledger
+  product_repo_direct_access_allowed: false
+tables:
+  ledger_entries:
+    append_only: true
+    update_allowed: false
+    delete_allowed: false
+    required_columns:
+      - ledger_entry_id
+      - ledger_transaction_id
+      - ledger_account_id
+      - tenant_id
+      - currency
+      - amount_minor
+      - debit_or_credit
+      - entry_type
+      - occurred_at
+      - command_id
+      - command_type
+      - idempotency_key
+      - payload_hash
+      - causation_ref
+      - reason
+      - created_at
+    amount:
+      integer_minor_units_required: true
+      floating_point_allowed: false
+double_entry:
+  required: true
+  balance_group_key: ledger_transaction_id
+  debit_credit_sum_must_balance: true
+  imbalance_policy: reject_transaction
+idempotency:
+  unique_scope:
+    - tenant_id
+    - command_type
+    - idempotency_key
+  payload_hash_required: true
+  duplicate_same_payload: return_previous_result
+  duplicate_different_payload: fail_conflict
+corrections:
+  method: reversal_entry
+  update_delete_corrections_allowed: false
+  reversal_required_fields:
+    - reversal_of_ledger_entry_id
+    - reason
+    - command_id
+    - idempotency_key
+projections:
+  source_of_truth: false
+  rebuildable_from_ledger_entries: true
+  direct_mutation_allowed: false
+forbidden:
+  - balance_projection_as_truth
+  - direct_balance_update
+  - ledger_entry_update
+  - ledger_entry_delete
+  - floating_point_amount
+  - idempotency_scope_missing
+  - product_repo_storage_access
+  - raw_provider_payload_in_ledger_row
+`,
     'contracts/payment-webhook.yaml': `
 contract:
   version: 1
@@ -807,20 +969,24 @@ export interface ContractDiagnostic {
 const MONEY_BOUNDARIES_FILE = 'contracts/money-boundaries.yaml';
 const MONEY_COMMAND_ENVELOPE_FILE = 'contracts/money-command-envelope.yaml';
 const LEDGER_ENTRY_FILE = 'contracts/ledger-entry.yaml';
+const LEDGER_STORAGE_FILE = 'contracts/ledger-storage.yaml';
 const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const SERVICE_FILE = 'service.yaml';
 const MONEY_FORBIDDEN = [];
+const LEDGER_STORAGE_FORBIDDEN = [];
 const QUEUE_ENVELOPE_REQUIRED_FIELDS = [];
 const REQUIRED_RULE = 'ZDP-MONEY-PLATFORM-001';
 export async function checkMoneyContracts(): Promise<void> {
   void MONEY_BOUNDARIES_FILE;
   void MONEY_COMMAND_ENVELOPE_FILE;
   void LEDGER_ENTRY_FILE;
+  void LEDGER_STORAGE_FILE;
   void PAYMENT_WEBHOOK_FILE;
   void ENTITLEMENT_CREDIT_FILE;
   void SERVICE_FILE;
   void MONEY_FORBIDDEN;
+  void LEDGER_STORAGE_FORBIDDEN;
   void QUEUE_ENVELOPE_REQUIRED_FIELDS;
   void REQUIRED_RULE;
 }
@@ -829,6 +995,7 @@ export async function checkMoneyContracts(): Promise<void> {
 const cases = [
   'fails when command idempotency or sensitive payload rules drift',
   'fails when ledger append-only rules drift',
+  'fails when ledger storage treats projections as truth',
   'fails when webhook processing can bypass edge, signature, or queue rules',
   'fails when entitlement and credit truth boundaries drift',
   'fails when service.yaml stops declaring the money risk boundary'
