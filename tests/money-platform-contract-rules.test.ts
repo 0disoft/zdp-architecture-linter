@@ -140,6 +140,21 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/storage/mod.rs',
+        path: 'repository.root',
+        message: 'Money platform repository must include `src/storage/mod.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'src/storage/payment_webhook_processing.rs',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `src/storage/payment_webhook_processing.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -729,6 +744,14 @@ pub struct MoneyCommandEnvelope {
           message:
             'Money platform runtime source must include `pub mod ledger;`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/lib.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod storage;`.'
+        });
       }
     );
   });
@@ -997,6 +1020,76 @@ pub fn admit_payment_webhook_processing() {}
           path: 'source',
           message:
             'Money platform runtime source must include `exhausted_or_terminal_work_cannot_continue_silently`.'
+        });
+      }
+    );
+  });
+
+  test('fails when money payment webhook processing storage port rules drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'src/storage/payment_webhook_processing.rs': `
+pub enum PaymentWebhookProcessingPersistenceMode {
+    InsertNew,
+}
+
+pub fn plan_payment_webhook_processing_persistence() {}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `CompareAndSwap { expected_version: u64 }`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub struct PaymentWebhookProcessingPersistenceBatch`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `validate_history_matches_record`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `PaymentWebhookProcessingPersistenceMode::CompareAndSwap`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `rejects_stale_or_cross_record_processing_transition_before_storage`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/storage/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `rejects_forbidden_payment_values_before_storage_port`.'
         });
       }
     );
@@ -1538,6 +1631,7 @@ use axum::{Json, Router, routing::get};
 pub mod boundaries;
 pub mod commands;
 pub mod ledger;
+pub mod storage;
 
 pub const SERVICE_ID: &str = "money-api";
 pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";
@@ -1851,6 +1945,64 @@ fn processing_lifecycle_records_worker_attempt_success_history_and_outbox() {}
 fn retry_schedule_requires_processing_state_and_retry_time() {}
 fn retryable_failure_writes_retry_outbox_and_can_restart() {}
 fn exhausted_or_terminal_work_cannot_continue_silently() {}
+`,
+    'src/storage/mod.rs': `
+pub mod payment_webhook_processing;
+`,
+    'src/storage/payment_webhook_processing.rs': `
+const FORBIDDEN_STORAGE_VALUE_FRAGMENTS: &[&str] = &[
+    "authorization",
+    "raw_payment",
+    "secret",
+    "token",
+];
+
+pub struct PaymentWebhookProcessingLookupKey;
+
+pub enum PaymentWebhookProcessingPersistenceMode {
+    InsertNew,
+    CompareAndSwap { expected_version: u64 },
+}
+
+pub struct PaymentWebhookProcessingPersistenceBatch;
+
+pub enum PaymentWebhookProcessingStorageError {
+    ForbiddenStorageValue,
+    HistoryMismatch,
+    OutboxMismatch,
+    RecordMismatch,
+    StaleTransitionVersion,
+}
+
+pub fn plan_payment_webhook_processing_persistence() {
+    validate_record_safe_for_storage();
+    validate_history_matches_record();
+    validate_outbox_matches_record();
+    require_initial_insert_shape();
+    validate_record_continuity();
+    require_record_match();
+    require_history_match();
+    require_outbox_match();
+    reject_forbidden_storage_value();
+    let _ = PaymentWebhookProcessingPersistenceMode::InsertNew;
+    let _ = PaymentWebhookProcessingPersistenceMode::CompareAndSwap { expected_version: 1 };
+}
+
+fn validate_record_safe_for_storage() {}
+fn validate_history_matches_record() {}
+fn validate_outbox_matches_record() {}
+fn require_initial_insert_shape() {}
+fn validate_record_continuity() {}
+fn require_record_match() {}
+fn require_history_match() {}
+fn require_outbox_match() {}
+fn reject_forbidden_storage_value() {}
+
+fn plans_insert_for_new_queued_processing_record_with_provider_event_lookup() {}
+fn plans_compare_and_swap_update_for_worker_transition_history_and_outbox() {}
+fn rejects_stale_or_cross_record_processing_transition_before_storage() {}
+fn rejects_history_or_outbox_that_does_not_match_processing_record() {}
+fn rejects_forbidden_payment_values_before_storage_port() {}
 `,
     'src/ledger/mod.rs': `
 const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[

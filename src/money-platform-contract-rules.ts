@@ -36,6 +36,9 @@ const RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE = 'src/commands/payment_webhook.rs';
 const RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE =
   'src/commands/payment_webhook_processing.rs';
 const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
+const RUNTIME_STORAGE_MOD_FILE = 'src/storage/mod.rs';
+const RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE =
+  'src/storage/payment_webhook_processing.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -61,7 +64,9 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_COMMAND_LEDGER_FILE,
   RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE,
   RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE,
-  RUNTIME_LEDGER_CORE_FILE
+  RUNTIME_LEDGER_CORE_FILE,
+  RUNTIME_STORAGE_MOD_FILE,
+  RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE
 ] as const;
 
 const REQUIRED_BOUNDARIES = ['billing', 'payments', 'ledger', 'risk'] as const;
@@ -1190,7 +1195,9 @@ async function validateRuntimeSurface(
     commandLedgerSource,
     commandPaymentWebhookSource,
     commandPaymentWebhookProcessingSource,
-    ledgerCoreSource
+    ledgerCoreSource,
+    storageModSource,
+    storagePaymentWebhookProcessingSource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -1212,6 +1219,8 @@ async function validateRuntimeSurface(
     ...commandPaymentWebhookSource.diagnostics,
     ...commandPaymentWebhookProcessingSource.diagnostics,
     ...ledgerCoreSource.diagnostics,
+    ...storageModSource.diagnostics,
+    ...storagePaymentWebhookProcessingSource.diagnostics,
     ...(cargoToml.source === null
       ? []
       : validateRuntimeSourceIncludes({
@@ -1233,6 +1242,7 @@ async function validateRuntimeSurface(
             'pub const SERVICE_ID: &str = "money-api";',
             'pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";',
             'pub mod ledger;',
+            'pub mod storage;',
             '.route("/healthz", get(healthz))',
             '.route("/readyz", get(readyz))',
             'service: SERVICE_ID',
@@ -1445,6 +1455,54 @@ async function validateRuntimeSurface(
             'retry_schedule_requires_processing_state_and_retry_time',
             'retryable_failure_writes_retry_outbox_and_can_restart',
             'exhausted_or_terminal_work_cannot_continue_silently'
+          ]
+        })),
+    ...(storageModSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_STORAGE_MOD_FILE,
+          source: storageModSource.source,
+          requiredFragments: ['pub mod payment_webhook_processing;']
+        })),
+    ...(storagePaymentWebhookProcessingSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE,
+          source: storagePaymentWebhookProcessingSource.source,
+          requiredFragments: [
+            'const FORBIDDEN_STORAGE_VALUE_FRAGMENTS',
+            '"authorization"',
+            '"raw_payment"',
+            '"secret"',
+            '"token"',
+            'pub struct PaymentWebhookProcessingLookupKey',
+            'pub enum PaymentWebhookProcessingPersistenceMode',
+            'InsertNew',
+            'CompareAndSwap { expected_version: u64 }',
+            'pub struct PaymentWebhookProcessingPersistenceBatch',
+            'pub enum PaymentWebhookProcessingStorageError',
+            'ForbiddenStorageValue',
+            'HistoryMismatch',
+            'OutboxMismatch',
+            'RecordMismatch',
+            'StaleTransitionVersion',
+            'pub fn plan_payment_webhook_processing_persistence',
+            'validate_record_safe_for_storage',
+            'validate_history_matches_record',
+            'validate_outbox_matches_record',
+            'require_initial_insert_shape',
+            'validate_record_continuity',
+            'require_record_match',
+            'require_history_match',
+            'require_outbox_match',
+            'reject_forbidden_storage_value',
+            'PaymentWebhookProcessingPersistenceMode::InsertNew',
+            'PaymentWebhookProcessingPersistenceMode::CompareAndSwap',
+            'plans_insert_for_new_queued_processing_record_with_provider_event_lookup',
+            'plans_compare_and_swap_update_for_worker_transition_history_and_outbox',
+            'rejects_stale_or_cross_record_processing_transition_before_storage',
+            'rejects_history_or_outbox_that_does_not_match_processing_record',
+            'rejects_forbidden_payment_values_before_storage_port'
           ]
         })),
     ...(ledgerCoreSource.source === null
