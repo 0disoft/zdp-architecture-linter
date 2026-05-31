@@ -117,6 +117,13 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/commands/ledger.rs',
+        path: 'repository.root',
+        message: 'Money platform repository must include `src/commands/ledger.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -698,6 +705,14 @@ pub struct MoneyCommandEnvelope {
           message:
             'Money platform runtime source must include `pub tenant_id: String`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod ledger;`.'
+        });
       }
     );
   });
@@ -784,6 +799,77 @@ pub fn append_ledger_transaction() {}
           path: 'source',
           message:
             'Money platform runtime source must include `rejects_sensitive_values_before_they_enter_ledger_rows`.'
+        });
+      }
+    );
+  });
+
+  test('fails when money command ledger admission rules drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'src/commands/mod.rs': `
+pub enum MoneyCommandType {
+    LedgerAppendEntry,
+}
+`,
+        'src/commands/ledger.rs': `
+pub enum LedgerAppendAdmission {
+    Accepted,
+}
+
+pub enum LedgerCommandAdmissionError {
+    DraftMismatch,
+}
+
+pub fn admit_ledger_append_command() {}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod ledger;`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/ledger.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `IdempotencyDecision::Conflict`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/ledger.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `validate_draft_matches_envelope`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/ledger.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `const FORBIDDEN_PAYLOAD_REF_FRAGMENTS`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/ledger.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `rejects_forbidden_payload_reference_values_before_ledger_append`.'
         });
       }
     );
@@ -1332,6 +1418,8 @@ pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
 };
 `,
     'src/commands/mod.rs': `
+pub mod ledger;
+
 pub enum MoneyCommandType {
     PaymentsRecordProviderWebhook,
     LedgerAppendEntry,
@@ -1358,6 +1446,60 @@ pub struct MoneyCommandEnvelope {
 }
 
 const RAW_PAYMENT_PAYLOAD_SENTINEL: &str = "raw_payment_payload";
+`,
+    'src/commands/ledger.rs': `
+const FORBIDDEN_PAYLOAD_REF_FRAGMENTS: &[&str] = &[
+    "authorization",
+    "raw_payment",
+    "secret",
+    "token",
+];
+
+pub enum LedgerAppendAdmission {
+    Accepted {},
+    Duplicate { ledger_transaction_id: String },
+}
+
+pub enum LedgerCommandAdmissionError {
+    DraftMismatch,
+    ForbiddenPayloadRefValue,
+    IdempotencyConflict,
+    UnsupportedCommandType(MoneyCommandType),
+    UnsupportedSchemaVersion(u16),
+}
+
+pub fn admit_ledger_append_command() {
+    validate_ledger_append_envelope();
+    validate_payload_ref();
+    validate_draft_matches_envelope();
+    append_ledger_transaction();
+    let _ = IdempotencyDecision::AcceptNew;
+    let _ = IdempotencyDecision::ReturnPrevious {};
+    let _ = IdempotencyDecision::Conflict;
+}
+
+pub fn idempotency_scope_for() {}
+fn validate_ledger_append_envelope() {}
+fn validate_payload_ref() {}
+fn validate_draft_matches_envelope() {}
+
+enum MoneyCommandType {
+    LedgerAppendEntry,
+}
+
+enum IdempotencyDecision {
+    AcceptNew,
+    ReturnPrevious {},
+    Conflict,
+}
+
+fn append_ledger_transaction() {}
+fn admits_matching_ledger_append_command_and_transaction_draft() {}
+fn returns_previous_result_for_duplicate_same_payload_without_appending() {}
+fn rejects_duplicate_idempotency_key_with_different_payload_hash() {}
+fn rejects_unsupported_command_type_before_ledger_append() {}
+fn rejects_draft_metadata_that_does_not_match_command_envelope() {}
+fn rejects_forbidden_payload_reference_values_before_ledger_append() {}
 `,
     'src/ledger/mod.rs': `
 const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[

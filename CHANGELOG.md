@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.6
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 command-to-ledger admission layer까지 검사하도록 강화했다.
+- `src/commands/ledger.rs`의 envelope/draft mismatch, unsupported command type, forbidden payload reference, idempotency conflict 테스트 표면을 검증한다.
+
 ## 0.32.5
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 순수 Rust ledger core까지 검사하도록 강화했다.

@@ -31,6 +31,7 @@ const RUNTIME_PAYMENTS_BOUNDARY_FILE = 'src/boundaries/payments.rs';
 const RUNTIME_LEDGER_BOUNDARY_FILE = 'src/boundaries/ledger.rs';
 const RUNTIME_RISK_BOUNDARY_FILE = 'src/boundaries/risk.rs';
 const RUNTIME_COMMANDS_FILE = 'src/commands/mod.rs';
+const RUNTIME_COMMAND_LEDGER_FILE = 'src/commands/ledger.rs';
 const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
@@ -54,6 +55,7 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_LEDGER_BOUNDARY_FILE,
   RUNTIME_RISK_BOUNDARY_FILE,
   RUNTIME_COMMANDS_FILE,
+  RUNTIME_COMMAND_LEDGER_FILE,
   RUNTIME_LEDGER_CORE_FILE
 ] as const;
 
@@ -1180,6 +1182,7 @@ async function validateRuntimeSurface(
     ledgerSource,
     riskSource,
     commandsSource,
+    commandLedgerSource,
     ledgerCoreSource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
@@ -1198,6 +1201,7 @@ async function validateRuntimeSurface(
     ...ledgerSource.diagnostics,
     ...riskSource.diagnostics,
     ...commandsSource.diagnostics,
+    ...commandLedgerSource.diagnostics,
     ...ledgerCoreSource.diagnostics,
     ...(cargoToml.source === null
       ? []
@@ -1281,6 +1285,7 @@ async function validateRuntimeSurface(
           file: RUNTIME_COMMANDS_FILE,
           source: commandsSource.source,
           requiredFragments: [
+            'pub mod ledger;',
             'pub enum MoneyCommandType',
             'PaymentsRecordProviderWebhook',
             'LedgerAppendEntry',
@@ -1297,6 +1302,43 @@ async function validateRuntimeSurface(
             'pub reason: String',
             'pub payload_ref: PayloadRef',
             '"raw_payment_payload"'
+          ]
+        })),
+    ...(commandLedgerSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_COMMAND_LEDGER_FILE,
+          source: commandLedgerSource.source,
+          requiredFragments: [
+            'const FORBIDDEN_PAYLOAD_REF_FRAGMENTS',
+            '"authorization"',
+            '"raw_payment"',
+            '"secret"',
+            '"token"',
+            'pub enum LedgerAppendAdmission',
+            'Accepted {',
+            'Duplicate {',
+            'pub enum LedgerCommandAdmissionError',
+            'DraftMismatch',
+            'ForbiddenPayloadRefValue',
+            'IdempotencyConflict',
+            'UnsupportedCommandType(MoneyCommandType)',
+            'UnsupportedSchemaVersion',
+            'pub fn admit_ledger_append_command',
+            'validate_ledger_append_envelope',
+            'validate_payload_ref',
+            'validate_draft_matches_envelope',
+            'pub fn idempotency_scope_for',
+            'IdempotencyDecision::AcceptNew',
+            'IdempotencyDecision::ReturnPrevious',
+            'IdempotencyDecision::Conflict',
+            'append_ledger_transaction',
+            'admits_matching_ledger_append_command_and_transaction_draft',
+            'returns_previous_result_for_duplicate_same_payload_without_appending',
+            'rejects_duplicate_idempotency_key_with_different_payload_hash',
+            'rejects_unsupported_command_type_before_ledger_append',
+            'rejects_draft_metadata_that_does_not_match_command_envelope',
+            'rejects_forbidden_payload_reference_values_before_ledger_append'
           ]
         })),
     ...(ledgerCoreSource.source === null
