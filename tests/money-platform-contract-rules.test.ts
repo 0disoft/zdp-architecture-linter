@@ -96,6 +96,20 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'Cargo.toml',
+        path: 'repository.root',
+        message: 'Money platform repository must include `Cargo.toml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'src/lib.rs',
+        path: 'repository.root',
+        message: 'Money platform repository must include `src/lib.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -553,6 +567,13 @@ test('money placeholder', () => {});
           ruleId: 'ZDP-MONEY-PLATFORM-001',
           severity: 'error',
           file: 'package.json',
+          path: 'scripts.rust:fmt',
+          message: 'Money platform package must declare `rust:fmt` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
           path: 'scripts.test',
           message: 'Money platform package must declare `test` script.'
         });
@@ -587,6 +608,88 @@ test('money placeholder', () => {});
           path: 'source',
           message:
             'Money platform checker source must include `fails when ledger append-only rules drift`.'
+        });
+      }
+    );
+  });
+
+  test('fails when money runtime skeleton files and source drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'Cargo.toml': `
+[package]
+name = "wrong-money"
+edition = "2024"
+`,
+        'src/lib.rs': `
+pub const SERVICE_ID: &str = "money-api";
+pub fn app() {}
+`,
+        'src/boundaries/mod.rs': `
+pub mod billing;
+pub mod ledger;
+`,
+        'src/boundaries/ledger.rs': `
+use super::MoneyBoundaryMarker;
+pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
+    id: "ledger",
+    db_schema: "money_ledger",
+    audit_required: true,
+    owns_credit_balance_truth: false,
+};
+`,
+        'src/commands/mod.rs': `
+pub struct MoneyCommandEnvelope {
+    pub command_id: String,
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'Cargo.toml',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `name = "zdp-money-platform"`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/lib.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `.route("/healthz", get(healthz))`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/boundaries/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod payments;`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/boundaries/ledger.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `owns_credit_balance_truth: true`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub tenant_id: String`.'
         });
       }
     );
@@ -925,11 +1028,29 @@ function createValidMoneyCheckerFiles(): Record<string, string> {
     'package.json': `
 {
   "scripts": {
-    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check": "tsc --noEmit && bun test && bun run contracts:check && cargo fmt --check && cargo check && cargo test",
     "test": "bun test",
-    "contracts:check": "bun scripts/check-money-contracts.ts"
+    "contracts:check": "bun scripts/check-money-contracts.ts",
+    "rust:fmt": "cargo fmt --check",
+    "rust:check": "cargo check",
+    "rust:test": "cargo test"
   }
 }
+`,
+    'Cargo.toml': `
+[package]
+name = "zdp-money-platform"
+version = "0.2.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+`,
+    'Cargo.lock': `
+# This file is automatically @generated by Cargo.
+version = 4
 `,
     'bun.lock': `
 {
@@ -1001,6 +1122,147 @@ const cases = [
   'fails when service.yaml stops declaring the money risk boundary'
 ];
 export { cases };
+`,
+    'src/lib.rs': `
+use axum::{Json, Router, routing::get};
+
+pub mod boundaries;
+pub mod commands;
+
+pub const SERVICE_ID: &str = "money-api";
+pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";
+
+pub fn app() -> Router {
+    Router::new()
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
+}
+
+pub async fn serve(addr: std::net::SocketAddr) -> std::io::Result<()> {
+    void_addr(addr).await
+}
+
+async fn void_addr(_addr: std::net::SocketAddr) -> std::io::Result<()> {
+    Ok(())
+}
+
+async fn healthz() -> Json<&'static str> {
+    let _ = SERVICE_ID;
+    Json("ok")
+}
+
+async fn readyz() -> Json<&'static [&'static str]> {
+    // checks: &["contracts"]
+    let checks = &["contracts"];
+    Json(checks)
+}
+
+fn money_boundaries_keep_ledger_as_credit_balance_truth_owner() {
+    assert_eq!(boundaries::credit_balance_truth_owner(), boundaries::ledger::MARKER);
+    let _ = service: SERVICE_ID;
+}
+
+fn command_envelope_requires_idempotency_audit_and_trace_fields() {}
+`,
+    'src/main.rs': `
+use zdp_money_platform::{bind_addr_from_env, serve};
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let addr = bind_addr_from_env().expect("bind addr");
+    serve(addr).await
+}
+`,
+    'src/boundaries/mod.rs': `
+pub mod billing;
+pub mod payments;
+pub mod ledger;
+pub mod risk;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoneyBoundaryMarker {
+    pub id: &'static str,
+    pub owns_credit_balance_truth: bool,
+}
+
+pub const ALL: &[MoneyBoundaryMarker] = &[
+    billing::MARKER,
+    payments::MARKER,
+    ledger::MARKER,
+    risk::MARKER,
+];
+
+pub fn credit_balance_truth_owner() -> MoneyBoundaryMarker {
+    ledger::MARKER
+}
+`,
+    'src/boundaries/billing.rs': `
+use super::MoneyBoundaryMarker;
+
+pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
+    id: "billing",
+    db_schema: "money_billing",
+    audit_required: true,
+    owns_credit_balance_truth: false,
+};
+`,
+    'src/boundaries/payments.rs': `
+use super::MoneyBoundaryMarker;
+
+pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
+    id: "payments",
+    db_schema: "money_payments",
+    audit_required: true,
+    owns_credit_balance_truth: false,
+};
+`,
+    'src/boundaries/ledger.rs': `
+use super::MoneyBoundaryMarker;
+
+pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
+    id: "ledger",
+    db_schema: "money_ledger",
+    audit_required: true,
+    owns_credit_balance_truth: true,
+};
+`,
+    'src/boundaries/risk.rs': `
+use super::MoneyBoundaryMarker;
+
+pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
+    id: "risk",
+    db_schema: "money_risk",
+    audit_required: true,
+    owns_credit_balance_truth: false,
+};
+`,
+    'src/commands/mod.rs': `
+pub enum MoneyCommandType {
+    PaymentsRecordProviderWebhook,
+    LedgerAppendEntry,
+    LedgerCreateCreditHold,
+    LedgerCaptureCreditHold,
+    LedgerReleaseCreditHold,
+}
+
+pub struct PayloadRef;
+
+pub struct MoneyCommandEnvelope {
+    pub command_id: String,
+    pub command_type: MoneyCommandType,
+    pub schema_version: u16,
+    pub actor_id: String,
+    pub tenant_id: String,
+    pub request_id: String,
+    pub trace_id: String,
+    pub idempotency_key: String,
+    pub reason: String,
+    pub issued_at: String,
+    pub source: String,
+    pub payload_ref: PayloadRef,
+}
+
+const RAW_PAYMENT_PAYLOAD_SENTINEL: &str = "raw_payment_payload";
 `
   };
 }

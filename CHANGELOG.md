@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.3
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 최소 Rust/Axum API skeleton까지 검사하도록 강화했다.
+- `Cargo.toml`, `Cargo.lock`, `/healthz`, `/readyz`, boundary marker, money command envelope source가 계속 유지되는지 검증한다.
+
 ## 0.32.2
 
 - `ZDP-MONEY-PLATFORM-001`이 `contracts/ledger-storage.yaml`까지 검사하도록 강화했다.

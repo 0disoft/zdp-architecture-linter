@@ -13,6 +13,8 @@ const LEDGER_STORAGE_FILE = 'contracts/ledger-storage.yaml';
 const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const PACKAGE_FILE = 'package.json';
+const CARGO_TOML_FILE = 'Cargo.toml';
+const CARGO_LOCK_FILE = 'Cargo.lock';
 const BUN_LOCK_FILE = 'bun.lock';
 const TSCONFIG_FILE = 'tsconfig.json';
 const CHECKER_SCRIPT_FILE = 'scripts/check-money-contracts.ts';
@@ -21,6 +23,14 @@ const CHECKER_PARSER_FILE = 'src/money-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/money-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/money-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/money-contracts.test.ts';
+const RUNTIME_LIB_FILE = 'src/lib.rs';
+const RUNTIME_MAIN_FILE = 'src/main.rs';
+const RUNTIME_BOUNDARY_MOD_FILE = 'src/boundaries/mod.rs';
+const RUNTIME_BILLING_BOUNDARY_FILE = 'src/boundaries/billing.rs';
+const RUNTIME_PAYMENTS_BOUNDARY_FILE = 'src/boundaries/payments.rs';
+const RUNTIME_LEDGER_BOUNDARY_FILE = 'src/boundaries/ledger.rs';
+const RUNTIME_RISK_BOUNDARY_FILE = 'src/boundaries/risk.rs';
+const RUNTIME_COMMANDS_FILE = 'src/commands/mod.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -31,6 +41,18 @@ const REQUIRED_MONEY_CHECKER_FILES = [
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
   CHECKER_TEST_FILE
+] as const;
+const REQUIRED_MONEY_RUNTIME_FILES = [
+  CARGO_TOML_FILE,
+  CARGO_LOCK_FILE,
+  RUNTIME_LIB_FILE,
+  RUNTIME_MAIN_FILE,
+  RUNTIME_BOUNDARY_MOD_FILE,
+  RUNTIME_BILLING_BOUNDARY_FILE,
+  RUNTIME_PAYMENTS_BOUNDARY_FILE,
+  RUNTIME_LEDGER_BOUNDARY_FILE,
+  RUNTIME_RISK_BOUNDARY_FILE,
+  RUNTIME_COMMANDS_FILE
 ] as const;
 
 const REQUIRED_BOUNDARIES = ['billing', 'payments', 'ledger', 'risk'] as const;
@@ -176,7 +198,14 @@ const REQUIRED_ENTITLEMENT_FORBIDDEN_ITEMS = [
   'billing_owns_credit_balance_truth',
   'analytics_event_as_money_truth'
 ] as const;
-const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'test',
+  'contracts:check',
+  'rust:fmt',
+  'rust:check',
+  'rust:test'
+] as const;
 
 export async function validateRepositoryMoneyPlatformContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -235,7 +264,8 @@ export async function validateRepositoryMoneyPlatformContract(input: {
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
-    ...(await validateCheckerSurface(input.repositoryRoot))
+    ...(await validateCheckerSurface(input.repositoryRoot)),
+    ...(await validateRuntimeSurface(input.repositoryRoot))
   ];
 }
 
@@ -1038,6 +1068,14 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  diagnostics.push(
+    ...validatePackageScriptIncludes({
+      value,
+      script: 'check',
+      requiredFragments: ['cargo fmt --check', 'cargo check', 'cargo test']
+    })
+  );
+
   return diagnostics;
 }
 
@@ -1126,6 +1164,165 @@ async function validateCheckerSurface(
   ];
 }
 
+async function validateRuntimeSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    cargoToml,
+    cargoLock,
+    libSource,
+    mainSource,
+    boundaryModSource,
+    billingSource,
+    paymentsSource,
+    ledgerSource,
+    riskSource,
+    commandsSource
+  ] = await Promise.all(
+    REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...cargoToml.diagnostics,
+    ...cargoLock.diagnostics,
+    ...libSource.diagnostics,
+    ...mainSource.diagnostics,
+    ...boundaryModSource.diagnostics,
+    ...billingSource.diagnostics,
+    ...paymentsSource.diagnostics,
+    ...ledgerSource.diagnostics,
+    ...riskSource.diagnostics,
+    ...commandsSource.diagnostics,
+    ...(cargoToml.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: CARGO_TOML_FILE,
+          source: cargoToml.source,
+          requiredFragments: [
+            'name = "zdp-money-platform"',
+            'edition = "2024"',
+            'axum = "0.8"',
+            'tokio = { version = "1"'
+          ]
+        })),
+    ...(libSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_LIB_FILE,
+          source: libSource.source,
+          requiredFragments: [
+            'pub const SERVICE_ID: &str = "money-api";',
+            'pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";',
+            '.route("/healthz", get(healthz))',
+            '.route("/readyz", get(readyz))',
+            'service: SERVICE_ID',
+            'checks: &["contracts"]',
+            'money_boundaries_keep_ledger_as_credit_balance_truth_owner',
+            'command_envelope_requires_idempotency_audit_and_trace_fields'
+          ]
+        })),
+    ...(mainSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_MAIN_FILE,
+          source: mainSource.source,
+          requiredFragments: ['bind_addr_from_env', 'serve(addr).await']
+        })),
+    ...(boundaryModSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_BOUNDARY_MOD_FILE,
+          source: boundaryModSource.source,
+          requiredFragments: [
+            'pub mod billing;',
+            'pub mod payments;',
+            'pub mod ledger;',
+            'pub mod risk;',
+            'owns_credit_balance_truth: bool',
+            'pub const ALL: &[MoneyBoundaryMarker]',
+            'pub fn credit_balance_truth_owner() -> MoneyBoundaryMarker',
+            'ledger::MARKER'
+          ]
+        })),
+    ...validateBoundaryMarkerSource(billingSource.source, RUNTIME_BILLING_BOUNDARY_FILE, {
+      id: 'billing',
+      schema: 'money_billing',
+      truthOwner: 'owns_credit_balance_truth: false'
+    }),
+    ...validateBoundaryMarkerSource(
+      paymentsSource.source,
+      RUNTIME_PAYMENTS_BOUNDARY_FILE,
+      {
+        id: 'payments',
+        schema: 'money_payments',
+        truthOwner: 'owns_credit_balance_truth: false'
+      }
+    ),
+    ...validateBoundaryMarkerSource(ledgerSource.source, RUNTIME_LEDGER_BOUNDARY_FILE, {
+      id: 'ledger',
+      schema: 'money_ledger',
+      truthOwner: 'owns_credit_balance_truth: true'
+    }),
+    ...validateBoundaryMarkerSource(riskSource.source, RUNTIME_RISK_BOUNDARY_FILE, {
+      id: 'risk',
+      schema: 'money_risk',
+      truthOwner: 'owns_credit_balance_truth: false'
+    }),
+    ...(commandsSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_COMMANDS_FILE,
+          source: commandsSource.source,
+          requiredFragments: [
+            'pub enum MoneyCommandType',
+            'PaymentsRecordProviderWebhook',
+            'LedgerAppendEntry',
+            'LedgerCreateCreditHold',
+            'LedgerCaptureCreditHold',
+            'LedgerReleaseCreditHold',
+            'pub struct PayloadRef',
+            'pub struct MoneyCommandEnvelope',
+            'pub command_id: String',
+            'pub tenant_id: String',
+            'pub request_id: String',
+            'pub trace_id: String',
+            'pub idempotency_key: String',
+            'pub reason: String',
+            'pub payload_ref: PayloadRef',
+            '"raw_payment_payload"'
+          ]
+        }))
+  ];
+}
+
+function validateBoundaryMarkerSource(
+  source: string | null,
+  file: string,
+  contract: {
+    readonly id: string;
+    readonly schema: string;
+    readonly truthOwner: string;
+  }
+): readonly Diagnostic[] {
+  if (source === null) {
+    return [];
+  }
+
+  return validateRuntimeSourceIncludes({
+    file,
+    source,
+    requiredFragments: [
+      'pub const MARKER: MoneyBoundaryMarker',
+      `id: "${contract.id}"`,
+      `db_schema: "${contract.schema}"`,
+      'audit_required: true',
+      contract.truthOwner
+    ]
+  });
+}
+
 function validateSourceIncludes(input: {
   readonly file: string;
   readonly source: string;
@@ -1143,6 +1340,60 @@ function validateSourceIncludes(input: {
         input.file,
         'source',
         `Money platform checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateRuntimeSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createMoneyDiagnostic(
+        input.file,
+        'source',
+        `Money platform runtime source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validatePackageScriptIncludes(input: {
+  readonly value: unknown;
+  readonly script: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const scriptValue = readPath(input.value, `scripts.${input.script}`);
+
+  if (typeof scriptValue !== 'string') {
+    return [];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (scriptValue.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createMoneyDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${input.script}`,
+        `Money platform package script \`${input.script}\` must include \`${fragment}\`.`
       )
     );
   }
