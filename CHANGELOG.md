@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.2
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 SDK generation source handoff 계약까지 검사하도록 강화했다.
+- SDK source repo/contract, TypeScript/Dart/Rust target, route `idempotency`, error `trace_id`, webhook dead-letter policy, authorization header 금지값이 사라지면 실패하도록 했다.
+
 ## 0.35.1
 
 - `ZDP-API-CONTRACTS-001`이 `zdp-api-contracts`의 SDK generation input 계약까지 검사하도록 강화했다.

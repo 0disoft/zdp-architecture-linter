@@ -52,6 +52,14 @@ describe('client SDKs repository rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-CLIENT-SDKS-001',
         severity: 'error',
+        file: 'contracts/sdk-generation-source.yaml',
+        path: 'repository.root',
+        message:
+          'Client SDKs repository must include `contracts/sdk-generation-source.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CLIENT-SDKS-001',
+        severity: 'error',
         file: 'contracts/auth-helper.yaml',
         path: 'repository.root',
         message:
@@ -134,6 +142,111 @@ sdk_surface:
           path: 'sdk_surface.must_not_own',
           message:
             'Client SDKs contract `contracts/sdk-surface.yaml` must include `API contract source` in `sdk_surface.must_not_own`.'
+        });
+      }
+    );
+  });
+
+  test('fails when SDK generation source handoff drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'contracts/sdk-generation-source.yaml': `
+sdk_generation_source:
+  status: live
+  source_repo: zdp-client-sdks
+  source_contract: contracts/local-sdk-input.yaml
+  generation_targets:
+    - typescript
+  required_route_metadata:
+    - operation_id
+  required_error_metadata:
+    - code
+  required_webhook_metadata:
+    - event_id
+  must_not_own:
+    - API contract source
+  forbidden_values:
+    - raw_customer_payload
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.status',
+          message:
+            'Client SDKs generation source must stay skeleton until generated SDK packages exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.source_repo',
+          message:
+            'Client SDKs generation source must consume `zdp-api-contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.source_contract',
+          message:
+            'Client SDKs generation source must consume `contracts/sdk-generation-input.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.generation_targets',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `rust` in `sdk_generation_source.generation_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.required_route_metadata',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `idempotency` in `sdk_generation_source.required_route_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.required_error_metadata',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `trace_id` in `sdk_generation_source.required_error_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.required_webhook_metadata',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `dead_letter_policy` in `sdk_generation_source.required_webhook_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.must_not_own',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `final authorization decisions` in `sdk_generation_source.must_not_own`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `authorization_header` in `sdk_generation_source.forbidden_values`.'
         });
       }
     );
@@ -271,7 +384,7 @@ test('client SDK placeholder', () => {});
           file: 'src/client-sdk-contracts/validator.ts',
           path: 'source',
           message:
-            'Client SDKs checker source must include `REQUIRED_SDK_LANGUAGES`.'
+            'Client SDKs checker source must include `REQUIRED_SDK_GENERATION_SOURCE_REPO`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -279,7 +392,7 @@ test('client SDK placeholder', () => {});
           file: 'tests/client-sdk-contracts.test.ts',
           path: 'source',
           message:
-            'Client SDKs checker source must include `fails when SDKs stop propagating request ids`.'
+            'Client SDKs checker source must include `fails when SDKs consume a different generation input source`.'
         });
       }
     );
@@ -369,6 +482,57 @@ sdk_surface:
     - final authorization decisions
     - product-specific business rules
 `,
+    'contracts/sdk-generation-source.yaml': `
+sdk_generation_source:
+  status: skeleton
+  source_repo: zdp-api-contracts
+  source_contract: contracts/sdk-generation-input.yaml
+  generation_targets:
+    - typescript
+    - dart
+    - rust
+  required_route_metadata:
+    - operation_id
+    - resource
+    - action
+    - method
+    - path
+    - request_schema_ref
+    - response_schema_ref
+    - auth_required
+    - permission_check
+    - audit_event
+    - idempotency
+    - error_codes
+  required_error_metadata:
+    - code
+    - message
+    - request_id
+    - trace_id
+    - retry_after_seconds
+    - documentation_url
+  required_webhook_metadata:
+    - event_id
+    - event_type
+    - schema_version
+    - signature_verification
+    - idempotency_key
+    - replay_policy
+    - dead_letter_policy
+  must_not_own:
+    - API contract source
+    - generated SDK source truth
+    - refresh token storage
+    - final authorization decisions
+    - provider credential storage
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - screen_component_payload
+`,
     'contracts/auth-helper.yaml': `
 auth_helper:
   status: skeleton
@@ -433,6 +597,7 @@ export async function runClientSdkContractCheckCli(): Promise<number> {
 import { join } from 'node:path';
 const files = [
   'sdk-surface.yaml',
+  'sdk-generation-source.yaml',
   'auth-helper.yaml',
   'upload-client.yaml'
 ];
@@ -450,22 +615,42 @@ export interface ClientSdkContractDiagnostic {
 const REQUIRED_SDK_LANGUAGES = [];
 const REQUIRED_SDK_BEHAVIORS = [];
 const REQUIRED_SDK_FORBIDDEN_OWNERSHIP = [];
+const REQUIRED_SDK_GENERATION_SOURCE_REPO = 'zdp-api-contracts';
+const REQUIRED_SDK_GENERATION_SOURCE_CONTRACT = 'contracts/sdk-generation-input.yaml';
+const REQUIRED_ROUTE_METADATA = [];
+const REQUIRED_ERROR_METADATA = [];
+const REQUIRED_WEBHOOK_METADATA = [];
+const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [];
 const REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP = [];
 const REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP = [];
 const CLIENT_SDK_LANGUAGE_MISSING = 'CLIENT_SDK_LANGUAGE_MISSING';
 const CLIENT_SDK_BEHAVIOR_MISSING = 'CLIENT_SDK_BEHAVIOR_MISSING';
 const CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING';
+const CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT = 'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT';
+const CLIENT_SDK_ROUTE_METADATA_MISSING = 'CLIENT_SDK_ROUTE_METADATA_MISSING';
+const CLIENT_SDK_ERROR_METADATA_MISSING = 'CLIENT_SDK_ERROR_METADATA_MISSING';
+const CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING';
 const CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING';
 const CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING';
 export {
   REQUIRED_SDK_LANGUAGES,
   REQUIRED_SDK_BEHAVIORS,
   REQUIRED_SDK_FORBIDDEN_OWNERSHIP,
+  REQUIRED_SDK_GENERATION_SOURCE_REPO,
+  REQUIRED_SDK_GENERATION_SOURCE_CONTRACT,
+  REQUIRED_ROUTE_METADATA,
+  REQUIRED_ERROR_METADATA,
+  REQUIRED_WEBHOOK_METADATA,
+  REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES,
   REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP,
   REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP,
   CLIENT_SDK_LANGUAGE_MISSING,
   CLIENT_SDK_BEHAVIOR_MISSING,
   CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING,
+  CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT,
+  CLIENT_SDK_ROUTE_METADATA_MISSING,
+  CLIENT_SDK_ERROR_METADATA_MISSING,
+  CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING,
   CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING,
   CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING
 };
@@ -475,6 +660,10 @@ const cases = [
   'fails when TypeScript SDK language support disappears',
   'fails when SDKs stop propagating request ids',
   'fails when SDKs become the API contract source',
+  'fails when SDKs consume a different generation input source',
+  'fails when route idempotency metadata is dropped',
+  'fails when error trace metadata is dropped',
+  'fails when raw authorization headers become allowed SDK generation values',
   'fails when auth helpers store refresh tokens',
   'fails when upload clients expose raw provider URLs as public contracts'
 ];

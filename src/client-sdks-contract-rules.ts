@@ -7,6 +7,7 @@ const CLIENT_SDKS_REPOSITORY_NAME = 'zdp-client-sdks';
 const CLIENT_SDKS_CONTRACT_RULE_ID = 'ZDP-CLIENT-SDKS-001';
 
 const SDK_SURFACE_FILE = 'contracts/sdk-surface.yaml';
+const SDK_GENERATION_SOURCE_FILE = 'contracts/sdk-generation-source.yaml';
 const AUTH_HELPER_FILE = 'contracts/auth-helper.yaml';
 const UPLOAD_CLIENT_FILE = 'contracts/upload-client.yaml';
 const PACKAGE_FILE = 'package.json';
@@ -46,6 +47,57 @@ const REQUIRED_SDK_FORBIDDEN_OWNERSHIP = [
   'product-specific business rules'
 ] as const;
 
+const REQUIRED_SDK_GENERATION_SOURCE_REPO = 'zdp-api-contracts';
+const REQUIRED_SDK_GENERATION_SOURCE_CONTRACT =
+  'contracts/sdk-generation-input.yaml';
+const REQUIRED_SDK_GENERATION_TARGETS = ['typescript', 'dart', 'rust'] as const;
+const REQUIRED_ROUTE_METADATA = [
+  'operation_id',
+  'resource',
+  'action',
+  'method',
+  'path',
+  'request_schema_ref',
+  'response_schema_ref',
+  'auth_required',
+  'permission_check',
+  'audit_event',
+  'idempotency',
+  'error_codes'
+] as const;
+const REQUIRED_ERROR_METADATA = [
+  'code',
+  'message',
+  'request_id',
+  'trace_id',
+  'retry_after_seconds',
+  'documentation_url'
+] as const;
+const REQUIRED_WEBHOOK_METADATA = [
+  'event_id',
+  'event_type',
+  'schema_version',
+  'signature_verification',
+  'idempotency_key',
+  'replay_policy',
+  'dead_letter_policy'
+] as const;
+const REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP = [
+  'API contract source',
+  'generated SDK source truth',
+  'refresh token storage',
+  'final authorization decisions',
+  'provider credential storage'
+] as const;
+const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'screen_component_payload'
+] as const;
+
 const REQUIRED_AUTH_HELPER_OWNERSHIP = [
   'access token attachment boundary',
   'current user context normalization input'
@@ -80,8 +132,15 @@ export async function validateRepositoryClientSdksContract(input: {
     return [];
   }
 
-  const [sdkSurface, authHelper, uploadClient, packageJson] = await Promise.all([
+  const [
+    sdkSurface,
+    sdkGenerationSource,
+    authHelper,
+    uploadClient,
+    packageJson
+  ] = await Promise.all([
     readRequiredYamlContract(input.repositoryRoot, SDK_SURFACE_FILE),
+    readRequiredYamlContract(input.repositoryRoot, SDK_GENERATION_SOURCE_FILE),
     readRequiredYamlContract(input.repositoryRoot, AUTH_HELPER_FILE),
     readRequiredYamlContract(input.repositoryRoot, UPLOAD_CLIENT_FILE),
     readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE)
@@ -89,10 +148,14 @@ export async function validateRepositoryClientSdksContract(input: {
 
   return [
     ...sdkSurface.diagnostics,
+    ...sdkGenerationSource.diagnostics,
     ...authHelper.diagnostics,
     ...uploadClient.diagnostics,
     ...packageJson.diagnostics,
     ...(sdkSurface.value === null ? [] : validateSdkSurfaceContract(sdkSurface.value)),
+    ...(sdkGenerationSource.value === null
+      ? []
+      : validateSdkGenerationSourceContract(sdkGenerationSource.value)),
     ...(authHelper.value === null ? [] : validateAuthHelperContract(authHelper.value)),
     ...(uploadClient.value === null
       ? []
@@ -253,6 +316,79 @@ function validateSdkSurfaceContract(value: unknown): readonly Diagnostic[] {
   ];
 }
 
+function validateSdkGenerationSourceContract(
+  value: unknown
+): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.status',
+      expected: 'skeleton',
+      message:
+        'Client SDKs generation source must stay skeleton until generated SDK packages exist.'
+    }),
+    ...validateExactValue({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.source_repo',
+      expected: REQUIRED_SDK_GENERATION_SOURCE_REPO,
+      message:
+        'Client SDKs generation source must consume `zdp-api-contracts`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.source_contract',
+      expected: REQUIRED_SDK_GENERATION_SOURCE_CONTRACT,
+      message:
+        'Client SDKs generation source must consume `contracts/sdk-generation-input.yaml`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.generation_targets',
+      field: 'sdk_generation_source.generation_targets',
+      requiredEntries: REQUIRED_SDK_GENERATION_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.required_route_metadata',
+      field: 'sdk_generation_source.required_route_metadata',
+      requiredEntries: REQUIRED_ROUTE_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.required_error_metadata',
+      field: 'sdk_generation_source.required_error_metadata',
+      requiredEntries: REQUIRED_ERROR_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.required_webhook_metadata',
+      field: 'sdk_generation_source.required_webhook_metadata',
+      requiredEntries: REQUIRED_WEBHOOK_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.must_not_own',
+      field: 'sdk_generation_source.must_not_own',
+      requiredEntries: REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_SOURCE_FILE,
+      path: 'sdk_generation_source.forbidden_values',
+      field: 'sdk_generation_source.forbidden_values',
+      requiredEntries: REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES
+    })
+  ];
+}
+
 function validateAuthHelperContract(value: unknown): readonly Diagnostic[] {
   return [
     ...validateExactValue({
@@ -370,6 +506,7 @@ async function validateCheckerSurface(
           source: parserSource.source,
           requiredFragments: [
             'sdk-surface.yaml',
+            'sdk-generation-source.yaml',
             'auth-helper.yaml',
             'upload-client.yaml',
             "join(root, 'contracts', fileName)"
@@ -384,11 +521,21 @@ async function validateCheckerSurface(
             'REQUIRED_SDK_LANGUAGES',
             'REQUIRED_SDK_BEHAVIORS',
             'REQUIRED_SDK_FORBIDDEN_OWNERSHIP',
+            'REQUIRED_SDK_GENERATION_SOURCE_REPO',
+            'REQUIRED_SDK_GENERATION_SOURCE_CONTRACT',
+            'REQUIRED_ROUTE_METADATA',
+            'REQUIRED_ERROR_METADATA',
+            'REQUIRED_WEBHOOK_METADATA',
+            'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
             'REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP',
             'REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP',
             'CLIENT_SDK_LANGUAGE_MISSING',
             'CLIENT_SDK_BEHAVIOR_MISSING',
             'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING',
+            'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT',
+            'CLIENT_SDK_ROUTE_METADATA_MISSING',
+            'CLIENT_SDK_ERROR_METADATA_MISSING',
+            'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
             'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING',
             'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING'
           ]
@@ -402,6 +549,10 @@ async function validateCheckerSurface(
             'fails when TypeScript SDK language support disappears',
             'fails when SDKs stop propagating request ids',
             'fails when SDKs become the API contract source',
+            'fails when SDKs consume a different generation input source',
+            'fails when route idempotency metadata is dropped',
+            'fails when error trace metadata is dropped',
+            'fails when raw authorization headers become allowed SDK generation values',
             'fails when auth helpers store refresh tokens',
             'fails when upload clients expose raw provider URLs as public contracts'
           ]
