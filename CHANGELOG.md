@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.2
+
+- `ZDP-RUNTIME-001`이 `platform-security-contracts` one-shot contract check target을 요구한다.
+- 이 검사로 `/healthz` 없는 보안 정책 저장소를 가짜 HTTP 서비스로 위장하는 일을 막고, runtime plan에서 보안 계약 검증 누락을 바로 잡을 수 있게 했다.
+
 ## 0.38.1
 
 - `ZDP-SECURITY-001`이 `zdp-platform-security`의 repo-local checker skeleton까지 검사하도록 강화했다.

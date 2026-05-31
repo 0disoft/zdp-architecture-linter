@@ -24,7 +24,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-client-sdks` 저장소 루트의 SDK generation source handoff, API SDK generation input drift check, API export dry-run plan handoff, libs export source handoff, sdk surface, auth helper, upload client 계약과 checker skeleton, dry-run generation plan skeleton이 SDK 구현 전 gate로 유지되는지 검사한다.
 - `zdp-core-platform` 저장소 루트의 core boundary, command envelope, audit event, consent record 계약 파일이 구현 전 gate로 유지되는지 검사한다.
 - `zdp-web-apps` 저장소 루트의 app shell 계약과 SvelteKit route skeleton이 platform truth를 소유하지 않는지 검사한다.
-- `zdp-platform-runtime` 저장소 루트의 health/readiness, `core-api`/`app-console`/`edge-webhook-ingress`/`money-api`/`connectors-platform` smoke target, deployment template, rollback 계약과 smoke runner skeleton이 배포 전 gate로 유지되는지 검사한다.
+- `zdp-platform-runtime` 저장소 루트의 health/readiness, `core-api`/`app-console`/`edge-webhook-ingress`/`money-api`/`connectors-platform` smoke target, `platform-security-contracts` one-shot contract check target, deployment template, rollback 계약과 smoke runner skeleton이 배포 전 gate로 유지되는지 검사한다.
 - `zdp-data-platform` 저장소 루트의 analytics ingest, ClickHouse storage, deletion/anonymization 계약, architecture-aware checker skeleton, validator-only runtime skeleton이 GA4 대체 분석 gate로 유지되는지 검사한다.
 - `zdp-edge-workers` 저장소 루트의 request boundary, webhook ingress, queue envelope, analytics ingress 계약과 data-platform runtime-compatible precheck source/test가 Worker 구현 전 gate로 유지되는지 검사한다.
 - `zdp-platform-observability` 저장소 루트의 telemetry convention, dashboard inventory, alert rule 계약과 checker skeleton이 provider 연결 전 gate로 유지되는지 검사한다.

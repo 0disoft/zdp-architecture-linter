@@ -216,6 +216,14 @@ targets:
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
           file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks',
+          message:
+            'Runtime smoke contract must declare a `contract_checks` array.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
           path: 'targets.core-api.readyz.expect_json.ready',
           message:
             'Runtime `core-api` readyz smoke target must expect `ready: true`.'
@@ -439,6 +447,69 @@ targets:
           path: 'targets.connectors-platform.blocked_production_when',
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when the platform security contract check target drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          contractChecks: `
+contract_checks:
+  - id: platform-security-contracts
+    repo: zdp-platform-security
+    service_id: platform-security
+    process: web
+    command: bun test
+    required_files:
+      - contracts/security-baseline.yaml
+    expected_evidence:
+      - security contracts parse without diagnostics
+    blocked_production_when:
+      - security baseline contracts are missing or unparseable
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-security-contracts.process',
+          message:
+            'Runtime `platform-security-contracts` check target must declare process `one-shot-checker`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-security-contracts.command',
+          message:
+            'Runtime `platform-security-contracts` check target must run `bun run contracts:check`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-security-contracts.required_files',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `contracts/threat-model-template.yaml` in `required_files`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-security-contracts.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value` in `blocked_production_when`.'
         });
       }
     );
@@ -682,10 +753,12 @@ export const missingTraceHeader = 'traceparent_not_propagated';
 import { test } from 'bun:test';
 test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
+  const securityTarget = 'platform-security-contracts';
+  const planOnly = 'is plan-only';
   const malformed = 'malformed_json_response';
   const moneyTarget = 'money-api';
   const connectorsTarget = 'connectors-platform';
-  return [reason, malformed, moneyTarget, connectorsTarget];
+  return [reason, securityTarget, planOnly, malformed, moneyTarget, connectorsTarget];
 });
 `
   };
@@ -696,6 +769,7 @@ function createSmokeTargetsYaml(
     readonly edgeWebhookIngress?: string;
     readonly moneyApi?: string;
     readonly connectorsPlatform?: string;
+    readonly contractChecks?: string;
   } = {}
 ): string {
   const edgeWebhookIngress =
@@ -781,6 +855,30 @@ function createSmokeTargetsYaml(
       - smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync
       - connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented
 `;
+  const contractChecks =
+    overrides.contractChecks ??
+    `
+contract_checks:
+  - id: platform-security-contracts
+    repo: zdp-platform-security
+    service_id: platform-security
+    process: one-shot-checker
+    command: bun run contracts:check
+    required_files:
+      - contracts/security-baseline.yaml
+      - contracts/threat-model-template.yaml
+      - contracts/secret-handling.yaml
+      - contracts/dependency-review.yaml
+      - scripts/check-security-contracts.ts
+    expected_evidence:
+      - security contracts parse without diagnostics
+      - checker does not connect to scanners or providers
+      - checker does not require exploit payloads, private incident details, or secret values
+    blocked_production_when:
+      - security baseline contracts are missing or unparseable
+      - contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
+      - security promotion relies on dashboard-only scanner evidence
+`;
 
   return `
 targets:
@@ -837,5 +935,6 @@ targets:
       - app shell attempts direct core, money, privacy, or credential datastore access
 ${edgeWebhookIngress}
 ${moneyApi}
-${connectorsPlatform}`;
+${connectorsPlatform}
+${contractChecks}`;
 }

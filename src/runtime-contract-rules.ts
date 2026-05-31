@@ -381,7 +381,8 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     ...validateMoneyApiSmokeTarget(targetById.get('money-api')),
     ...validateConnectorsPlatformSmokeTarget(
       targetById.get('connectors-platform')
-    )
+    ),
+    ...validatePlatformSecurityContractCheck(value)
   );
 
   return diagnostics;
@@ -768,6 +769,110 @@ function validateConnectorsPlatformSmokeTarget(
   ];
 }
 
+function validatePlatformSecurityContractCheck(value: unknown): readonly Diagnostic[] {
+  const contractChecks = readPath(value, 'contract_checks');
+
+  if (!Array.isArray(contractChecks)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks',
+        'Runtime smoke contract must declare a `contract_checks` array.'
+      )
+    ];
+  }
+
+  const target = contractChecks.find(
+    (entry) =>
+      isRecord(entry) &&
+      readStringField(entry, 'id') === 'platform-security-contracts'
+  );
+
+  if (!isRecord(target)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks.platform-security-contracts',
+        'Runtime smoke contract must declare `platform-security-contracts` contract check target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.repo',
+      field: 'repo',
+      expected: 'zdp-platform-security',
+      message:
+        'Runtime `platform-security-contracts` check target must reference repo `zdp-platform-security`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.service_id',
+      field: 'service_id',
+      expected: 'platform-security',
+      message:
+        'Runtime `platform-security-contracts` check target must declare service id `platform-security`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.process',
+      field: 'process',
+      expected: 'one-shot-checker',
+      message:
+        'Runtime `platform-security-contracts` check target must declare process `one-shot-checker`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.command',
+      field: 'command',
+      expected: 'bun run contracts:check',
+      message:
+        'Runtime `platform-security-contracts` check target must run `bun run contracts:check`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.required_files',
+      field: 'required_files',
+      requiredEntries: [
+        'contracts/security-baseline.yaml',
+        'contracts/threat-model-template.yaml',
+        'contracts/secret-handling.yaml',
+        'contracts/dependency-review.yaml',
+        'scripts/check-security-contracts.ts'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.expected_evidence',
+      field: 'expected_evidence',
+      requiredEntries: [
+        'security contracts parse without diagnostics',
+        'checker does not connect to scanners or providers',
+        'checker does not require exploit payloads, private incident details, or secret values'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'security baseline contracts are missing or unparseable',
+        'contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value',
+        'security promotion relies on dashboard-only scanner evidence'
+      ]
+    })
+  ];
+}
+
 function validateTargetIdentity(
   target: Record<string, unknown>,
   id: string,
@@ -956,6 +1061,8 @@ async function validateSmokeRunnerSurface(
           requiredFragments: [
             'fails closed when run mode has no base URL',
             'base_url_not_provided',
+            'platform-security-contracts',
+            'is plan-only',
             'malformed_json_response',
             'money-api',
             'connectors-platform'
