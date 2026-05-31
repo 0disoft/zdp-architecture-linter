@@ -19,6 +19,10 @@ const CHECKER_PARSER_FILE = 'src/api-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/api-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/api-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/api-contracts.test.ts';
+const EXPORT_PLAN_SCRIPT_FILE = 'scripts/plan-api-exports.ts';
+const EXPORT_PLAN_CLI_FILE = 'src/api-export-plan/cli.ts';
+const EXPORT_PLAN_SOURCE_FILE = 'src/api-export-plan/plan.ts';
+const EXPORT_PLAN_TEST_FILE = 'tests/api-export-plan.test.ts';
 
 const REQUIRED_API_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -28,10 +32,19 @@ const REQUIRED_API_CHECKER_FILES = [
   CHECKER_PARSER_FILE,
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
-  CHECKER_TEST_FILE
+  CHECKER_TEST_FILE,
+  EXPORT_PLAN_SCRIPT_FILE,
+  EXPORT_PLAN_CLI_FILE,
+  EXPORT_PLAN_SOURCE_FILE,
+  EXPORT_PLAN_TEST_FILE
 ] as const;
 
-const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'test',
+  'contracts:check',
+  'export:plan'
+] as const;
 
 const REQUIRED_ROUTE_FIELDS = [
   'resource',
@@ -496,7 +509,11 @@ async function validateCheckerSurface(
     parserSource,
     typesSource,
     validatorSource,
-    testSource
+    testSource,
+    exportPlanScript,
+    exportPlanCliSource,
+    exportPlanSource,
+    exportPlanTestSource
   ] = await Promise.all(
     REQUIRED_API_CHECKER_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -512,6 +529,10 @@ async function validateCheckerSurface(
     ...typesSource.diagnostics,
     ...validatorSource.diagnostics,
     ...testSource.diagnostics,
+    ...exportPlanScript.diagnostics,
+    ...exportPlanCliSource.diagnostics,
+    ...exportPlanSource.diagnostics,
+    ...exportPlanTestSource.diagnostics,
     ...(script.source === null
       ? []
       : validateSourceIncludes({
@@ -573,6 +594,55 @@ async function validateCheckerSurface(
             'fails when SDK generation input drops route idempotency metadata',
             'fails when SDK generation input owns generated SDK source',
             'fails when SDK generation input can carry authorization headers'
+          ]
+        })),
+    ...(exportPlanScript.source === null
+      ? []
+      : validateSourceIncludes({
+          file: EXPORT_PLAN_SCRIPT_FILE,
+          source: exportPlanScript.source,
+          requiredFragments: ['runApiExportPlanCli']
+        })),
+    ...(exportPlanCliSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: EXPORT_PLAN_CLI_FILE,
+          source: exportPlanCliSource.source,
+          requiredFragments: [
+            'runApiExportPlanCli',
+            '--json',
+            '--root',
+            'buildApiExportPlan'
+          ]
+        })),
+    ...(exportPlanSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: EXPORT_PLAN_SOURCE_FILE,
+          source: exportPlanSource.source,
+          requiredFragments: [
+            'buildApiExportPlan',
+            'writesArtifacts',
+            'publishesSchemas',
+            'openapi',
+            'sdk_generation_input',
+            'webhook_schema',
+            'docs_contract',
+            'API_EXPORT_PLAN_ROUTE_METADATA_DRIFT',
+            'API_EXPORT_PLAN_ERROR_METADATA_DRIFT',
+            'API_EXPORT_PLAN_FORBIDDEN_VALUE_MISSING'
+          ]
+        })),
+    ...(exportPlanTestSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: EXPORT_PLAN_TEST_FILE,
+          source: exportPlanTestSource.source,
+          requiredFragments: [
+            'api export plan',
+            'builds a dry-run plan without writing generated artifacts',
+            'fails when SDK input no longer mirrors route metadata',
+            'fails when SDK input drops traceable error metadata'
           ]
         }))
   ];

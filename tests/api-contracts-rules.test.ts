@@ -352,6 +352,9 @@ sdk_generation_input:
         'src/api-contracts/validator.ts': `
 export function validateApiContracts(): void {}
 `,
+        'src/api-export-plan/plan.ts': `
+export function planPlaceholder(): void {}
+`,
         'tests/api-contracts.test.ts': `
 import { test } from 'bun:test';
 test('api placeholder', () => {});
@@ -376,6 +379,13 @@ test('api placeholder', () => {});
           file: 'package.json',
           path: 'scripts.contracts:check',
           message: 'API contracts package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.export:plan',
+          message: 'API contracts package must declare `export:plan` script.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-API-CONTRACTS-001',
@@ -408,6 +418,14 @@ test('api placeholder', () => {});
           path: 'source',
           message:
             'API contracts checker source must include `fails when SDK generation input drops a language target`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'src/api-export-plan/plan.ts',
+          path: 'source',
+          message:
+            'API contracts checker source must include `buildApiExportPlan`.'
         });
       }
     );
@@ -593,7 +611,8 @@ function createValidApiCheckerFiles(): Record<string, string> {
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
     "test": "bun test",
-    "contracts:check": "bun scripts/check-api-contracts.ts"
+    "contracts:check": "bun scripts/check-api-contracts.ts",
+    "export:plan": "bun scripts/plan-api-exports.ts"
   }
 }
 `,
@@ -612,6 +631,11 @@ function createValidApiCheckerFiles(): Record<string, string> {
     'scripts/check-api-contracts.ts': `
 import { runApiContractCheckCli } from '../src/api-contracts/cli';
 const exitCode = await runApiContractCheckCli(process.argv.slice(2));
+process.exit(exitCode);
+`,
+    'scripts/plan-api-exports.ts': `
+import { runApiExportPlanCli } from '../src/api-export-plan/cli';
+const exitCode = await runApiExportPlanCli(process.argv.slice(2));
 process.exit(exitCode);
 `,
     'src/api-contracts/cli.ts': `
@@ -685,6 +709,35 @@ const cases = [
   'fails when SDK generation input drops route idempotency metadata',
   'fails when SDK generation input owns generated SDK source',
   'fails when SDK generation input can carry authorization headers'
+];
+export { cases };
+`,
+    'src/api-export-plan/cli.ts': `
+import { buildApiExportPlan } from './plan';
+export async function runApiExportPlanCli(argv: readonly string[]): Promise<number> {
+  return argv.includes('--json') || argv.includes('--root') || buildApiExportPlan({ root: '.' }) ? 0 : 1;
+}
+`,
+    'src/api-export-plan/plan.ts': `
+export function buildApiExportPlan(_input?: unknown): unknown {
+  return {
+    writesArtifacts: false,
+    publishesSchemas: false,
+    outputs: ['openapi', 'sdk_generation_input', 'webhook_schema', 'docs_contract'],
+    diagnostics: [
+      'API_EXPORT_PLAN_ROUTE_METADATA_DRIFT',
+      'API_EXPORT_PLAN_ERROR_METADATA_DRIFT',
+      'API_EXPORT_PLAN_FORBIDDEN_VALUE_MISSING'
+    ]
+  };
+}
+`,
+    'tests/api-export-plan.test.ts': `
+const cases = [
+  'api export plan',
+  'builds a dry-run plan without writing generated artifacts',
+  'fails when SDK input no longer mirrors route metadata',
+  'fails when SDK input drops traceable error metadata'
 ];
 export { cases };
 `

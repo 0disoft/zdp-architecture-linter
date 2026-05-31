@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.9
+
+- `ZDP-API-CONTRACTS-001`이 `zdp-api-contracts`의 API export dry-run plan skeleton과 `export:plan` script까지 검사하도록 강화했다.
+- OpenAPI, SDK input, docs contract, webhook schema 계획이 권한, 감사, 멱등성, `request_id`, `trace_id` metadata를 같이 유지하지 못하면 실제 생성기 구현 전부터 실패하도록 했다.
+
 ## 0.35.8
 
 - `ZDP-LIBS-001`이 `zdp-libs-ts`의 API source input drift 검증 표면까지 검사하도록 강화했다.
