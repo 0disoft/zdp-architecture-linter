@@ -49,6 +49,14 @@ describe('libs repository rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-LIBS-001',
         severity: 'error',
+        file: 'contracts/api-contract-source.yaml',
+        path: 'repository.root',
+        message:
+          'Libs repository must include `contracts/api-contract-source.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-LIBS-001',
+        severity: 'error',
         file: 'contracts/schema-contract.yaml',
         path: 'repository.root',
         message: 'Libs repository must include `contracts/schema-contract.yaml`.'
@@ -121,6 +129,76 @@ packages:
           path: 'packages[].must_not_own',
           message:
             'Libs contract `contracts/package-boundaries.yaml` must include `secret values` in `packages[].must_not_own`.'
+        });
+      }
+    );
+  });
+
+  test('fails when API contract source handoff drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidLibsContractFiles(),
+        'contracts/api-contract-source.yaml': `
+api_contract_source:
+  status: live
+  source_repo: zdp-libs-ts
+  source_contracts:
+    - contracts/route-contract.yaml
+  consumed_by_packages:
+    - "@zdp/schema"
+  required_handoff_metadata:
+    - schema_id
+  must_not_own:
+    - product domain models
+  forbidden_values:
+    - raw_provider_error
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryLibsContract({
+          repositoryRoot,
+          repositoryServiceContract: createLibsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'contracts/api-contract-source.yaml',
+          path: 'api_contract_source.status',
+          message:
+            'Libs API contract source handoff must stay skeleton until real package exports exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'contracts/api-contract-source.yaml',
+          path: 'api_contract_source.source_repo',
+          message:
+            'Libs API contract source handoff must consume `zdp-api-contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'contracts/api-contract-source.yaml',
+          path: 'api_contract_source.source_contracts',
+          message:
+            'Libs contract `contracts/api-contract-source.yaml` must include `contracts/sdk-generation-input.yaml` in `api_contract_source.source_contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'contracts/api-contract-source.yaml',
+          path: 'api_contract_source.required_handoff_metadata',
+          message:
+            'Libs contract `contracts/api-contract-source.yaml` must include `idempotency` in `api_contract_source.required_handoff_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'contracts/api-contract-source.yaml',
+          path: 'api_contract_source.forbidden_values',
+          message:
+            'Libs contract `contracts/api-contract-source.yaml` must include `authorization_header` in `api_contract_source.forbidden_values`.'
         });
       }
     );
@@ -332,7 +410,7 @@ test('libs placeholder', () => {});
           file: 'src/libs-contracts/validator.ts',
           path: 'source',
           message:
-            'Libs checker source must include `REQUIRED_PACKAGE_NAMES`.'
+            'Libs checker source must include `REQUIRED_API_SOURCE_CONTRACTS`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
@@ -340,7 +418,7 @@ test('libs placeholder', () => {});
           file: 'tests/libs-contracts.test.ts',
           path: 'source',
           message:
-            'Libs checker source must include `fails when env contracts allow provider tokens as values`.'
+            'Libs checker source must include `fails when API contract source handoff drifts`.'
         });
       }
     );
@@ -441,6 +519,42 @@ packages:
       - message key and argument contracts
     must_not_own:
       - translation runtime
+`,
+    'contracts/api-contract-source.yaml': `
+api_contract_source:
+  status: skeleton
+  source_repo: zdp-api-contracts
+  source_contracts:
+    - contracts/route-contract.yaml
+    - contracts/error-envelope.yaml
+    - contracts/webhook-contract.yaml
+    - contracts/sdk-generation-input.yaml
+  consumed_by_packages:
+    - "@zdp/schema"
+    - "@zdp/event-contracts"
+    - "@zdp/error"
+  required_handoff_metadata:
+    - schema_id
+    - operation_id
+    - error_code
+    - event_type
+    - request_id
+    - trace_id
+    - idempotency
+    - sdk_generation_targets
+  must_not_own:
+    - API contract source
+    - generated SDK source truth
+    - product domain models
+    - runtime validator competitor
+    - final authorization decisions
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - screen_component_payload
 `,
     'contracts/schema-contract.yaml': `
 schema_contract:
@@ -568,6 +682,7 @@ export async function runLibsContractCheckCli(): Promise<number> {
     'src/libs-contracts/parser.ts': `
 const files = [
   'contracts/package-boundaries.yaml',
+  'contracts/api-contract-source.yaml',
   'contracts/schema-contract.yaml',
   'contracts/env-contract.yaml',
   'contracts/event-contract.yaml',
@@ -583,24 +698,36 @@ export interface LibsContractDiagnostic {
 `,
     'src/libs-contracts/validator.ts': `
 const REQUIRED_PACKAGE_NAMES = [];
+const REQUIRED_API_SOURCE_CONTRACTS = [];
+const REQUIRED_API_SOURCE_HANDOFF_METADATA = [];
 const REQUIRED_SCHEMA_METADATA = [];
 const REQUIRED_ENV_METADATA = [];
 const REQUIRED_EVENT_TRACE_FIELDS = [];
 const REQUIRED_ERROR_FIELDS = [];
 const REQUIRED_I18N_METADATA = [];
 const LIBS_PACKAGE_MISSING = 'LIBS_PACKAGE_MISSING';
+const LIBS_API_SOURCE_REPO_INVALID = 'LIBS_API_SOURCE_REPO_INVALID';
+const LIBS_API_SOURCE_CONTRACT_MISSING = 'LIBS_API_SOURCE_CONTRACT_MISSING';
+const LIBS_API_SOURCE_METADATA_MISSING = 'LIBS_API_SOURCE_METADATA_MISSING';
+const LIBS_API_SOURCE_FORBIDDEN_VALUE_MISSING = 'LIBS_API_SOURCE_FORBIDDEN_VALUE_MISSING';
 const LIBS_ENV_FORBIDDEN_VALUE_MISSING = 'LIBS_ENV_FORBIDDEN_VALUE_MISSING';
 const LIBS_EVENT_TRACE_FIELD_MISSING = 'LIBS_EVENT_TRACE_FIELD_MISSING';
 const LIBS_ERROR_FORBIDDEN_FIELD_MISSING = 'LIBS_ERROR_FORBIDDEN_FIELD_MISSING';
 const LIBS_I18N_FORBIDDEN_OWNERSHIP_MISSING = 'LIBS_I18N_FORBIDDEN_OWNERSHIP_MISSING';
 export {
   REQUIRED_PACKAGE_NAMES,
+  REQUIRED_API_SOURCE_CONTRACTS,
+  REQUIRED_API_SOURCE_HANDOFF_METADATA,
   REQUIRED_SCHEMA_METADATA,
   REQUIRED_ENV_METADATA,
   REQUIRED_EVENT_TRACE_FIELDS,
   REQUIRED_ERROR_FIELDS,
   REQUIRED_I18N_METADATA,
   LIBS_PACKAGE_MISSING,
+  LIBS_API_SOURCE_REPO_INVALID,
+  LIBS_API_SOURCE_CONTRACT_MISSING,
+  LIBS_API_SOURCE_METADATA_MISSING,
+  LIBS_API_SOURCE_FORBIDDEN_VALUE_MISSING,
   LIBS_ENV_FORBIDDEN_VALUE_MISSING,
   LIBS_EVENT_TRACE_FIELD_MISSING,
   LIBS_ERROR_FORBIDDEN_FIELD_MISSING,
@@ -610,6 +737,7 @@ export {
     'tests/libs-contracts.test.ts': `
 const cases = [
   'fails when a required package boundary disappears',
+  'fails when API contract source handoff drifts',
   'fails when schema contracts stop targeting Rust generation',
   'fails when env contracts allow provider tokens as values',
   'fails when event contracts drop trace fields',

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.3
+
+- `ZDP-LIBS-001`이 `zdp-libs-ts`의 API contract source handoff 계약까지 검사하도록 강화했다.
+- `zdp-api-contracts` source repo/contract, handoff metadata, `idempotency`, `trace_id`, authorization header와 raw customer payload 금지값이 사라지면 실패하도록 했다.
+
 ## 0.35.2
 
 - `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 SDK generation source handoff 계약까지 검사하도록 강화했다.

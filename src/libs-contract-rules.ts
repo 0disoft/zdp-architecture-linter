@@ -7,6 +7,7 @@ const LIBS_REPOSITORY_NAME = 'zdp-libs-ts';
 const LIBS_CONTRACT_RULE_ID = 'ZDP-LIBS-001';
 
 const PACKAGE_BOUNDARIES_FILE = 'contracts/package-boundaries.yaml';
+const API_CONTRACT_SOURCE_FILE = 'contracts/api-contract-source.yaml';
 const SCHEMA_CONTRACT_FILE = 'contracts/schema-contract.yaml';
 const ENV_CONTRACT_FILE = 'contracts/env-contract.yaml';
 const EVENT_CONTRACT_FILE = 'contracts/event-contract.yaml';
@@ -49,6 +50,49 @@ const REQUIRED_PACKAGE_FORBIDDEN_BOUNDARIES = [
   'queue provider implementation',
   'provider raw errors',
   'translation runtime'
+] as const;
+
+const REQUIRED_API_CONTRACT_SOURCE_REPO = 'zdp-api-contracts';
+
+const REQUIRED_API_SOURCE_CONTRACTS = [
+  'contracts/route-contract.yaml',
+  'contracts/error-envelope.yaml',
+  'contracts/webhook-contract.yaml',
+  'contracts/sdk-generation-input.yaml'
+] as const;
+
+const REQUIRED_API_SOURCE_PACKAGES = [
+  '@zdp/schema',
+  '@zdp/event-contracts',
+  '@zdp/error'
+] as const;
+
+const REQUIRED_API_SOURCE_HANDOFF_METADATA = [
+  'schema_id',
+  'operation_id',
+  'error_code',
+  'event_type',
+  'request_id',
+  'trace_id',
+  'idempotency',
+  'sdk_generation_targets'
+] as const;
+
+const REQUIRED_API_SOURCE_FORBIDDEN_OWNERSHIP = [
+  'API contract source',
+  'generated SDK source truth',
+  'product domain models',
+  'runtime validator competitor',
+  'final authorization decisions'
+] as const;
+
+const REQUIRED_API_SOURCE_FORBIDDEN_VALUES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'screen_component_payload'
 ] as const;
 
 const REQUIRED_SCHEMA_METADATA = [
@@ -153,6 +197,7 @@ export async function validateRepositoryLibsContract(input: {
 
   const [
     packageBoundaries,
+    apiContractSource,
     schemaContract,
     envContract,
     eventContract,
@@ -161,6 +206,7 @@ export async function validateRepositoryLibsContract(input: {
     packageJson
   ] = await Promise.all([
     readRequiredYamlContract(input.repositoryRoot, PACKAGE_BOUNDARIES_FILE),
+    readRequiredYamlContract(input.repositoryRoot, API_CONTRACT_SOURCE_FILE),
     readRequiredYamlContract(input.repositoryRoot, SCHEMA_CONTRACT_FILE),
     readRequiredYamlContract(input.repositoryRoot, ENV_CONTRACT_FILE),
     readRequiredYamlContract(input.repositoryRoot, EVENT_CONTRACT_FILE),
@@ -171,6 +217,7 @@ export async function validateRepositoryLibsContract(input: {
 
   return [
     ...packageBoundaries.diagnostics,
+    ...apiContractSource.diagnostics,
     ...schemaContract.diagnostics,
     ...envContract.diagnostics,
     ...eventContract.diagnostics,
@@ -180,6 +227,9 @@ export async function validateRepositoryLibsContract(input: {
     ...(packageBoundaries.value === null
       ? []
       : validatePackageBoundariesContract(packageBoundaries.value)),
+    ...(apiContractSource.value === null
+      ? []
+      : validateApiContractSourceContract(apiContractSource.value)),
     ...(schemaContract.value === null
       ? []
       : validateSchemaContract(schemaContract.value)),
@@ -339,6 +389,62 @@ function validatePackageBoundariesContract(value: unknown): readonly Diagnostic[
       field: 'packages',
       nestedField: 'must_not_own',
       requiredEntries: REQUIRED_PACKAGE_FORBIDDEN_BOUNDARIES
+    })
+  ];
+}
+
+function validateApiContractSourceContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.status',
+      expected: 'skeleton',
+      message:
+        'Libs API contract source handoff must stay skeleton until real package exports exist.'
+    }),
+    ...validateExactValue({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.source_repo',
+      expected: REQUIRED_API_CONTRACT_SOURCE_REPO,
+      message:
+        'Libs API contract source handoff must consume `zdp-api-contracts`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.source_contracts',
+      field: 'api_contract_source.source_contracts',
+      requiredEntries: REQUIRED_API_SOURCE_CONTRACTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.consumed_by_packages',
+      field: 'api_contract_source.consumed_by_packages',
+      requiredEntries: REQUIRED_API_SOURCE_PACKAGES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.required_handoff_metadata',
+      field: 'api_contract_source.required_handoff_metadata',
+      requiredEntries: REQUIRED_API_SOURCE_HANDOFF_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.must_not_own',
+      field: 'api_contract_source.must_not_own',
+      requiredEntries: REQUIRED_API_SOURCE_FORBIDDEN_OWNERSHIP
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: API_CONTRACT_SOURCE_FILE,
+      path: 'api_contract_source.forbidden_values',
+      field: 'api_contract_source.forbidden_values',
+      requiredEntries: REQUIRED_API_SOURCE_FORBIDDEN_VALUES
     })
   ];
 }
@@ -547,6 +653,7 @@ async function validateCheckerSurface(
           source: parserSource.source,
           requiredFragments: [
             PACKAGE_BOUNDARIES_FILE,
+            API_CONTRACT_SOURCE_FILE,
             SCHEMA_CONTRACT_FILE,
             ENV_CONTRACT_FILE,
             EVENT_CONTRACT_FILE,
@@ -561,12 +668,18 @@ async function validateCheckerSurface(
           source: validatorSource.source,
           requiredFragments: [
             'REQUIRED_PACKAGE_NAMES',
+            'REQUIRED_API_SOURCE_CONTRACTS',
+            'REQUIRED_API_SOURCE_HANDOFF_METADATA',
             'REQUIRED_SCHEMA_METADATA',
             'REQUIRED_ENV_METADATA',
             'REQUIRED_EVENT_TRACE_FIELDS',
             'REQUIRED_ERROR_FIELDS',
             'REQUIRED_I18N_METADATA',
             'LIBS_PACKAGE_MISSING',
+            'LIBS_API_SOURCE_REPO_INVALID',
+            'LIBS_API_SOURCE_CONTRACT_MISSING',
+            'LIBS_API_SOURCE_METADATA_MISSING',
+            'LIBS_API_SOURCE_FORBIDDEN_VALUE_MISSING',
             'LIBS_ENV_FORBIDDEN_VALUE_MISSING',
             'LIBS_EVENT_TRACE_FIELD_MISSING',
             'LIBS_ERROR_FORBIDDEN_FIELD_MISSING',
@@ -580,6 +693,7 @@ async function validateCheckerSurface(
           source: testSource.source,
           requiredFragments: [
             'fails when a required package boundary disappears',
+            'fails when API contract source handoff drifts',
             'fails when schema contracts stop targeting Rust generation',
             'fails when env contracts allow provider tokens as values',
             'fails when event contracts drop trace fields',
