@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.34.0
+
+- `ZDP-LIBS-001`을 추가해 `zdp-libs-ts`의 package/schema/env/event/error/i18n 계약과 checker skeleton을 repository validate gate로 검사한다.
+- product domain model, secret/provider token, raw provider error, customer payload, translation runtime 경계가 공통 TypeScript 계약 패키지로 새면 실패하도록 했다.
+
 ## 0.33.0
 
 - `ZDP-API-CONTRACTS-001`을 추가해 `zdp-api-contracts`의 route/error/webhook 계약과 checker skeleton을 repository validate gate로 검사한다.
