@@ -124,6 +124,14 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/commands/payment_webhook.rs',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `src/commands/payment_webhook.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -842,6 +850,14 @@ pub fn admit_ledger_append_command() {}
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-MONEY-PLATFORM-001',
           severity: 'error',
+          file: 'src/commands/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod payment_webhook;`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
           file: 'src/commands/ledger.rs',
           path: 'source',
           message:
@@ -870,6 +886,108 @@ pub fn admit_ledger_append_command() {}
           path: 'source',
           message:
             'Money platform runtime source must include `rejects_forbidden_payload_reference_values_before_ledger_append`.'
+        });
+      }
+    );
+  });
+
+  test('fails when money payment webhook handoff rules drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'src/commands/mod.rs': `
+pub mod ledger;
+
+pub enum MoneyCommandType {
+    PaymentsRecordProviderWebhook,
+    LedgerAppendEntry,
+    LedgerCreateCreditHold,
+    LedgerCaptureCreditHold,
+    LedgerReleaseCreditHold,
+}
+
+pub struct PayloadRef;
+
+pub struct MoneyCommandEnvelope {
+    pub command_id: String,
+    pub command_type: MoneyCommandType,
+    pub schema_version: u16,
+    pub actor_id: String,
+    pub tenant_id: String,
+    pub request_id: String,
+    pub trace_id: String,
+    pub idempotency_key: String,
+    pub reason: String,
+    pub issued_at: String,
+    pub source: String,
+    pub payload_ref: PayloadRef,
+}
+
+const RAW_PAYMENT_PAYLOAD_SENTINEL: &str = "raw_payment_payload";
+`,
+        'src/commands/payment_webhook.rs': `
+pub struct PaymentWebhookHandoffInput;
+
+pub enum PaymentWebhookHandoffError {
+    SignatureNotVerified,
+}
+
+pub fn build_payment_webhook_command_handoff() {}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod payment_webhook;`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `MoneyCommandType::PaymentsRecordProviderWebhook`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `IdempotencyKeyMustUseProviderEventId`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `QueueFieldMismatch`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `rejects_raw_payment_payload_references_before_command_handoff`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `webhook_handoff_does_not_create_ledger_append_command`.'
         });
       }
     );
@@ -1419,6 +1537,7 @@ pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
 `,
     'src/commands/mod.rs': `
 pub mod ledger;
+pub mod payment_webhook;
 
 pub enum MoneyCommandType {
     PaymentsRecordProviderWebhook,
@@ -1500,6 +1619,53 @@ fn rejects_duplicate_idempotency_key_with_different_payload_hash() {}
 fn rejects_unsupported_command_type_before_ledger_append() {}
 fn rejects_draft_metadata_that_does_not_match_command_envelope() {}
 fn rejects_forbidden_payload_reference_values_before_ledger_append() {}
+`,
+    'src/commands/payment_webhook.rs': `
+const WEBHOOK_QUEUE_JOB_TYPE: &str = "money.payment_webhook.process";
+const WEBHOOK_COMMAND_SOURCE: &str = "payment-webhook-queue";
+const FORBIDDEN_WEBHOOK_REF_FRAGMENTS: &[&str] = &[
+    "authorization",
+    "raw_payment",
+    "secret",
+    "token",
+];
+
+pub struct PaymentWebhookHandoffInput;
+pub struct PaymentWebhookCommandContext;
+pub struct WebhookQueueEnvelope;
+pub struct PaymentWebhookCommandHandoff;
+
+pub enum PaymentWebhookHandoffError {
+    ForbiddenPayloadRefValue,
+    IdempotencyKeyMustUseProviderEventId,
+    QueueFieldMismatch,
+    SignatureNotVerified,
+    UnsupportedQueueJobType,
+    UnsupportedSchemaVersion,
+}
+
+pub fn build_payment_webhook_command_handoff() {
+    validate_webhook_input();
+    validate_command_context();
+    validate_queue_envelope();
+    let _ = MoneyCommandType::PaymentsRecordProviderWebhook;
+    let _ = MoneyCommandType::LedgerAppendEntry;
+}
+
+enum MoneyCommandType {
+    PaymentsRecordProviderWebhook,
+    LedgerAppendEntry,
+}
+
+fn validate_webhook_input() {}
+fn validate_command_context() {}
+fn validate_queue_envelope() {}
+fn builds_payment_webhook_command_after_signature_and_queue_handoff() {}
+fn rejects_unverified_webhook_before_money_command_creation() {}
+fn requires_provider_event_id_as_webhook_idempotency_key() {}
+fn rejects_queue_handoff_that_does_not_match_webhook_trace_context() {}
+fn rejects_raw_payment_payload_references_before_command_handoff() {}
+fn webhook_handoff_does_not_create_ledger_append_command() {}
 `,
     'src/ledger/mod.rs': `
 const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.7
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 payment webhook-to-command handoff layer까지 검사하도록 강화했다.
+- `src/commands/payment_webhook.rs`의 verified signature, provider event id idempotency, queue trace context, safe payload reference, ledger append bypass 방지 테스트 표면을 검증한다.
+
 ## 0.32.6
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 command-to-ledger admission layer까지 검사하도록 강화했다.

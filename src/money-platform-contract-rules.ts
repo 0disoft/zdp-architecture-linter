@@ -32,6 +32,7 @@ const RUNTIME_LEDGER_BOUNDARY_FILE = 'src/boundaries/ledger.rs';
 const RUNTIME_RISK_BOUNDARY_FILE = 'src/boundaries/risk.rs';
 const RUNTIME_COMMANDS_FILE = 'src/commands/mod.rs';
 const RUNTIME_COMMAND_LEDGER_FILE = 'src/commands/ledger.rs';
+const RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE = 'src/commands/payment_webhook.rs';
 const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
@@ -56,6 +57,7 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_RISK_BOUNDARY_FILE,
   RUNTIME_COMMANDS_FILE,
   RUNTIME_COMMAND_LEDGER_FILE,
+  RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE,
   RUNTIME_LEDGER_CORE_FILE
 ] as const;
 
@@ -1183,6 +1185,7 @@ async function validateRuntimeSurface(
     riskSource,
     commandsSource,
     commandLedgerSource,
+    commandPaymentWebhookSource,
     ledgerCoreSource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
@@ -1202,6 +1205,7 @@ async function validateRuntimeSurface(
     ...riskSource.diagnostics,
     ...commandsSource.diagnostics,
     ...commandLedgerSource.diagnostics,
+    ...commandPaymentWebhookSource.diagnostics,
     ...ledgerCoreSource.diagnostics,
     ...(cargoToml.source === null
       ? []
@@ -1286,6 +1290,7 @@ async function validateRuntimeSurface(
           source: commandsSource.source,
           requiredFragments: [
             'pub mod ledger;',
+            'pub mod payment_webhook;',
             'pub enum MoneyCommandType',
             'PaymentsRecordProviderWebhook',
             'LedgerAppendEntry',
@@ -1339,6 +1344,46 @@ async function validateRuntimeSurface(
             'rejects_unsupported_command_type_before_ledger_append',
             'rejects_draft_metadata_that_does_not_match_command_envelope',
             'rejects_forbidden_payload_reference_values_before_ledger_append'
+          ]
+        })),
+    ...(commandPaymentWebhookSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE,
+          source: commandPaymentWebhookSource.source,
+          requiredFragments: [
+            'const WEBHOOK_QUEUE_JOB_TYPE',
+            '"money.payment_webhook.process"',
+            'const WEBHOOK_COMMAND_SOURCE',
+            '"payment-webhook-queue"',
+            'const FORBIDDEN_WEBHOOK_REF_FRAGMENTS',
+            '"authorization"',
+            '"raw_payment"',
+            '"secret"',
+            '"token"',
+            'pub struct PaymentWebhookHandoffInput',
+            'pub struct PaymentWebhookCommandContext',
+            'pub struct WebhookQueueEnvelope',
+            'pub struct PaymentWebhookCommandHandoff',
+            'pub enum PaymentWebhookHandoffError',
+            'ForbiddenPayloadRefValue',
+            'IdempotencyKeyMustUseProviderEventId',
+            'QueueFieldMismatch',
+            'SignatureNotVerified',
+            'UnsupportedQueueJobType',
+            'UnsupportedSchemaVersion',
+            'pub fn build_payment_webhook_command_handoff',
+            'validate_webhook_input',
+            'validate_command_context',
+            'validate_queue_envelope',
+            'MoneyCommandType::PaymentsRecordProviderWebhook',
+            'MoneyCommandType::LedgerAppendEntry',
+            'builds_payment_webhook_command_after_signature_and_queue_handoff',
+            'rejects_unverified_webhook_before_money_command_creation',
+            'requires_provider_event_id_as_webhook_idempotency_key',
+            'rejects_queue_handoff_that_does_not_match_webhook_trace_context',
+            'rejects_raw_payment_payload_references_before_command_handoff',
+            'webhook_handoff_does_not_create_ledger_append_command'
           ]
         })),
     ...(ledgerCoreSource.source === null
