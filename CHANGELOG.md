@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.4
+
+- `ZDP-PRIVACY-001`이 `zdp-privacy-access-broker`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.
+- `/healthz`, `/readyz`, `ZDP_PRIVACY_BROKER_BIND_ADDR`, boundary marker, raw source/credential/final authorization 금지 표면을 검증한다.
+
 ## 0.37.3
 
 - `ZDP-PRIVACY-001`이 `zdp-privacy-access-broker`의 repo-local checker skeleton까지 검사하도록 강화했다.

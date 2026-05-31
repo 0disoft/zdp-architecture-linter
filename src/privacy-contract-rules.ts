@@ -19,6 +19,15 @@ const CHECKER_PARSER_FILE = 'src/privacy-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/privacy-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/privacy-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/privacy-contracts.test.ts';
+const CARGO_FILE = 'Cargo.toml';
+const CARGO_LOCK_FILE = 'Cargo.lock';
+const RUNTIME_LIB_FILE = 'src/lib.rs';
+const RUNTIME_MAIN_FILE = 'src/main.rs';
+const RUNTIME_BOUNDARY_MOD_FILE = 'src/boundaries/mod.rs';
+const RUNTIME_ACCESS_POLICY_FILE = 'src/boundaries/access_policy.rs';
+const RUNTIME_CAPABILITY_GRANTS_FILE = 'src/boundaries/capability_grants.rs';
+const RUNTIME_DATA_MINIMIZATION_FILE = 'src/boundaries/data_minimization.rs';
+const RUNTIME_AUDIT_FILE = 'src/boundaries/audit.rs';
 
 const REQUIRED_PRIVACY_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -32,6 +41,18 @@ const REQUIRED_PRIVACY_CHECKER_FILES = [
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+
+const REQUIRED_PRIVACY_RUNTIME_FILES = [
+  CARGO_FILE,
+  CARGO_LOCK_FILE,
+  RUNTIME_LIB_FILE,
+  RUNTIME_MAIN_FILE,
+  RUNTIME_BOUNDARY_MOD_FILE,
+  RUNTIME_ACCESS_POLICY_FILE,
+  RUNTIME_CAPABILITY_GRANTS_FILE,
+  RUNTIME_DATA_MINIMIZATION_FILE,
+  RUNTIME_AUDIT_FILE
+] as const;
 
 const REQUIRED_POLICY_CONTEXT = [
   'actor_id',
@@ -205,7 +226,8 @@ export async function validateRepositoryPrivacyContract(input: {
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
-    ...(await validateCheckerSurface(input.repositoryRoot))
+    ...(await validateCheckerSurface(input.repositoryRoot)),
+    ...(await validateRuntimeSurface(input.repositoryRoot))
   ];
 }
 
@@ -807,6 +829,171 @@ async function validateCheckerSurface(
             'fails when capability can skip policy recheck',
             'fails when data minimization can retain raw source data',
             'fails when growth or analytics can receive subject-level raw streams'
+          ]
+        }))
+  ];
+}
+
+async function validateRuntimeSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    cargo,
+    cargoLock,
+    libSource,
+    mainSource,
+    boundaryModSource,
+    accessPolicySource,
+    capabilityGrantsSource,
+    dataMinimizationSource,
+    auditSource
+  ] = await Promise.all(
+    REQUIRED_PRIVACY_RUNTIME_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...cargo.diagnostics,
+    ...cargoLock.diagnostics,
+    ...libSource.diagnostics,
+    ...mainSource.diagnostics,
+    ...boundaryModSource.diagnostics,
+    ...accessPolicySource.diagnostics,
+    ...capabilityGrantsSource.diagnostics,
+    ...dataMinimizationSource.diagnostics,
+    ...auditSource.diagnostics,
+    ...(cargo.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CARGO_FILE,
+          source: cargo.source,
+          requiredFragments: ['axum', 'tokio', 'serde', 'serde_json', 'tower']
+        })),
+    ...(libSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_LIB_FILE,
+          source: libSource.source,
+          requiredFragments: [
+            'pub const SERVICE_ID',
+            '"privacy-broker"',
+            'pub const DEFAULT_BIND_ADDR',
+            '"127.0.0.1:3004"',
+            'ZDP_PRIVACY_BROKER_BIND_ADDR',
+            '.route("/healthz", get(healthz))',
+            '.route("/readyz", get(readyz))',
+            'ready: true',
+            'checks:',
+            '"contracts"',
+            'healthz_returns_privacy_broker_identity',
+            'readyz_reports_contract_readiness_only',
+            'privacy_boundaries_do_not_own_source_truth_or_product_authorization',
+            'owns_final_product_authorization',
+            'can_return_raw_source_payload',
+            'can_return_provider_credentials',
+            'MAX_CAPABILITY_TTL_SECONDS'
+          ]
+        })),
+    ...(mainSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_MAIN_FILE,
+          source: mainSource.source,
+          requiredFragments: ['bind_addr_from_env', 'serve']
+        })),
+    ...(boundaryModSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_BOUNDARY_MOD_FILE,
+          source: boundaryModSource.source,
+          requiredFragments: [
+            'access_policy',
+            'capability_grants',
+            'data_minimization',
+            'audit',
+            'owns_final_product_authorization',
+            'can_return_raw_source_payload',
+            'can_return_provider_credentials'
+          ]
+        })),
+    ...(accessPolicySource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_ACCESS_POLICY_FILE,
+          source: accessPolicySource.source,
+          requiredFragments: [
+            'id: "access_policy"',
+            'owns_final_product_authorization: false',
+            'can_return_raw_source_payload: false',
+            'can_return_provider_credentials: false',
+            'REQUIRED_ACCESS_CONTEXT',
+            'actor_id',
+            'tenant_id',
+            'subject_id',
+            'purpose',
+            'resource_scope',
+            'DEFAULT_DECISION',
+            '"deny"'
+          ]
+        })),
+    ...(capabilityGrantsSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_CAPABILITY_GRANTS_FILE,
+          source: capabilityGrantsSource.source,
+          requiredFragments: [
+            'MAX_CAPABILITY_TTL_SECONDS',
+            '= 300',
+            'id: "capability_grants"',
+            'owns_final_product_authorization: false',
+            'can_return_raw_source_payload: false',
+            'can_return_provider_credentials: false',
+            'REQUIRED_GRANT_PROPERTIES',
+            'non_delegable',
+            'revocable',
+            'policy_rechecked',
+            'consent_rechecked'
+          ]
+        })),
+    ...(dataMinimizationSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_DATA_MINIMIZATION_FILE,
+          source: dataMinimizationSource.source,
+          requiredFragments: [
+            'id: "data_minimization"',
+            'owns_final_product_authorization: false',
+            'can_return_raw_source_payload: false',
+            'can_return_provider_credentials: false',
+            'ALLOWED_OUTPUT_SHAPES',
+            'masked_summary',
+            'limited_metadata',
+            'aggregate_count',
+            'FORBIDDEN_OUTPUT_SHAPES',
+            'raw_payload',
+            'full_mailbox_export',
+            'subject_level_growth_stream'
+          ]
+        })),
+    ...(auditSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_AUDIT_FILE,
+          source: auditSource.source,
+          requiredFragments: [
+            'id: "audit"',
+            'owns_final_product_authorization: false',
+            'can_return_raw_source_payload: false',
+            'can_return_provider_credentials: false',
+            'REQUIRED_EVENTS',
+            'privacy.capability.issued',
+            'privacy.access.denied',
+            'privacy.masking.applied',
+            'FORBIDDEN_AUDIT_VALUES',
+            'provider_refresh_token',
+            'authorization_header',
+            'cookie'
           ]
         }))
   ];
