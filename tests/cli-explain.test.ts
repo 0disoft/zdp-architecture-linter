@@ -28,12 +28,12 @@ describe('explain CLI', () => {
         }),
         'catalogs/repositories.yaml': `
 repositories:
-  - name: zdp-connectors-platform
+  - name: zdp-test-edge
     status: active
     repo_stage: deploy_unit
     kind: deploy_unit
-    area: connectors
-    purpose: Connector platform.
+    area: platform
+    purpose: Test edge worker.
     owner: 0disoft
     risk_level: medium
   - name: zdp-privacy-access-broker
@@ -47,8 +47,8 @@ repositories:
 `,
         'catalogs/services.yaml': `
 services:
-  - id: connectors-telegram-bot
-    repo: zdp-connectors-platform
+  - id: test-edge-worker
+    repo: zdp-test-edge
 `,
         'catalogs/datastores.yaml': `
 datastores:
@@ -71,8 +71,8 @@ datastores:
         'repo/README.md': '# Repository\n',
         'repo/service.yaml': `
 service:
-  id: connectors-telegram-bot
-  repo: zdp-connectors-platform
+  id: test-edge-worker
+  repo: zdp-test-edge
 runtime:
   edge: cloudflare-workers
 data:
@@ -104,7 +104,7 @@ data:
             relatedEdges: [
               {
                 type: 'service-accesses-datastore',
-                from: { kind: 'service', id: 'connectors-telegram-bot' },
+                from: { kind: 'service', id: 'test-edge-worker' },
                 to: { kind: 'datastore', id: 'privacy_credential_vault' },
                 file: 'service.yaml',
                 path: 'data.datastores[0]',
@@ -115,7 +115,7 @@ data:
               expect.objectContaining({
                 kind: 'service',
                 node: expect.objectContaining({
-                  id: 'connectors-telegram-bot',
+                  id: 'test-edge-worker',
                   file: 'service.yaml'
                 })
               }),

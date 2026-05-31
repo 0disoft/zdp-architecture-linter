@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.0
+
+- `ZDP-CONNECTORS-001`을 추가해 `zdp-connectors-platform`의 provider registry, sync-state, webhook replay, provider boundary 계약을 repository validate gate로 검사한다.
+- Provider 연동이 credential vault capability, privacy broker scope, replay idempotency, request/trace 전파 없이 열리거나 connector가 raw token/source payload와 final authorization, entitlement, ledger, privacy policy 판단을 소유하는 구조를 차단한다.
+
 ## 0.36.0
 
 - `ZDP-CREDENTIAL-001`을 추가해 `zdp-privacy-credential-vault`의 credential boundary, capability issuance, access audit, storage boundary 계약을 repository validate gate로 검사한다.
