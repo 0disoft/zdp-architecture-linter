@@ -110,6 +110,13 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/ledger/mod.rs',
+        path: 'repository.root',
+        message: 'Money platform repository must include `src/ledger/mod.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -694,6 +701,93 @@ pub struct MoneyCommandEnvelope {
       }
     );
   });
+
+  test('fails when money ledger core rules drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'src/lib.rs': `
+use axum::{Json, Router, routing::get};
+
+pub mod boundaries;
+pub mod commands;
+
+pub const SERVICE_ID: &str = "money-api";
+pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";
+
+pub fn app() -> Router {
+    Router::new()
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
+}
+
+async fn healthz() -> Json<&'static str> {
+    Json(SERVICE_ID)
+}
+
+async fn readyz() -> Json<&'static [&'static str]> {
+    Json(&["contracts"])
+}
+
+fn money_boundaries_keep_ledger_as_credit_balance_truth_owner() {}
+fn command_envelope_requires_idempotency_audit_and_trace_fields() {}
+`,
+        'src/ledger/mod.rs': `
+pub struct MoneyAmount;
+pub struct LedgerEntry;
+
+pub fn append_ledger_transaction() {}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/lib.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub mod ledger;`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/ledger/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `pub fn decide_idempotency`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/ledger/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `LedgerError::ImbalancedTransaction`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/ledger/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `DerivedFromLedgerEntries`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/ledger/mod.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `rejects_sensitive_values_before_they_enter_ledger_rows`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -1128,6 +1222,7 @@ use axum::{Json, Router, routing::get};
 
 pub mod boundaries;
 pub mod commands;
+pub mod ledger;
 
 pub const SERVICE_ID: &str = "money-api";
 pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";
@@ -1263,6 +1358,59 @@ pub struct MoneyCommandEnvelope {
 }
 
 const RAW_PAYMENT_PAYLOAD_SENTINEL: &str = "raw_payment_payload";
+`,
+    'src/ledger/mod.rs': `
+const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[
+    "authorization",
+    "raw_payment",
+    "secret",
+    "token",
+];
+
+pub struct MoneyAmount;
+pub enum DebitCredit {
+    Debit,
+    Credit,
+}
+pub struct LedgerTransactionDraft;
+pub struct LedgerEntry {
+    pub reversal_of_ledger_entry_id: Option<String>,
+}
+pub enum IdempotencyDecision {
+    ReturnPrevious,
+    Conflict,
+}
+pub enum ProjectionSource {
+    DerivedFromLedgerEntries,
+}
+pub enum LedgerError {
+    ImbalancedTransaction,
+    MixedCurrencyTransaction,
+}
+
+pub fn append_ledger_transaction() {}
+pub fn reject_ledger_error() -> LedgerError {
+    LedgerError::ImbalancedTransaction
+}
+pub fn reject_mixed_currency_error() -> LedgerError {
+    LedgerError::MixedCurrencyTransaction
+}
+pub fn decide_idempotency() -> IdempotencyDecision {
+    IdempotencyDecision::ReturnPrevious
+}
+pub fn reject_idempotency_conflict() -> IdempotencyDecision {
+    IdempotencyDecision::Conflict
+}
+pub fn reverse_transaction() {}
+pub fn derive_account_projection() {}
+fn reject_forbidden_value() {}
+
+fn accepts_balanced_append_only_double_entry_transaction() {}
+fn rejects_imbalanced_or_mixed_currency_transactions() {}
+fn keeps_idempotency_scoped_to_tenant_command_and_key() {}
+fn creates_refund_or_correction_as_reversal_entries_not_mutation() {}
+fn derives_projection_from_entries_without_becoming_truth() {}
+fn rejects_sensitive_values_before_they_enter_ledger_rows() {}
 `
   };
 }

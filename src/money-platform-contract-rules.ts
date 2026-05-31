@@ -31,6 +31,7 @@ const RUNTIME_PAYMENTS_BOUNDARY_FILE = 'src/boundaries/payments.rs';
 const RUNTIME_LEDGER_BOUNDARY_FILE = 'src/boundaries/ledger.rs';
 const RUNTIME_RISK_BOUNDARY_FILE = 'src/boundaries/risk.rs';
 const RUNTIME_COMMANDS_FILE = 'src/commands/mod.rs';
+const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -52,7 +53,8 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_PAYMENTS_BOUNDARY_FILE,
   RUNTIME_LEDGER_BOUNDARY_FILE,
   RUNTIME_RISK_BOUNDARY_FILE,
-  RUNTIME_COMMANDS_FILE
+  RUNTIME_COMMANDS_FILE,
+  RUNTIME_LEDGER_CORE_FILE
 ] as const;
 
 const REQUIRED_BOUNDARIES = ['billing', 'payments', 'ledger', 'risk'] as const;
@@ -1177,7 +1179,8 @@ async function validateRuntimeSurface(
     paymentsSource,
     ledgerSource,
     riskSource,
-    commandsSource
+    commandsSource,
+    ledgerCoreSource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -1195,6 +1198,7 @@ async function validateRuntimeSurface(
     ...ledgerSource.diagnostics,
     ...riskSource.diagnostics,
     ...commandsSource.diagnostics,
+    ...ledgerCoreSource.diagnostics,
     ...(cargoToml.source === null
       ? []
       : validateRuntimeSourceIncludes({
@@ -1215,6 +1219,7 @@ async function validateRuntimeSurface(
           requiredFragments: [
             'pub const SERVICE_ID: &str = "money-api";',
             'pub const BIND_ADDR_ENV: &str = "ZDP_MONEY_BIND_ADDR";',
+            'pub mod ledger;',
             '.route("/healthz", get(healthz))',
             '.route("/readyz", get(readyz))',
             'service: SERVICE_ID',
@@ -1292,6 +1297,42 @@ async function validateRuntimeSurface(
             'pub reason: String',
             'pub payload_ref: PayloadRef',
             '"raw_payment_payload"'
+          ]
+        })),
+    ...(ledgerCoreSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_LEDGER_CORE_FILE,
+          source: ledgerCoreSource.source,
+          requiredFragments: [
+            'const FORBIDDEN_LEDGER_VALUE_FRAGMENTS',
+            '"authorization"',
+            '"raw_payment"',
+            '"secret"',
+            '"token"',
+            'pub struct MoneyAmount',
+            'pub enum DebitCredit',
+            'pub struct LedgerTransactionDraft',
+            'pub struct LedgerEntry',
+            'pub enum IdempotencyDecision',
+            'pub enum ProjectionSource',
+            'DerivedFromLedgerEntries',
+            'pub fn append_ledger_transaction',
+            'LedgerError::ImbalancedTransaction',
+            'LedgerError::MixedCurrencyTransaction',
+            'pub fn decide_idempotency',
+            'IdempotencyDecision::ReturnPrevious',
+            'IdempotencyDecision::Conflict',
+            'pub fn reverse_transaction',
+            'reversal_of_ledger_entry_id',
+            'pub fn derive_account_projection',
+            'reject_forbidden_value',
+            'accepts_balanced_append_only_double_entry_transaction',
+            'rejects_imbalanced_or_mixed_currency_transactions',
+            'keeps_idempotency_scoped_to_tenant_command_and_key',
+            'creates_refund_or_correction_as_reversal_entries_not_mutation',
+            'derives_projection_from_entries_without_becoming_truth',
+            'rejects_sensitive_values_before_they_enter_ledger_rows'
           ]
         }))
   ];

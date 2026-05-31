@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.5
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 순수 Rust ledger core까지 검사하도록 강화했다.
+- `src/ledger/mod.rs`의 append-only transaction, double-entry rejection, idempotency decision, reversal entry, projection-not-truth, sensitive value rejection 테스트 표면을 검증한다.
+
 ## 0.32.4
 
 - `ZDP-RUNTIME-001`이 runtime smoke target에 `money-api`를 요구하도록 강화했다.
