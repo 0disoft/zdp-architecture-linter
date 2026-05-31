@@ -470,6 +470,9 @@ test('client SDK placeholder', () => {});
         'src/sdk-generation-plan/plan.ts': `
 export function buildSdkGenerationPlan(): void {}
 `,
+        'src/sdk-generation-plan/api-input.ts': `
+export function loadApiSdkGenerationInput(): void {}
+`,
         'tests/sdk-generation-plan.test.ts': `
 import { test } from 'bun:test';
 test('SDK plan placeholder', () => {});
@@ -518,6 +521,14 @@ test('SDK plan placeholder', () => {});
           path: 'source',
           message:
             'Client SDKs checker source must include `validateClientSdkContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'src/sdk-generation-plan/api-input.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include `sdk-generation-input.yaml`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -742,7 +753,7 @@ function createValidClientSdkCheckerFiles(): Record<string, string> {
     "check": "tsc --noEmit && bun test && bun run contracts:check && bun run generation:plan -- --check",
     "test": "bun test",
     "contracts:check": "bun scripts/check-client-sdk-contracts.ts",
-    "generation:plan": "bun scripts/plan-sdk-generation.ts"
+    "generation:plan": "bun scripts/plan-sdk-generation.ts --api-contracts-root ../zdp-api-contracts"
   }
 }
 `,
@@ -872,11 +883,28 @@ export { cases };
 `,
     'src/sdk-generation-plan/cli.ts': `
 import { loadClientSdkContracts } from '../client-sdk-contracts/parser';
+import { loadApiSdkGenerationInput } from './api-input';
 import { buildSdkGenerationPlan } from './plan';
 export async function runSdkGenerationPlanCli(argv: readonly string[]): Promise<number> {
   loadClientSdkContracts();
+  loadApiSdkGenerationInput();
   buildSdkGenerationPlan;
-  return argv.includes('--check') || argv.includes('--json') ? 0 : 0;
+  return argv.includes('--api-contracts-root') || argv.includes('--check') || argv.includes('--json') ? 0 : 0;
+}
+`,
+    'src/sdk-generation-plan/api-input.ts': `
+const file = 'sdk-generation-input.yaml';
+const fields = [
+  'source_contracts',
+  'generation_targets',
+  'required_route_metadata',
+  'required_error_metadata',
+  'required_webhook_metadata',
+  'forbidden_values'
+];
+export function loadApiSdkGenerationInput(): void {
+  file;
+  fields;
 }
 `,
     'src/sdk-generation-plan/plan.ts': `
@@ -884,10 +912,18 @@ import { validateClientSdkContracts } from '../client-sdk-contracts/validator';
 const plannedPackages = ['@zdp/client-sdk', 'zdp_client_sdk', 'zdp-client-sdk'];
 const codes = [
   'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
-  'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
+  'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED',
+  'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
+  'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT'
 ];
+const apiInputSourceContracts = [];
+function validateApiGenerationInput(): void {}
 export function buildSdkGenerationPlan(): void {
   validateClientSdkContracts;
+  validateApiGenerationInput;
+  apiInputSourceContracts;
   plannedPackages;
   codes;
 }
@@ -903,6 +939,7 @@ const cases = [
   'builds a deterministic SDK generation plan',
   'fails when contract validation fails before planning',
   'fails when libs source does not cover an SDK generation target',
+  'fails when API SDK generation input drifts from client SDK source',
   'zdp-libs-ts/schema',
   'request_id',
   'trace_id'

@@ -21,7 +21,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - 공개 정적 웹 저장소 루트에 `webpub.toml`이 있고, 후보 도메인과 robots 차단 정책이 `service.yaml`과 어긋나지 않는지 검사한다.
 - `zdp-api-contracts` 저장소 루트의 route/error/webhook/SDK generation input 계약과 checker skeleton이 API 구현 전 gate로 유지되는지 검사한다.
 - `zdp-libs-ts` 저장소 루트의 API contract source/package/schema/env/event/error/i18n 계약, checker skeleton, 최소 public export skeleton이 공통 TypeScript 패키지 구현 전 gate로 유지되는지 검사한다.
-- `zdp-client-sdks` 저장소 루트의 SDK generation source handoff, libs export source handoff, sdk surface, auth helper, upload client 계약과 checker skeleton, dry-run generation plan skeleton이 SDK 구현 전 gate로 유지되는지 검사한다.
+- `zdp-client-sdks` 저장소 루트의 SDK generation source handoff, API SDK generation input drift check, libs export source handoff, sdk surface, auth helper, upload client 계약과 checker skeleton, dry-run generation plan skeleton이 SDK 구현 전 gate로 유지되는지 검사한다.
 - `zdp-core-platform` 저장소 루트의 core boundary, command envelope, audit event, consent record 계약 파일이 구현 전 gate로 유지되는지 검사한다.
 - `zdp-web-apps` 저장소 루트의 app shell 계약과 SvelteKit route skeleton이 platform truth를 소유하지 않는지 검사한다.
 - `zdp-platform-runtime` 저장소 루트의 health/readiness, `core-api`/`app-console`/`edge-webhook-ingress`/`money-api` smoke target, deployment template, rollback 계약과 smoke runner skeleton이 배포 전 gate로 유지되는지 검사한다.

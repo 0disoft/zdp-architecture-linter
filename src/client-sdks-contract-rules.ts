@@ -21,6 +21,7 @@ const CHECKER_TYPES_FILE = 'src/client-sdk-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/client-sdk-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/client-sdk-contracts.test.ts';
 const GENERATION_PLAN_SCRIPT_FILE = 'scripts/plan-sdk-generation.ts';
+const GENERATION_PLAN_API_INPUT_FILE = 'src/sdk-generation-plan/api-input.ts';
 const GENERATION_PLAN_CLI_FILE = 'src/sdk-generation-plan/cli.ts';
 const GENERATION_PLAN_SOURCE_FILE = 'src/sdk-generation-plan/plan.ts';
 const GENERATION_PLAN_TYPES_FILE = 'src/sdk-generation-plan/types.ts';
@@ -36,6 +37,7 @@ const REQUIRED_CLIENT_SDK_CHECKER_FILES = [
   CHECKER_VALIDATOR_FILE,
   CHECKER_TEST_FILE,
   GENERATION_PLAN_SCRIPT_FILE,
+  GENERATION_PLAN_API_INPUT_FILE,
   GENERATION_PLAN_CLI_FILE,
   GENERATION_PLAN_SOURCE_FILE,
   GENERATION_PLAN_TYPES_FILE,
@@ -603,6 +605,7 @@ async function validateCheckerSurface(
     validatorSource,
     testSource,
     generationPlanScript,
+    generationPlanApiInputSource,
     generationPlanCliSource,
     generationPlanSource,
     generationPlanTypesSource,
@@ -623,6 +626,7 @@ async function validateCheckerSurface(
     ...validatorSource.diagnostics,
     ...testSource.diagnostics,
     ...generationPlanScript.diagnostics,
+    ...generationPlanApiInputSource.diagnostics,
     ...generationPlanCliSource.diagnostics,
     ...generationPlanSource.diagnostics,
     ...generationPlanTypesSource.diagnostics,
@@ -719,9 +723,27 @@ async function validateCheckerSurface(
           source: generationPlanCliSource.source,
           requiredFragments: [
             'buildSdkGenerationPlan',
+            'loadApiSdkGenerationInput',
             'loadClientSdkContracts',
+            '--api-contracts-root',
             '--check',
             '--json'
+          ]
+        })),
+    ...(generationPlanApiInputSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_API_INPUT_FILE,
+          source: generationPlanApiInputSource.source,
+          requiredFragments: [
+            'loadApiSdkGenerationInput',
+            'sdk-generation-input.yaml',
+            'source_contracts',
+            'generation_targets',
+            'required_route_metadata',
+            'required_error_metadata',
+            'required_webhook_metadata',
+            'forbidden_values'
           ]
         })),
     ...(generationPlanSource.source === null
@@ -735,6 +757,12 @@ async function validateCheckerSurface(
             '@zdp/client-sdk',
             'zdp_client_sdk',
             'zdp-client-sdk',
+            'validateApiGenerationInput',
+            'apiInputSourceContracts',
+            'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
+            'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
+            'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
+            'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
             'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
             'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
           ]
@@ -759,6 +787,7 @@ async function validateCheckerSurface(
             'builds a deterministic SDK generation plan',
             'fails when contract validation fails before planning',
             'fails when libs source does not cover an SDK generation target',
+            'fails when API SDK generation input drifts from client SDK source',
             'zdp-libs-ts/schema',
             'request_id',
             'trace_id'

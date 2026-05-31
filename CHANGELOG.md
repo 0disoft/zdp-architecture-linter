@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.7
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 API SDK generation input drift 검증 표면까지 검사하도록 강화했다.
+- `generation:plan`이 `zdp-api-contracts/contracts/sdk-generation-input.yaml`을 읽지 않거나 route/error/webhook metadata drift 실패 테스트가 사라지면 실패하도록 했다.
+
 ## 0.35.6
 
 - `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 SDK generation dry-run plan skeleton과 `generation:plan` script까지 검사하도록 강화했다.
