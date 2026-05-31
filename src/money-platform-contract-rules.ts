@@ -33,6 +33,8 @@ const RUNTIME_RISK_BOUNDARY_FILE = 'src/boundaries/risk.rs';
 const RUNTIME_COMMANDS_FILE = 'src/commands/mod.rs';
 const RUNTIME_COMMAND_LEDGER_FILE = 'src/commands/ledger.rs';
 const RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE = 'src/commands/payment_webhook.rs';
+const RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE =
+  'src/commands/payment_webhook_processing.rs';
 const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
@@ -58,6 +60,7 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_COMMANDS_FILE,
   RUNTIME_COMMAND_LEDGER_FILE,
   RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE,
+  RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE,
   RUNTIME_LEDGER_CORE_FILE
 ] as const;
 
@@ -1186,6 +1189,7 @@ async function validateRuntimeSurface(
     commandsSource,
     commandLedgerSource,
     commandPaymentWebhookSource,
+    commandPaymentWebhookProcessingSource,
     ledgerCoreSource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
@@ -1206,6 +1210,7 @@ async function validateRuntimeSurface(
     ...commandsSource.diagnostics,
     ...commandLedgerSource.diagnostics,
     ...commandPaymentWebhookSource.diagnostics,
+    ...commandPaymentWebhookProcessingSource.diagnostics,
     ...ledgerCoreSource.diagnostics,
     ...(cargoToml.source === null
       ? []
@@ -1291,6 +1296,7 @@ async function validateRuntimeSurface(
           requiredFragments: [
             'pub mod ledger;',
             'pub mod payment_webhook;',
+            'pub mod payment_webhook_processing;',
             'pub enum MoneyCommandType',
             'PaymentsRecordProviderWebhook',
             'LedgerAppendEntry',
@@ -1384,6 +1390,61 @@ async function validateRuntimeSurface(
             'rejects_queue_handoff_that_does_not_match_webhook_trace_context',
             'rejects_raw_payment_payload_references_before_command_handoff',
             'webhook_handoff_does_not_create_ledger_append_command'
+          ]
+        })),
+    ...(commandPaymentWebhookProcessingSource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE,
+          source: commandPaymentWebhookProcessingSource.source,
+          requiredFragments: [
+            'PROCESSING_REQUESTED_OUTBOX_TYPE',
+            '"money.payment_webhook.processing_requested"',
+            'PROCESSING_SUCCEEDED_OUTBOX_TYPE',
+            '"money.payment_webhook.processing_succeeded"',
+            'PROCESSING_RETRY_SCHEDULED_OUTBOX_TYPE',
+            '"money.payment_webhook.retry_scheduled"',
+            'PROCESSING_DEAD_LETTERED_OUTBOX_TYPE',
+            '"money.payment_webhook.dead_lettered"',
+            'pub enum PaymentWebhookProcessingState',
+            'Queued',
+            'Processing',
+            'RetryScheduled',
+            'Succeeded',
+            'DeadLettered',
+            'pub struct PaymentWebhookProcessingRecord',
+            'pub struct PaymentWebhookProcessingHistory',
+            'pub enum PaymentWebhookProcessingEvent',
+            'pub struct PaymentWebhookOutboxRecord',
+            'pub enum PaymentWebhookProcessingAdmission',
+            'pub enum PaymentWebhookProcessingError',
+            'InvalidTransition',
+            'IdempotencyConflict',
+            'RetryBudgetExhausted',
+            'TerminalState',
+            'UnsupportedCommandType(MoneyCommandType)',
+            'pub fn admit_payment_webhook_processing',
+            'pub fn transition_payment_webhook_processing',
+            'classify_duplicate',
+            'build_history',
+            'build_outbox',
+            'PaymentWebhookProcessingAdmission::Duplicate',
+            'PaymentWebhookProcessingEvent::WorkerStarted',
+            'PaymentWebhookProcessingEvent::CommandSucceeded',
+            'PaymentWebhookProcessingEvent::RetryScheduled',
+            'PaymentWebhookProcessingEvent::DeadLettered',
+            'PaymentWebhookProcessingState::Queued',
+            'PaymentWebhookProcessingState::Processing',
+            'PaymentWebhookProcessingState::RetryScheduled',
+            'PaymentWebhookProcessingState::Succeeded',
+            'PaymentWebhookProcessingState::DeadLettered',
+            'accepts_verified_webhook_command_into_queued_processing_record_and_outbox',
+            'duplicate_provider_event_with_same_payload_returns_existing_record',
+            'duplicate_provider_event_with_different_payload_hash_conflicts',
+            'processing_lifecycle_records_worker_attempt_success_history_and_outbox',
+            'retry_schedule_requires_processing_state_and_retry_time',
+            'retryable_failure_writes_retry_outbox_and_can_restart',
+            'exhausted_or_terminal_work_cannot_continue_silently'
           ]
         })),
     ...(ledgerCoreSource.source === null

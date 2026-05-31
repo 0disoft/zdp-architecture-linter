@@ -132,6 +132,14 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/commands/payment_webhook_processing.rs',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `src/commands/payment_webhook_processing.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'scripts/check-money-contracts.ts',
         path: 'repository.root',
         message:
@@ -891,6 +899,109 @@ pub fn admit_ledger_append_command() {}
     );
   });
 
+  test('fails when money payment webhook processing state rules drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'src/commands/mod.rs': `
+pub mod ledger;
+pub mod payment_webhook;
+pub mod payment_webhook_processing;
+
+pub enum MoneyCommandType {
+    PaymentsRecordProviderWebhook,
+    LedgerAppendEntry,
+    LedgerCreateCreditHold,
+    LedgerCaptureCreditHold,
+    LedgerReleaseCreditHold,
+}
+
+pub struct PayloadRef;
+
+pub struct MoneyCommandEnvelope {
+    pub command_id: String,
+    pub command_type: MoneyCommandType,
+    pub schema_version: u16,
+    pub actor_id: String,
+    pub tenant_id: String,
+    pub request_id: String,
+    pub trace_id: String,
+    pub idempotency_key: String,
+    pub reason: String,
+    pub issued_at: String,
+    pub source: String,
+    pub payload_ref: PayloadRef,
+}
+
+const RAW_PAYMENT_PAYLOAD_SENTINEL: &str = "raw_payment_payload";
+`,
+        'src/commands/payment_webhook_processing.rs': `
+pub enum PaymentWebhookProcessingState {
+    Queued,
+    Processing,
+}
+
+pub fn admit_payment_webhook_processing() {}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `PROCESSING_DEAD_LETTERED_OUTBOX_TYPE`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `PaymentWebhookProcessingAdmission::Duplicate`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `PaymentWebhookProcessingState::DeadLettered`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `duplicate_provider_event_with_different_payload_hash_conflicts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `retryable_failure_writes_retry_outbox_and_can_restart`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/commands/payment_webhook_processing.rs',
+          path: 'source',
+          message:
+            'Money platform runtime source must include `exhausted_or_terminal_work_cannot_continue_silently`.'
+        });
+      }
+    );
+  });
+
   test('fails when money payment webhook handoff rules drift', async () => {
     await withRepositoryRoot(
       {
@@ -1538,6 +1649,7 @@ pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
     'src/commands/mod.rs': `
 pub mod ledger;
 pub mod payment_webhook;
+pub mod payment_webhook_processing;
 
 pub enum MoneyCommandType {
     PaymentsRecordProviderWebhook,
@@ -1666,6 +1778,79 @@ fn requires_provider_event_id_as_webhook_idempotency_key() {}
 fn rejects_queue_handoff_that_does_not_match_webhook_trace_context() {}
 fn rejects_raw_payment_payload_references_before_command_handoff() {}
 fn webhook_handoff_does_not_create_ledger_append_command() {}
+`,
+    'src/commands/payment_webhook_processing.rs': `
+pub const PROCESSING_REQUESTED_OUTBOX_TYPE: &str = "money.payment_webhook.processing_requested";
+pub const PROCESSING_SUCCEEDED_OUTBOX_TYPE: &str = "money.payment_webhook.processing_succeeded";
+pub const PROCESSING_RETRY_SCHEDULED_OUTBOX_TYPE: &str =
+    "money.payment_webhook.retry_scheduled";
+pub const PROCESSING_DEAD_LETTERED_OUTBOX_TYPE: &str = "money.payment_webhook.dead_lettered";
+
+pub enum PaymentWebhookProcessingState {
+    Queued,
+    Processing,
+    RetryScheduled,
+    Succeeded,
+    DeadLettered,
+}
+
+pub struct PaymentWebhookProcessingRecord;
+pub struct PaymentWebhookProcessingHistory;
+
+pub enum PaymentWebhookProcessingEvent {
+    WorkerStarted,
+    CommandSucceeded,
+    RetryScheduled,
+    DeadLettered,
+}
+
+pub struct PaymentWebhookOutboxRecord;
+
+pub enum PaymentWebhookProcessingAdmission {
+    Duplicate,
+}
+
+pub enum PaymentWebhookProcessingError {
+    InvalidTransition,
+    IdempotencyConflict,
+    RetryBudgetExhausted,
+    TerminalState,
+    UnsupportedCommandType(MoneyCommandType),
+}
+
+pub fn admit_payment_webhook_processing() {
+    let _ = PaymentWebhookProcessingAdmission::Duplicate;
+    classify_duplicate();
+    build_history();
+    build_outbox();
+}
+
+pub fn transition_payment_webhook_processing() {
+    let _ = PaymentWebhookProcessingEvent::WorkerStarted;
+    let _ = PaymentWebhookProcessingEvent::CommandSucceeded;
+    let _ = PaymentWebhookProcessingEvent::RetryScheduled;
+    let _ = PaymentWebhookProcessingEvent::DeadLettered;
+    let _ = PaymentWebhookProcessingState::Queued;
+    let _ = PaymentWebhookProcessingState::Processing;
+    let _ = PaymentWebhookProcessingState::RetryScheduled;
+    let _ = PaymentWebhookProcessingState::Succeeded;
+    let _ = PaymentWebhookProcessingState::DeadLettered;
+}
+
+enum MoneyCommandType {
+    PaymentsRecordProviderWebhook,
+}
+
+fn classify_duplicate() {}
+fn build_history() {}
+fn build_outbox() {}
+fn accepts_verified_webhook_command_into_queued_processing_record_and_outbox() {}
+fn duplicate_provider_event_with_same_payload_returns_existing_record() {}
+fn duplicate_provider_event_with_different_payload_hash_conflicts() {}
+fn processing_lifecycle_records_worker_attempt_success_history_and_outbox() {}
+fn retry_schedule_requires_processing_state_and_retry_time() {}
+fn retryable_failure_writes_retry_outbox_and_can_restart() {}
+fn exhausted_or_terminal_work_cannot_continue_silently() {}
 `,
     'src/ledger/mod.rs': `
 const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[

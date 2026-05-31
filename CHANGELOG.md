@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.8
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 payment webhook processing state/outbox skeleton까지 검사하도록 강화했다.
+- `src/commands/payment_webhook_processing.rs`의 queued/processing/retry/succeeded/dead-letter 상태, duplicate provider event 처리, payload hash conflict, retry/dead-letter outbox record 테스트 표면을 검증한다.
+
 ## 0.32.7
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 payment webhook-to-command handoff layer까지 검사하도록 강화했다.
