@@ -10,6 +10,7 @@ import {
   buildPublicApiContractPolicy,
   validatePublicApiContracts
 } from './api-rules.ts';
+import { validateRepositoryApiContractsContract } from './api-contracts-rules.ts';
 import {
   buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
@@ -245,6 +246,13 @@ export async function validateArchitecture(
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
+  const repositoryApiContractsContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryApiContractsContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
   const repositoryEdgeContractDiagnostics =
     input.repositoryRoot === undefined
       ? []
@@ -476,6 +484,7 @@ export async function validateArchitecture(
       ...repositoryCoreContractDiagnostics,
       ...repositoryAppShellContractDiagnostics,
       ...repositoryRuntimeContractDiagnostics,
+      ...repositoryApiContractsContractDiagnostics,
       ...repositoryEdgeContractDiagnostics,
       ...repositoryObservabilityContractDiagnostics,
       ...repositoryInfraContractDiagnostics,

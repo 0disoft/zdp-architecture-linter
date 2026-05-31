@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.33.0
+
+- `ZDP-API-CONTRACTS-001`을 추가해 `zdp-api-contracts`의 route/error/webhook 계약과 checker skeleton을 repository validate gate로 검사한다.
+- route 권한·감사·멱등성 hook, error envelope 추적·민감값 금지, webhook 서명·멱등성·재처리·dead-letter 기준이 사라지면 실패하도록 했다.
+
 ## 0.32.9
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 payment webhook processing storage port skeleton까지 검사하도록 강화했다.
