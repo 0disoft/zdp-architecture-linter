@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.1
+
+- `ZDP-API-CONTRACTS-001`이 `zdp-api-contracts`의 SDK generation input 계약까지 검사하도록 강화했다.
+- SDK source contract, TypeScript/Dart/Rust target, route/error/webhook metadata, generated SDK source 미소유, final authorization 미소유, authorization header 금지값이 사라지면 실패하도록 했다.
+
 ## 0.35.0
 
 - `ZDP-CLIENT-SDKS-001`을 추가해 `zdp-client-sdks`의 sdk surface/auth helper/upload client 계약과 checker skeleton을 repository validate gate로 검사한다.

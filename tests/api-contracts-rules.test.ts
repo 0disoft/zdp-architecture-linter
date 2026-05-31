@@ -62,6 +62,14 @@ describe('api contracts repository rules', () => {
         message:
           'API contracts repository must include `contracts/webhook-contract.yaml`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-API-CONTRACTS-001',
+        severity: 'error',
+        file: 'contracts/sdk-generation-input.yaml',
+        path: 'repository.root',
+        message:
+          'API contracts repository must include `contracts/sdk-generation-input.yaml`.'
+      });
     });
   });
 
@@ -233,6 +241,103 @@ webhook_contract:
     );
   });
 
+  test('fails when SDK generation input loses handoff boundaries', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidApiContractFiles(),
+        'contracts/sdk-generation-input.yaml': `
+sdk_generation_input:
+  status: live
+  source_contracts:
+    - contracts/route-contract.yaml
+  generation_targets:
+    - typescript
+  required_route_metadata:
+    - operation_id
+  required_error_metadata:
+    - code
+  required_webhook_metadata:
+    - event_id
+  forbidden_ownership:
+    - product_business_logic
+  forbidden_values:
+    - raw_customer_payload
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryApiContractsContract({
+          repositoryRoot,
+          repositoryServiceContract: createApiContractsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.status',
+          message:
+            'API SDK generation input must stay in skeleton status until real generators exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.source_contracts',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `contracts/error-envelope.yaml` in `sdk_generation_input.source_contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.generation_targets',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `rust` in `sdk_generation_input.generation_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.required_route_metadata',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `idempotency` in `sdk_generation_input.required_route_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.required_error_metadata',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `trace_id` in `sdk_generation_input.required_error_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.required_webhook_metadata',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `dead_letter_policy` in `sdk_generation_input.required_webhook_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.forbidden_ownership',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `final_authorization_decision` in `sdk_generation_input.forbidden_ownership`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-input.yaml',
+          path: 'sdk_generation_input.forbidden_values',
+          message:
+            'API contract `contracts/sdk-generation-input.yaml` must include `authorization_header` in `sdk_generation_input.forbidden_values`.'
+        });
+      }
+    );
+  });
+
   test('fails when API checker files and scripts drift', async () => {
     await withRepositoryRoot(
       {
@@ -283,10 +388,26 @@ test('api placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-API-CONTRACTS-001',
           severity: 'error',
+          file: 'src/api-contracts/validator.ts',
+          path: 'source',
+          message:
+            'API contracts checker source must include `API_SDK_GENERATION_TARGET_MISSING`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
           file: 'tests/api-contracts.test.ts',
           path: 'source',
           message:
             'API contracts checker source must include `fails when webhook contracts stop requiring idempotency`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'tests/api-contracts.test.ts',
+          path: 'source',
+          message:
+            'API contracts checker source must include `fails when SDK generation input drops a language target`.'
         });
       }
     );
@@ -407,6 +528,60 @@ webhook_contract:
     - unversioned_payload
     - provider_secret_in_schema
     - ledger_mutation_without_money_contract
+`,
+    'contracts/sdk-generation-input.yaml': `
+sdk_generation_input:
+  status: skeleton
+  source_contracts:
+    - contracts/route-contract.yaml
+    - contracts/error-envelope.yaml
+    - contracts/webhook-contract.yaml
+  generation_targets:
+    - typescript
+    - dart
+    - rust
+  required_route_metadata:
+    - operation_id
+    - resource
+    - action
+    - method
+    - path
+    - request_schema_ref
+    - response_schema_ref
+    - auth_required
+    - permission_check
+    - audit_event
+    - idempotency
+    - error_codes
+  required_error_metadata:
+    - code
+    - message
+    - request_id
+    - trace_id
+    - retry_after_seconds
+    - documentation_url
+  required_webhook_metadata:
+    - event_id
+    - event_type
+    - schema_version
+    - signature_verification
+    - idempotency_key
+    - replay_policy
+    - dead_letter_policy
+  forbidden_ownership:
+    - generated_sdk_source
+    - sdk_runtime_implementation
+    - product_business_logic
+    - refresh_token_storage
+    - final_authorization_decision
+    - provider_credential_storage
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - screen_component_payload
 `
   };
 }
@@ -448,7 +623,8 @@ export async function runApiContractCheckCli(): Promise<number> {
 const files = [
   'contracts/route-contract.yaml',
   'contracts/error-envelope.yaml',
-  'contracts/webhook-contract.yaml'
+  'contracts/webhook-contract.yaml',
+  'contracts/sdk-generation-input.yaml'
 ];
 export { files };
 `,
@@ -464,9 +640,18 @@ const REQUIRED_ERROR_FIELDS = [];
 const FORBIDDEN_ERROR_FIELDS = [];
 const REQUIRED_WEBHOOK_CONTROLS = [];
 const FORBIDDEN_WEBHOOK_CONTROLS = [];
+const REQUIRED_SDK_GENERATION_TARGETS = [];
+const REQUIRED_SDK_ROUTE_METADATA = [];
+const REQUIRED_SDK_ERROR_METADATA = [];
+const REQUIRED_SDK_WEBHOOK_METADATA = [];
+const FORBIDDEN_SDK_OWNERSHIP = [];
+const FORBIDDEN_SDK_VALUES = [];
 const API_ROUTE_REQUIRED_FIELD_MISSING = 'API_ROUTE_REQUIRED_FIELD_MISSING';
 const API_ERROR_FORBIDDEN_FIELD_MISSING = 'API_ERROR_FORBIDDEN_FIELD_MISSING';
 const API_WEBHOOK_REQUIRED_CONTROL_MISSING = 'API_WEBHOOK_REQUIRED_CONTROL_MISSING';
+const API_SDK_GENERATION_TARGET_MISSING = 'API_SDK_GENERATION_TARGET_MISSING';
+const API_SDK_FORBIDDEN_OWNERSHIP_MISSING = 'API_SDK_FORBIDDEN_OWNERSHIP_MISSING';
+const API_SDK_FORBIDDEN_VALUE_MISSING = 'API_SDK_FORBIDDEN_VALUE_MISSING';
 export {
   REQUIRED_ROUTE_FIELDS,
   FORBIDDEN_ROUTE_SHAPES,
@@ -474,9 +659,18 @@ export {
   FORBIDDEN_ERROR_FIELDS,
   REQUIRED_WEBHOOK_CONTROLS,
   FORBIDDEN_WEBHOOK_CONTROLS,
+  REQUIRED_SDK_GENERATION_TARGETS,
+  REQUIRED_SDK_ROUTE_METADATA,
+  REQUIRED_SDK_ERROR_METADATA,
+  REQUIRED_SDK_WEBHOOK_METADATA,
+  FORBIDDEN_SDK_OWNERSHIP,
+  FORBIDDEN_SDK_VALUES,
   API_ROUTE_REQUIRED_FIELD_MISSING,
   API_ERROR_FORBIDDEN_FIELD_MISSING,
-  API_WEBHOOK_REQUIRED_CONTROL_MISSING
+  API_WEBHOOK_REQUIRED_CONTROL_MISSING,
+  API_SDK_GENERATION_TARGET_MISSING,
+  API_SDK_FORBIDDEN_OWNERSHIP_MISSING,
+  API_SDK_FORBIDDEN_VALUE_MISSING
 };
 `,
     'tests/api-contracts.test.ts': `
@@ -486,7 +680,11 @@ const cases = [
   'fails when error envelopes stop carrying trace identifiers',
   'fails when error envelopes stop forbidding provider secrets',
   'fails when webhook contracts stop requiring idempotency',
-  'fails when webhook contracts allow ledger mutation bypasses'
+  'fails when webhook contracts allow ledger mutation bypasses',
+  'fails when SDK generation input drops a language target',
+  'fails when SDK generation input drops route idempotency metadata',
+  'fails when SDK generation input owns generated SDK source',
+  'fails when SDK generation input can carry authorization headers'
 ];
 export { cases };
 `

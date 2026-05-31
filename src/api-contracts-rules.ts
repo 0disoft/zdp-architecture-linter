@@ -9,6 +9,7 @@ const API_CONTRACTS_RULE_ID = 'ZDP-API-CONTRACTS-001';
 const ROUTE_CONTRACT_FILE = 'contracts/route-contract.yaml';
 const ERROR_ENVELOPE_FILE = 'contracts/error-envelope.yaml';
 const WEBHOOK_CONTRACT_FILE = 'contracts/webhook-contract.yaml';
+const SDK_GENERATION_INPUT_FILE = 'contracts/sdk-generation-input.yaml';
 const PACKAGE_FILE = 'package.json';
 const BUN_LOCK_FILE = 'bun.lock';
 const TSCONFIG_FILE = 'tsconfig.json';
@@ -80,6 +81,70 @@ const REQUIRED_FORBIDDEN_WEBHOOK_CONTROLS = [
   'ledger_mutation_without_money_contract'
 ] as const;
 
+const REQUIRED_SDK_SOURCE_CONTRACTS = [
+  ROUTE_CONTRACT_FILE,
+  ERROR_ENVELOPE_FILE,
+  WEBHOOK_CONTRACT_FILE
+] as const;
+
+const REQUIRED_SDK_GENERATION_TARGETS = [
+  'typescript',
+  'dart',
+  'rust'
+] as const;
+
+const REQUIRED_SDK_ROUTE_METADATA = [
+  'operation_id',
+  'resource',
+  'action',
+  'method',
+  'path',
+  'request_schema_ref',
+  'response_schema_ref',
+  'auth_required',
+  'permission_check',
+  'audit_event',
+  'idempotency',
+  'error_codes'
+] as const;
+
+const REQUIRED_SDK_ERROR_METADATA = [
+  'code',
+  'message',
+  'request_id',
+  'trace_id',
+  'retry_after_seconds',
+  'documentation_url'
+] as const;
+
+const REQUIRED_SDK_WEBHOOK_METADATA = [
+  'event_id',
+  'event_type',
+  'schema_version',
+  'signature_verification',
+  'idempotency_key',
+  'replay_policy',
+  'dead_letter_policy'
+] as const;
+
+const REQUIRED_FORBIDDEN_SDK_OWNERSHIP = [
+  'generated_sdk_source',
+  'sdk_runtime_implementation',
+  'product_business_logic',
+  'refresh_token_storage',
+  'final_authorization_decision',
+  'provider_credential_storage'
+] as const;
+
+const REQUIRED_FORBIDDEN_SDK_VALUES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'screen_component_payload'
+] as const;
+
 export async function validateRepositoryApiContractsContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -92,11 +157,18 @@ export async function validateRepositoryApiContractsContract(input: {
     return [];
   }
 
-  const [routeContract, errorEnvelope, webhookContract, packageJson] =
+  const [
+    routeContract,
+    errorEnvelope,
+    webhookContract,
+    sdkGenerationInput,
+    packageJson
+  ] =
     await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, ROUTE_CONTRACT_FILE),
       readRequiredYamlContract(input.repositoryRoot, ERROR_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, WEBHOOK_CONTRACT_FILE),
+      readRequiredYamlContract(input.repositoryRoot, SDK_GENERATION_INPUT_FILE),
       readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE)
     ]);
 
@@ -104,6 +176,7 @@ export async function validateRepositoryApiContractsContract(input: {
     ...routeContract.diagnostics,
     ...errorEnvelope.diagnostics,
     ...webhookContract.diagnostics,
+    ...sdkGenerationInput.diagnostics,
     ...packageJson.diagnostics,
     ...(routeContract.value === null
       ? []
@@ -114,6 +187,9 @@ export async function validateRepositoryApiContractsContract(input: {
     ...(webhookContract.value === null
       ? []
       : validateWebhookContract(webhookContract.value)),
+    ...(sdkGenerationInput.value === null
+      ? []
+      : validateSdkGenerationInputContract(sdkGenerationInput.value)),
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...(await validateCheckerSurface(input.repositoryRoot)),
     ...validateRequiredLinterRule(input.repositoryServiceContract)
@@ -325,6 +401,68 @@ function validateWebhookContract(value: unknown): readonly Diagnostic[] {
   ];
 }
 
+function validateSdkGenerationInputContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.status',
+      expected: 'skeleton',
+      message:
+        'API SDK generation input must stay in skeleton status until real generators exist.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.source_contracts',
+      field: 'sdk_generation_input.source_contracts',
+      requiredEntries: REQUIRED_SDK_SOURCE_CONTRACTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.generation_targets',
+      field: 'sdk_generation_input.generation_targets',
+      requiredEntries: REQUIRED_SDK_GENERATION_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.required_route_metadata',
+      field: 'sdk_generation_input.required_route_metadata',
+      requiredEntries: REQUIRED_SDK_ROUTE_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.required_error_metadata',
+      field: 'sdk_generation_input.required_error_metadata',
+      requiredEntries: REQUIRED_SDK_ERROR_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.required_webhook_metadata',
+      field: 'sdk_generation_input.required_webhook_metadata',
+      requiredEntries: REQUIRED_SDK_WEBHOOK_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.forbidden_ownership',
+      field: 'sdk_generation_input.forbidden_ownership',
+      requiredEntries: REQUIRED_FORBIDDEN_SDK_OWNERSHIP
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_GENERATION_INPUT_FILE,
+      path: 'sdk_generation_input.forbidden_values',
+      field: 'sdk_generation_input.forbidden_values',
+      requiredEntries: REQUIRED_FORBIDDEN_SDK_VALUES
+    })
+  ];
+}
+
 function validatePackageScripts(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
@@ -389,7 +527,8 @@ async function validateCheckerSurface(
           requiredFragments: [
             ROUTE_CONTRACT_FILE,
             ERROR_ENVELOPE_FILE,
-            WEBHOOK_CONTRACT_FILE
+            WEBHOOK_CONTRACT_FILE,
+            SDK_GENERATION_INPUT_FILE
           ]
         })),
     ...(validatorSource.source === null
@@ -404,9 +543,18 @@ async function validateCheckerSurface(
             'FORBIDDEN_ERROR_FIELDS',
             'REQUIRED_WEBHOOK_CONTROLS',
             'FORBIDDEN_WEBHOOK_CONTROLS',
+            'REQUIRED_SDK_GENERATION_TARGETS',
+            'REQUIRED_SDK_ROUTE_METADATA',
+            'REQUIRED_SDK_ERROR_METADATA',
+            'REQUIRED_SDK_WEBHOOK_METADATA',
+            'FORBIDDEN_SDK_OWNERSHIP',
+            'FORBIDDEN_SDK_VALUES',
             'API_ROUTE_REQUIRED_FIELD_MISSING',
             'API_ERROR_FORBIDDEN_FIELD_MISSING',
-            'API_WEBHOOK_REQUIRED_CONTROL_MISSING'
+            'API_WEBHOOK_REQUIRED_CONTROL_MISSING',
+            'API_SDK_GENERATION_TARGET_MISSING',
+            'API_SDK_FORBIDDEN_OWNERSHIP_MISSING',
+            'API_SDK_FORBIDDEN_VALUE_MISSING'
           ]
         })),
     ...(testSource.source === null
@@ -420,7 +568,11 @@ async function validateCheckerSurface(
             'fails when error envelopes stop carrying trace identifiers',
             'fails when error envelopes stop forbidding provider secrets',
             'fails when webhook contracts stop requiring idempotency',
-            'fails when webhook contracts allow ledger mutation bypasses'
+            'fails when webhook contracts allow ledger mutation bypasses',
+            'fails when SDK generation input drops a language target',
+            'fails when SDK generation input drops route idempotency metadata',
+            'fails when SDK generation input owns generated SDK source',
+            'fails when SDK generation input can carry authorization headers'
           ]
         }))
   ];
