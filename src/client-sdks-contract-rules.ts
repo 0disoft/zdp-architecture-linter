@@ -8,6 +8,7 @@ const CLIENT_SDKS_CONTRACT_RULE_ID = 'ZDP-CLIENT-SDKS-001';
 
 const SDK_SURFACE_FILE = 'contracts/sdk-surface.yaml';
 const SDK_GENERATION_SOURCE_FILE = 'contracts/sdk-generation-source.yaml';
+const LIBS_EXPORT_SOURCE_FILE = 'contracts/libs-export-source.yaml';
 const AUTH_HELPER_FILE = 'contracts/auth-helper.yaml';
 const UPLOAD_CLIENT_FILE = 'contracts/upload-client.yaml';
 const PACKAGE_FILE = 'package.json';
@@ -98,6 +99,45 @@ const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [
   'screen_component_payload'
 ] as const;
 
+const REQUIRED_LIBS_EXPORT_SOURCE_REPO = 'zdp-libs-ts';
+const REQUIRED_LIBS_EXPORT_SOURCE_PACKAGE = 'zdp-libs-ts';
+const REQUIRED_LIBS_SOURCE_EXPORTS = [
+  'zdp-libs-ts/schema',
+  'zdp-libs-ts/env-contract',
+  'zdp-libs-ts/event-contracts',
+  'zdp-libs-ts/error',
+  'zdp-libs-ts/i18n-contract'
+] as const;
+const REQUIRED_LIBS_SOURCE_TARGETS = ['typescript', 'dart', 'rust'] as const;
+const REQUIRED_LIBS_SOURCE_METADATA = [
+  'schema_id',
+  'env_var',
+  'event_type',
+  'error_code',
+  'message_key',
+  'request_id',
+  'trace_id',
+  'idempotency'
+] as const;
+const REQUIRED_LIBS_SOURCE_FORBIDDEN_OWNERSHIP = [
+  'zdp-libs-ts package source',
+  'API contract source',
+  'runtime validation engine',
+  'product domain models',
+  'final authorization decisions',
+  'translation runtime'
+] as const;
+const REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES = [
+  'authorization_header',
+  'cookie_header',
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'provider_token',
+  'secret_value',
+  'screen_component_payload'
+] as const;
+
 const REQUIRED_AUTH_HELPER_OWNERSHIP = [
   'access token attachment boundary',
   'current user context normalization input'
@@ -135,12 +175,14 @@ export async function validateRepositoryClientSdksContract(input: {
   const [
     sdkSurface,
     sdkGenerationSource,
+    libsExportSource,
     authHelper,
     uploadClient,
     packageJson
   ] = await Promise.all([
     readRequiredYamlContract(input.repositoryRoot, SDK_SURFACE_FILE),
     readRequiredYamlContract(input.repositoryRoot, SDK_GENERATION_SOURCE_FILE),
+    readRequiredYamlContract(input.repositoryRoot, LIBS_EXPORT_SOURCE_FILE),
     readRequiredYamlContract(input.repositoryRoot, AUTH_HELPER_FILE),
     readRequiredYamlContract(input.repositoryRoot, UPLOAD_CLIENT_FILE),
     readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE)
@@ -149,6 +191,7 @@ export async function validateRepositoryClientSdksContract(input: {
   return [
     ...sdkSurface.diagnostics,
     ...sdkGenerationSource.diagnostics,
+    ...libsExportSource.diagnostics,
     ...authHelper.diagnostics,
     ...uploadClient.diagnostics,
     ...packageJson.diagnostics,
@@ -156,6 +199,9 @@ export async function validateRepositoryClientSdksContract(input: {
     ...(sdkGenerationSource.value === null
       ? []
       : validateSdkGenerationSourceContract(sdkGenerationSource.value)),
+    ...(libsExportSource.value === null
+      ? []
+      : validateLibsExportSourceContract(libsExportSource.value)),
     ...(authHelper.value === null ? [] : validateAuthHelperContract(authHelper.value)),
     ...(uploadClient.value === null
       ? []
@@ -389,6 +435,70 @@ function validateSdkGenerationSourceContract(
   ];
 }
 
+function validateLibsExportSourceContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.status',
+      expected: 'skeleton',
+      message:
+        'Client SDKs libs export source must stay skeleton until generated SDK packages exist.'
+    }),
+    ...validateExactValue({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.source_repo',
+      expected: REQUIRED_LIBS_EXPORT_SOURCE_REPO,
+      message:
+        'Client SDKs libs export source must consume `zdp-libs-ts`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.source_package',
+      expected: REQUIRED_LIBS_EXPORT_SOURCE_PACKAGE,
+      message:
+        'Client SDKs libs export source package must be `zdp-libs-ts`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.source_exports',
+      field: 'libs_export_source.source_exports',
+      requiredEntries: REQUIRED_LIBS_SOURCE_EXPORTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.generation_targets',
+      field: 'libs_export_source.generation_targets',
+      requiredEntries: REQUIRED_LIBS_SOURCE_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.required_metadata',
+      field: 'libs_export_source.required_metadata',
+      requiredEntries: REQUIRED_LIBS_SOURCE_METADATA
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.must_not_own',
+      field: 'libs_export_source.must_not_own',
+      requiredEntries: REQUIRED_LIBS_SOURCE_FORBIDDEN_OWNERSHIP
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: LIBS_EXPORT_SOURCE_FILE,
+      path: 'libs_export_source.forbidden_values',
+      field: 'libs_export_source.forbidden_values',
+      requiredEntries: REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES
+    })
+  ];
+}
+
 function validateAuthHelperContract(value: unknown): readonly Diagnostic[] {
   return [
     ...validateExactValue({
@@ -507,6 +617,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'sdk-surface.yaml',
             'sdk-generation-source.yaml',
+            'libs-export-source.yaml',
             'auth-helper.yaml',
             'upload-client.yaml',
             "join(root, 'contracts', fileName)"
@@ -527,6 +638,10 @@ async function validateCheckerSurface(
             'REQUIRED_ERROR_METADATA',
             'REQUIRED_WEBHOOK_METADATA',
             'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
+            'REQUIRED_LIBS_EXPORT_SOURCE_REPO',
+            'REQUIRED_LIBS_SOURCE_EXPORTS',
+            'REQUIRED_LIBS_SOURCE_METADATA',
+            'REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES',
             'REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP',
             'REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP',
             'CLIENT_SDK_LANGUAGE_MISSING',
@@ -536,6 +651,10 @@ async function validateCheckerSurface(
             'CLIENT_SDK_ROUTE_METADATA_MISSING',
             'CLIENT_SDK_ERROR_METADATA_MISSING',
             'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
+            'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT',
+            'CLIENT_SDK_LIBS_EXPORT_MISSING',
+            'CLIENT_SDK_LIBS_METADATA_MISSING',
+            'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING',
             'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING',
             'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING'
           ]
@@ -550,6 +669,10 @@ async function validateCheckerSurface(
             'fails when SDKs stop propagating request ids',
             'fails when SDKs become the API contract source',
             'fails when SDKs consume a different generation input source',
+            'fails when SDKs consume a different libs export source',
+            'fails when libs schema export disappears from SDK generation metadata',
+            'fails when libs trace metadata disappears from SDK generation handoff',
+            'fails when libs source allows provider tokens into SDK handoff',
             'fails when route idempotency metadata is dropped',
             'fails when error trace metadata is dropped',
             'fails when raw authorization headers become allowed SDK generation values',

@@ -60,6 +60,14 @@ describe('client SDKs repository rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-CLIENT-SDKS-001',
         severity: 'error',
+        file: 'contracts/libs-export-source.yaml',
+        path: 'repository.root',
+        message:
+          'Client SDKs repository must include `contracts/libs-export-source.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CLIENT-SDKS-001',
+        severity: 'error',
         file: 'contracts/auth-helper.yaml',
         path: 'repository.root',
         message:
@@ -247,6 +255,101 @@ sdk_generation_source:
           path: 'sdk_generation_source.forbidden_values',
           message:
             'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `authorization_header` in `sdk_generation_source.forbidden_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when libs export source handoff drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'contracts/libs-export-source.yaml': `
+libs_export_source:
+  status: live
+  source_repo: zdp-client-sdks
+  source_package: zdp-client-sdks
+  source_exports:
+    - zdp-libs-ts/schema
+  generation_targets:
+    - typescript
+  required_metadata:
+    - schema_id
+  must_not_own:
+    - API contract source
+  forbidden_values:
+    - authorization_header
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.status',
+          message:
+            'Client SDKs libs export source must stay skeleton until generated SDK packages exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.source_repo',
+          message:
+            'Client SDKs libs export source must consume `zdp-libs-ts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.source_package',
+          message:
+            'Client SDKs libs export source package must be `zdp-libs-ts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.source_exports',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `zdp-libs-ts/error` in `libs_export_source.source_exports`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.generation_targets',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `rust` in `libs_export_source.generation_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.required_metadata',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `trace_id` in `libs_export_source.required_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.must_not_own',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `zdp-libs-ts package source` in `libs_export_source.must_not_own`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `provider_token` in `libs_export_source.forbidden_values`.'
         });
       }
     );
@@ -533,6 +636,47 @@ sdk_generation_source:
     - cookie_header
     - screen_component_payload
 `,
+    'contracts/libs-export-source.yaml': `
+libs_export_source:
+  status: skeleton
+  source_repo: zdp-libs-ts
+  source_package: zdp-libs-ts
+  source_exports:
+    - zdp-libs-ts/schema
+    - zdp-libs-ts/env-contract
+    - zdp-libs-ts/event-contracts
+    - zdp-libs-ts/error
+    - zdp-libs-ts/i18n-contract
+  generation_targets:
+    - typescript
+    - dart
+    - rust
+  required_metadata:
+    - schema_id
+    - env_var
+    - event_type
+    - error_code
+    - message_key
+    - request_id
+    - trace_id
+    - idempotency
+  must_not_own:
+    - zdp-libs-ts package source
+    - API contract source
+    - runtime validation engine
+    - product domain models
+    - final authorization decisions
+    - translation runtime
+  forbidden_values:
+    - authorization_header
+    - cookie_header
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - provider_token
+    - secret_value
+    - screen_component_payload
+`,
     'contracts/auth-helper.yaml': `
 auth_helper:
   status: skeleton
@@ -598,6 +742,7 @@ import { join } from 'node:path';
 const files = [
   'sdk-surface.yaml',
   'sdk-generation-source.yaml',
+  'libs-export-source.yaml',
   'auth-helper.yaml',
   'upload-client.yaml'
 ];
@@ -621,6 +766,10 @@ const REQUIRED_ROUTE_METADATA = [];
 const REQUIRED_ERROR_METADATA = [];
 const REQUIRED_WEBHOOK_METADATA = [];
 const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [];
+const REQUIRED_LIBS_EXPORT_SOURCE_REPO = 'zdp-libs-ts';
+const REQUIRED_LIBS_SOURCE_EXPORTS = [];
+const REQUIRED_LIBS_SOURCE_METADATA = [];
+const REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES = [];
 const REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP = [];
 const REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP = [];
 const CLIENT_SDK_LANGUAGE_MISSING = 'CLIENT_SDK_LANGUAGE_MISSING';
@@ -630,6 +779,10 @@ const CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT = 'CLIENT_SDK_GENERATION_SOURCE_RE
 const CLIENT_SDK_ROUTE_METADATA_MISSING = 'CLIENT_SDK_ROUTE_METADATA_MISSING';
 const CLIENT_SDK_ERROR_METADATA_MISSING = 'CLIENT_SDK_ERROR_METADATA_MISSING';
 const CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING';
+const CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT = 'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT';
+const CLIENT_SDK_LIBS_EXPORT_MISSING = 'CLIENT_SDK_LIBS_EXPORT_MISSING';
+const CLIENT_SDK_LIBS_METADATA_MISSING = 'CLIENT_SDK_LIBS_METADATA_MISSING';
+const CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING';
 const CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING';
 const CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING';
 export {
@@ -642,6 +795,10 @@ export {
   REQUIRED_ERROR_METADATA,
   REQUIRED_WEBHOOK_METADATA,
   REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES,
+  REQUIRED_LIBS_EXPORT_SOURCE_REPO,
+  REQUIRED_LIBS_SOURCE_EXPORTS,
+  REQUIRED_LIBS_SOURCE_METADATA,
+  REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES,
   REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP,
   REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP,
   CLIENT_SDK_LANGUAGE_MISSING,
@@ -651,6 +808,10 @@ export {
   CLIENT_SDK_ROUTE_METADATA_MISSING,
   CLIENT_SDK_ERROR_METADATA_MISSING,
   CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING,
+  CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT,
+  CLIENT_SDK_LIBS_EXPORT_MISSING,
+  CLIENT_SDK_LIBS_METADATA_MISSING,
+  CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING,
   CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING,
   CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING
 };
@@ -661,6 +822,10 @@ const cases = [
   'fails when SDKs stop propagating request ids',
   'fails when SDKs become the API contract source',
   'fails when SDKs consume a different generation input source',
+  'fails when SDKs consume a different libs export source',
+  'fails when libs schema export disappears from SDK generation metadata',
+  'fails when libs trace metadata disappears from SDK generation handoff',
+  'fails when libs source allows provider tokens into SDK handoff',
   'fails when route idempotency metadata is dropped',
   'fails when error trace metadata is dropped',
   'fails when raw authorization headers become allowed SDK generation values',

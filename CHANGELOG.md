@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.5
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 `zdp-libs-ts` public export source handoff 계약까지 검사하도록 강화했다.
+- SDK가 `zdp-libs-ts/schema`, `env-contract`, `event-contracts`, `error`, `i18n-contract` export와 trace/request/error/message metadata를 잃거나 provider token 같은 민감값을 SDK 입력으로 허용하면 실패하도록 했다.
+
 ## 0.35.4
 
 - `ZDP-LIBS-001`이 `zdp-libs-ts`의 최소 public export skeleton까지 검사하도록 강화했다.
