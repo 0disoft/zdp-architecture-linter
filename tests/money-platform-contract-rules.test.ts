@@ -78,6 +78,21 @@ describe('money platform contract rules', () => {
         message:
           'Money platform repository must include `contracts/entitlement-credit.yaml`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'package.json',
+        path: 'repository.root',
+        message: 'Money platform repository must include `package.json`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'scripts/check-money-contracts.ts',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `scripts/check-money-contracts.ts`.'
+      });
     });
   });
 
@@ -409,6 +424,79 @@ forbidden:
       });
     });
   });
+
+  test('fails when money checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun test"
+  }
+}
+`,
+        'src/money-contracts/parser.ts': `
+export async function readYamlFile(): Promise<unknown> {
+  return {};
+}
+`,
+        'src/money-contracts/validator.ts': `
+export async function checkMoneyContracts(): Promise<void> {}
+`,
+        'tests/money-contracts.test.ts': `
+import { test } from 'bun:test';
+test('money placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Money platform package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Money platform package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/money-contracts/parser.ts',
+          path: 'source',
+          message:
+            'Money platform checker source must include `Bun.YAML.parse`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'src/money-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Money platform checker source must include `MONEY_BOUNDARIES_FILE`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-PLATFORM-001',
+          severity: 'error',
+          file: 'tests/money-contracts.test.ts',
+          path: 'source',
+          message:
+            'Money platform checker source must include `fails when ledger append-only rules drift`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -467,6 +555,7 @@ function createMoneyServiceContract(): Record<string, unknown> {
 
 function createValidMoneyFiles(): Record<string, string> {
   return {
+    ...createValidMoneyCheckerFiles(),
     'contracts/money-boundaries.yaml': `
 contract:
   version: 2
@@ -665,6 +754,86 @@ forbidden:
   - product_repo_credit_decrement
   - billing_owns_credit_balance_truth
   - analytics_event_as_money_truth
+`
+  };
+}
+
+function createValidMoneyCheckerFiles(): Record<string, string> {
+  return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-money-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-money-contracts.ts': `
+import { runMoneyContractCheckCli } from '../src/money-contracts/cli';
+const exitCode = await runMoneyContractCheckCli(process.cwd(), process.argv.slice(2));
+process.exitCode = exitCode;
+`,
+    'src/money-contracts/cli.ts': `
+export async function runMoneyContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/money-contracts/parser.ts': `
+export async function readYamlFile(): Promise<unknown> {
+  return Bun.YAML.parse('{}');
+}
+`,
+    'src/money-contracts/types.ts': `
+export interface ContractDiagnostic {
+  readonly file: string;
+  readonly path: string;
+  readonly message: string;
+}
+`,
+    'src/money-contracts/validator.ts': `
+const MONEY_BOUNDARIES_FILE = 'contracts/money-boundaries.yaml';
+const MONEY_COMMAND_ENVELOPE_FILE = 'contracts/money-command-envelope.yaml';
+const LEDGER_ENTRY_FILE = 'contracts/ledger-entry.yaml';
+const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
+const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
+const SERVICE_FILE = 'service.yaml';
+const MONEY_FORBIDDEN = [];
+const QUEUE_ENVELOPE_REQUIRED_FIELDS = [];
+const REQUIRED_RULE = 'ZDP-MONEY-PLATFORM-001';
+export async function checkMoneyContracts(): Promise<void> {
+  void MONEY_BOUNDARIES_FILE;
+  void MONEY_COMMAND_ENVELOPE_FILE;
+  void LEDGER_ENTRY_FILE;
+  void PAYMENT_WEBHOOK_FILE;
+  void ENTITLEMENT_CREDIT_FILE;
+  void SERVICE_FILE;
+  void MONEY_FORBIDDEN;
+  void QUEUE_ENVELOPE_REQUIRED_FIELDS;
+  void REQUIRED_RULE;
+}
+`,
+    'tests/money-contracts.test.ts': `
+const cases = [
+  'fails when command idempotency or sensitive payload rules drift',
+  'fails when ledger append-only rules drift',
+  'fails when webhook processing can bypass edge, signature, or queue rules',
+  'fails when entitlement and credit truth boundaries drift',
+  'fails when service.yaml stops declaring the money risk boundary'
+];
+export { cases };
 `
   };
 }

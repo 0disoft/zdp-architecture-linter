@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.1
+
+- `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 checker skeleton까지 검사하도록 강화했다.
+- money platform package scripts와 `scripts/check-money-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.32.0
 
 - `ZDP-MONEY-PLATFORM-001`을 추가했다.
