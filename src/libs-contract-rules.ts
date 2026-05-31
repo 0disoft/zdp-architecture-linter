@@ -22,6 +22,13 @@ const CHECKER_PARSER_FILE = 'src/libs-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/libs-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/libs-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/libs-contracts.test.ts';
+const PUBLIC_ROOT_EXPORT_FILE = 'src/index.ts';
+const PUBLIC_SCHEMA_EXPORT_FILE = 'src/schema/index.ts';
+const PUBLIC_ENV_EXPORT_FILE = 'src/env-contract/index.ts';
+const PUBLIC_EVENT_EXPORT_FILE = 'src/event-contracts/index.ts';
+const PUBLIC_ERROR_EXPORT_FILE = 'src/error/index.ts';
+const PUBLIC_I18N_EXPORT_FILE = 'src/i18n-contract/index.ts';
+const PUBLIC_EXPORT_TEST_FILE = 'tests/public-exports.test.ts';
 
 const REQUIRED_LIBS_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -31,10 +38,26 @@ const REQUIRED_LIBS_CHECKER_FILES = [
   CHECKER_PARSER_FILE,
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
-  CHECKER_TEST_FILE
+  CHECKER_TEST_FILE,
+  PUBLIC_ROOT_EXPORT_FILE,
+  PUBLIC_SCHEMA_EXPORT_FILE,
+  PUBLIC_ENV_EXPORT_FILE,
+  PUBLIC_EVENT_EXPORT_FILE,
+  PUBLIC_ERROR_EXPORT_FILE,
+  PUBLIC_I18N_EXPORT_FILE,
+  PUBLIC_EXPORT_TEST_FILE
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+
+const REQUIRED_PACKAGE_EXPORTS = {
+  '.': './src/index.ts',
+  './schema': './src/schema/index.ts',
+  './env-contract': './src/env-contract/index.ts',
+  './event-contracts': './src/event-contracts/index.ts',
+  './error': './src/error/index.ts',
+  './i18n-contract': './src/i18n-contract/index.ts'
+} as const;
 
 const REQUIRED_PACKAGES = [
   '@zdp/schema',
@@ -244,6 +267,7 @@ export async function validateRepositoryLibsContract(input: {
       ? []
       : validateI18nContract(i18nContract.value)),
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...(packageJson.value === null ? [] : validatePackageExports(packageJson.value)),
     ...(await validateCheckerSurface(input.repositoryRoot)),
     ...validateRequiredLinterRule(input.repositoryServiceContract)
   ];
@@ -612,6 +636,39 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
   return diagnostics;
 }
 
+function validatePackageExports(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const [exportPath, expectedTarget] of Object.entries(REQUIRED_PACKAGE_EXPORTS)) {
+    const actual = readPackageExportTarget(value, exportPath);
+
+    if (actual === expectedTarget) {
+      continue;
+    }
+
+    diagnostics.push(
+      createLibsDiagnostic(
+        PACKAGE_FILE,
+        `exports["${exportPath}"]`,
+        `Libs package must export \`${exportPath}\` from \`${expectedTarget}\`.`
+      )
+    );
+  }
+
+  const typesTarget = readPath(value, 'types');
+  if (typesTarget !== './src/index.ts') {
+    diagnostics.push(
+      createLibsDiagnostic(
+        PACKAGE_FILE,
+        'types',
+        'Libs package must point `types` at `./src/index.ts`.'
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 async function validateCheckerSurface(
   repositoryRoot: string
 ): Promise<readonly Diagnostic[]> {
@@ -623,7 +680,14 @@ async function validateCheckerSurface(
     parserSource,
     typesSource,
     validatorSource,
-    testSource
+    testSource,
+    publicRootSource,
+    publicSchemaSource,
+    publicEnvSource,
+    publicEventSource,
+    publicErrorSource,
+    publicI18nSource,
+    publicExportTestSource
   ] = await Promise.all(
     REQUIRED_LIBS_CHECKER_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -639,6 +703,13 @@ async function validateCheckerSurface(
     ...typesSource.diagnostics,
     ...validatorSource.diagnostics,
     ...testSource.diagnostics,
+    ...publicRootSource.diagnostics,
+    ...publicSchemaSource.diagnostics,
+    ...publicEnvSource.diagnostics,
+    ...publicEventSource.diagnostics,
+    ...publicErrorSource.diagnostics,
+    ...publicI18nSource.diagnostics,
+    ...publicExportTestSource.diagnostics,
     ...(script.source === null
       ? []
       : validateSourceIncludes({
@@ -699,6 +770,84 @@ async function validateCheckerSurface(
             'fails when event contracts drop trace fields',
             'fails when error contracts allow raw provider errors',
             'fails when i18n contracts become a translation runtime'
+          ]
+        })),
+    ...(publicRootSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_ROOT_EXPORT_FILE,
+          source: publicRootSource.source,
+          requiredFragments: [
+            "from './schema/index'",
+            "from './env-contract/index'",
+            "from './event-contracts/index'",
+            "from './error/index'",
+            "from './i18n-contract/index'"
+          ]
+        })),
+    ...(publicSchemaSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_SCHEMA_EXPORT_FILE,
+          source: publicSchemaSource.source,
+          requiredFragments: [
+            'SCHEMA_GENERATION_TARGETS',
+            'SchemaMetadata',
+            'defineSchemaMetadata'
+          ]
+        })),
+    ...(publicEnvSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_ENV_EXPORT_FILE,
+          source: publicEnvSource.source,
+          requiredFragments: [
+            'EnvContractMetadata',
+            'defineEnvContractMetadata'
+          ]
+        })),
+    ...(publicEventSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_EVENT_EXPORT_FILE,
+          source: publicEventSource.source,
+          requiredFragments: [
+            'EventTraceContext',
+            'EventContractMetadata',
+            'defineEventContractMetadata'
+          ]
+        })),
+    ...(publicErrorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_ERROR_EXPORT_FILE,
+          source: publicErrorSource.source,
+          requiredFragments: [
+            'ZdpErrorCategory',
+            'ZdpErrorContract',
+            'defineZdpErrorContract'
+          ]
+        })),
+    ...(publicI18nSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_I18N_EXPORT_FILE,
+          source: publicI18nSource.source,
+          requiredFragments: [
+            'I18nMessageArgument',
+            'I18nMessageContract',
+            'defineI18nMessageContract'
+          ]
+        })),
+    ...(publicExportTestSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: PUBLIC_EXPORT_TEST_FILE,
+          source: publicExportTestSource.source,
+          requiredFragments: [
+            'public contract package exports',
+            'defineSchemaMetadataFromSubpath',
+            'defineZdpErrorContract'
           ]
         }))
   ];
@@ -919,6 +1068,18 @@ function readPath(value: unknown, path: string): unknown {
   }
 
   return current;
+}
+
+function readPackageExportTarget(value: unknown, exportPath: string): string | null {
+  if (!isRecord(value) || !isRecord(value.exports)) {
+    return null;
+  }
+
+  const candidate = value.exports[exportPath];
+
+  return typeof candidate === 'string' && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
 }
 
 function readStringField(

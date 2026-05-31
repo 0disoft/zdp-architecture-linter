@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.4
+
+- `ZDP-LIBS-001`이 `zdp-libs-ts`의 최소 public export skeleton까지 검사하도록 강화했다.
+- `schema`, `env-contract`, `event-contracts`, `error`, `i18n-contract` subpath export와 public export 테스트 표면이 사라지면 실패하도록 했다.
+
 ## 0.35.3
 
 - `ZDP-LIBS-001`이 `zdp-libs-ts`의 API contract source handoff 계약까지 검사하도록 강화했다.

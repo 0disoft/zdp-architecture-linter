@@ -424,6 +424,83 @@ test('libs placeholder', () => {});
     );
   });
 
+  test('fails when libs public export skeleton drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidLibsContractFiles(),
+        'package.json': `
+{
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "types": "./src/not-index.ts",
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-libs-contracts.ts"
+  }
+}
+`,
+        'src/index.ts': `
+export { defineSchemaMetadata } from './schema/index';
+`,
+        'src/schema/index.ts': `
+export const SCHEMA_GENERATION_TARGETS = [];
+`,
+        'tests/public-exports.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryLibsContract({
+          repositoryRoot,
+          repositoryServiceContract: createLibsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'exports["./env-contract"]',
+          message:
+            'Libs package must export `./env-contract` from `./src/env-contract/index.ts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'types',
+          message: 'Libs package must point `types` at `./src/index.ts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'src/index.ts',
+          path: 'source',
+          message:
+            "Libs checker source must include `from './env-contract/index'`."
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'src/schema/index.ts',
+          path: 'source',
+          message: 'Libs checker source must include `SchemaMetadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'tests/public-exports.test.ts',
+          path: 'source',
+          message:
+            'Libs checker source must include `public contract package exports`.'
+        });
+      }
+    );
+  });
+
   test('fails when service contract does not require the libs gate', async () => {
     await withRepositoryRoot(createValidLibsContractFiles(), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryLibsContract({
@@ -650,6 +727,15 @@ function createValidLibsCheckerFiles(): Record<string, string> {
   return {
     'package.json': `
 {
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./env-contract": "./src/env-contract/index.ts",
+    "./event-contracts": "./src/event-contracts/index.ts",
+    "./error": "./src/error/index.ts",
+    "./i18n-contract": "./src/i18n-contract/index.ts"
+  },
+  "types": "./src/index.ts",
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
     "test": "bun test",
@@ -743,6 +829,79 @@ const cases = [
   'fails when event contracts drop trace fields',
   'fails when error contracts allow raw provider errors',
   'fails when i18n contracts become a translation runtime'
+];
+export { cases };
+`,
+    'src/index.ts': `
+export { defineSchemaMetadata } from './schema/index';
+export { defineEnvContractMetadata } from './env-contract/index';
+export { defineEventContractMetadata } from './event-contracts/index';
+export { defineZdpErrorContract } from './error/index';
+export { defineI18nMessageContract } from './i18n-contract/index';
+`,
+    'src/schema/index.ts': `
+const SCHEMA_GENERATION_TARGETS = [];
+interface SchemaMetadata {
+  readonly schemaId: string;
+}
+function defineSchemaMetadata(metadata: SchemaMetadata): SchemaMetadata {
+  return metadata;
+}
+export { SCHEMA_GENERATION_TARGETS, defineSchemaMetadata };
+export type { SchemaMetadata };
+`,
+    'src/env-contract/index.ts': `
+interface EnvContractMetadata {
+  readonly name: string;
+}
+function defineEnvContractMetadata(metadata: EnvContractMetadata): EnvContractMetadata {
+  return metadata;
+}
+export { defineEnvContractMetadata };
+export type { EnvContractMetadata };
+`,
+    'src/event-contracts/index.ts': `
+interface EventTraceContext {
+  readonly traceId: string;
+}
+interface EventContractMetadata {
+  readonly trace: EventTraceContext;
+}
+function defineEventContractMetadata(metadata: EventContractMetadata): EventContractMetadata {
+  return metadata;
+}
+export { defineEventContractMetadata };
+export type { EventTraceContext, EventContractMetadata };
+`,
+    'src/error/index.ts': `
+type ZdpErrorCategory = 'internal';
+interface ZdpErrorContract {
+  readonly code: string;
+}
+function defineZdpErrorContract(contract: ZdpErrorContract): ZdpErrorContract {
+  return contract;
+}
+export { defineZdpErrorContract };
+export type { ZdpErrorCategory, ZdpErrorContract };
+`,
+    'src/i18n-contract/index.ts': `
+interface I18nMessageArgument {
+  readonly name: string;
+}
+interface I18nMessageContract {
+  readonly key: string;
+}
+function defineI18nMessageContract(contract: I18nMessageContract): I18nMessageContract {
+  return contract;
+}
+export { defineI18nMessageContract };
+export type { I18nMessageArgument, I18nMessageContract };
+`,
+    'tests/public-exports.test.ts': `
+const cases = [
+  'public contract package exports',
+  'defineSchemaMetadataFromSubpath',
+  'defineZdpErrorContract'
 ];
 export { cases };
 `
