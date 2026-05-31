@@ -10,6 +10,28 @@ const CREDENTIAL_BOUNDARY_FILE = 'contracts/credential-boundary.yaml';
 const CAPABILITY_ISSUANCE_FILE = 'contracts/capability-issuance.yaml';
 const ACCESS_AUDIT_FILE = 'contracts/access-audit.yaml';
 const STORAGE_BOUNDARY_FILE = 'contracts/storage-boundary.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-credential-vault-contracts.ts';
+const CHECKER_CLI_FILE = 'src/credential-vault-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/credential-vault-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/credential-vault-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/credential-vault-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/credential-vault-contracts.test.ts';
+
+const REQUIRED_CREDENTIAL_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_CREDENTIAL_CLASSES = [
   'oauth_refresh_token',
@@ -134,12 +156,14 @@ export async function validateRepositoryCredentialVaultContract(input: {
       readRequiredYamlContract(input.repositoryRoot, ACCESS_AUDIT_FILE),
       readRequiredYamlContract(input.repositoryRoot, STORAGE_BOUNDARY_FILE)
     ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...credentialBoundary.diagnostics,
     ...capabilityIssuance.diagnostics,
     ...accessAudit.diagnostics,
     ...storageBoundary.diagnostics,
+    ...packageJson.diagnostics,
     ...(credentialBoundary.value === null
       ? []
       : validateCredentialBoundaryContract(credentialBoundary.value)),
@@ -152,8 +176,10 @@ export async function validateRepositoryCredentialVaultContract(input: {
     ...(storageBoundary.value === null
       ? []
       : validateStorageBoundaryContract(storageBoundary.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
-    ...validateRequiredLinterRule(input.repositoryServiceContract)
+    ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -203,6 +229,85 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createCredentialDiagnostic(
+            file,
+            'repository.root',
+            `Credential vault repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createCredentialDiagnostic(
+          file,
+          'json',
+          `Credential vault contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createCredentialDiagnostic(
+            file,
+            'repository.root',
+            `Credential vault repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -645,6 +750,129 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       ]
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Credential vault package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_CREDENTIAL_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runCredentialVaultContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: [
+            'service.yaml',
+            CREDENTIAL_BOUNDARY_FILE,
+            CAPABILITY_ISSUANCE_FILE,
+            ACCESS_AUDIT_FILE,
+            STORAGE_BOUNDARY_FILE
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'MAX_CAPABILITY_TTL_SECONDS',
+            'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED',
+            'CRED_CAPABILITY_TTL_TOO_HIGH',
+            'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+            'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
+            'CRED_RESTORE_SECRET_VALUES_ALLOWED'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when a credential class allows plaintext export',
+            'fails when capability ttl is longer than five minutes',
+            'fails when connector repositories can persist capabilities',
+            'fails when audit records can include encrypted credential payloads',
+            'fails when restore evidence can include secret values'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        'source',
+        `Credential vault checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredLinterRule(value: unknown): readonly Diagnostic[] {

@@ -341,6 +341,66 @@ restore:
       });
     });
   });
+
+  test('fails when credential vault checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCredentialVaultFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit"
+  }
+}
+`,
+        'src/credential-vault-contracts/validator.ts': `
+const MAX_CAPABILITY_TTL_SECONDS = 300;
+`,
+        'tests/credential-vault-contracts.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Credential vault package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Credential vault package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/credential-vault-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Credential vault checker source must include `CRED_RESTORE_SECRET_VALUES_ALLOWED`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'tests/credential-vault-contracts.test.ts',
+          path: 'source',
+          message:
+            'Credential vault checker source must include `fails when restore evidence can include secret values`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -366,6 +426,66 @@ async function withRepositoryRoot(
 
 function createValidCredentialVaultFiles(): Record<string, string> {
   return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-credential-vault-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-credential-vault-contracts.ts': `
+import { runCredentialVaultContractCheckCli } from '../src/credential-vault-contracts/cli';
+`,
+    'src/credential-vault-contracts/cli.ts': `
+export async function runCredentialVaultContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/credential-vault-contracts/parser.ts': `
+const files = [
+  'service.yaml',
+  'contracts/credential-boundary.yaml',
+  'contracts/capability-issuance.yaml',
+  'contracts/access-audit.yaml',
+  'contracts/storage-boundary.yaml'
+];
+`,
+    'src/credential-vault-contracts/types.ts': `
+export interface CredentialVaultContracts {}
+`,
+    'src/credential-vault-contracts/validator.ts': `
+const MAX_CAPABILITY_TTL_SECONDS = 300;
+const codes = [
+  'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED',
+  'CRED_CAPABILITY_TTL_TOO_HIGH',
+  'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+  'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
+  'CRED_RESTORE_SECRET_VALUES_ALLOWED'
+];
+`,
+    'tests/credential-vault-contracts.test.ts': `
+const cases = [
+  'fails when a credential class allows plaintext export',
+  'fails when capability ttl is longer than five minutes',
+  'fails when connector repositories can persist capabilities',
+  'fails when audit records can include encrypted credential payloads',
+  'fails when restore evidence can include secret values'
+];
+`,
     'contracts/credential-boundary.yaml': `
 contract:
   version: 1

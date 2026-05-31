@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.2
+
+- `ZDP-CREDENTIAL-001`이 `zdp-privacy-credential-vault`의 repo-local checker skeleton까지 검사하도록 강화했다.
+- credential vault package scripts와 `scripts/check-credential-vault-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.37.1
 
 - `ZDP-CONNECTORS-001`이 `zdp-connectors-platform`의 repo-local checker skeleton까지 검사하도록 강화했다.
