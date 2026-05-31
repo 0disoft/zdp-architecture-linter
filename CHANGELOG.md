@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.6
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 SDK generation dry-run plan skeleton과 `generation:plan` script까지 검사하도록 강화했다.
+- SDK plan source/test/script가 사라지면 실제 SDK 생성기를 붙이기 전부터 API 계약, libs export, request/trace/idempotency 입력이 drift난 것으로 실패하도록 했다.
+
 ## 0.35.5
 
 - `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 `zdp-libs-ts` public export source handoff 계약까지 검사하도록 강화했다.

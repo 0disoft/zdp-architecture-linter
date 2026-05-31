@@ -20,6 +20,11 @@ const CHECKER_PARSER_FILE = 'src/client-sdk-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/client-sdk-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/client-sdk-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/client-sdk-contracts.test.ts';
+const GENERATION_PLAN_SCRIPT_FILE = 'scripts/plan-sdk-generation.ts';
+const GENERATION_PLAN_CLI_FILE = 'src/sdk-generation-plan/cli.ts';
+const GENERATION_PLAN_SOURCE_FILE = 'src/sdk-generation-plan/plan.ts';
+const GENERATION_PLAN_TYPES_FILE = 'src/sdk-generation-plan/types.ts';
+const GENERATION_PLAN_TEST_FILE = 'tests/sdk-generation-plan.test.ts';
 
 const REQUIRED_CLIENT_SDK_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -29,10 +34,20 @@ const REQUIRED_CLIENT_SDK_CHECKER_FILES = [
   CHECKER_PARSER_FILE,
   CHECKER_TYPES_FILE,
   CHECKER_VALIDATOR_FILE,
-  CHECKER_TEST_FILE
+  CHECKER_TEST_FILE,
+  GENERATION_PLAN_SCRIPT_FILE,
+  GENERATION_PLAN_CLI_FILE,
+  GENERATION_PLAN_SOURCE_FILE,
+  GENERATION_PLAN_TYPES_FILE,
+  GENERATION_PLAN_TEST_FILE
 ] as const;
 
-const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'test',
+  'contracts:check',
+  'generation:plan'
+] as const;
 
 const REQUIRED_SDK_LANGUAGES = ['typescript', 'dart', 'rust'] as const;
 const REQUIRED_SDK_BEHAVIORS = [
@@ -586,7 +601,12 @@ async function validateCheckerSurface(
     parserSource,
     typesSource,
     validatorSource,
-    testSource
+    testSource,
+    generationPlanScript,
+    generationPlanCliSource,
+    generationPlanSource,
+    generationPlanTypesSource,
+    generationPlanTestSource
   ] = await Promise.all(
     REQUIRED_CLIENT_SDK_CHECKER_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -602,6 +622,11 @@ async function validateCheckerSurface(
     ...typesSource.diagnostics,
     ...validatorSource.diagnostics,
     ...testSource.diagnostics,
+    ...generationPlanScript.diagnostics,
+    ...generationPlanCliSource.diagnostics,
+    ...generationPlanSource.diagnostics,
+    ...generationPlanTypesSource.diagnostics,
+    ...generationPlanTestSource.diagnostics,
     ...(script.source === null
       ? []
       : validateSourceIncludes({
@@ -678,6 +703,65 @@ async function validateCheckerSurface(
             'fails when raw authorization headers become allowed SDK generation values',
             'fails when auth helpers store refresh tokens',
             'fails when upload clients expose raw provider URLs as public contracts'
+          ]
+        })),
+    ...(generationPlanScript.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_SCRIPT_FILE,
+          source: generationPlanScript.source,
+          requiredFragments: ['runSdkGenerationPlanCli']
+        })),
+    ...(generationPlanCliSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_CLI_FILE,
+          source: generationPlanCliSource.source,
+          requiredFragments: [
+            'buildSdkGenerationPlan',
+            'loadClientSdkContracts',
+            '--check',
+            '--json'
+          ]
+        })),
+    ...(generationPlanSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_SOURCE_FILE,
+          source: generationPlanSource.source,
+          requiredFragments: [
+            'buildSdkGenerationPlan',
+            'validateClientSdkContracts',
+            '@zdp/client-sdk',
+            'zdp_client_sdk',
+            'zdp-client-sdk',
+            'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
+            'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
+          ]
+        })),
+    ...(generationPlanTypesSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_TYPES_FILE,
+          source: generationPlanTypesSource.source,
+          requiredFragments: [
+            'SdkGenerationPlan',
+            'writesArtifacts: false',
+            'publishesPackages: false'
+          ]
+        })),
+    ...(generationPlanTestSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: GENERATION_PLAN_TEST_FILE,
+          source: generationPlanTestSource.source,
+          requiredFragments: [
+            'builds a deterministic SDK generation plan',
+            'fails when contract validation fails before planning',
+            'fails when libs source does not cover an SDK generation target',
+            'zdp-libs-ts/schema',
+            'request_id',
+            'trace_id'
           ]
         }))
   ];

@@ -466,6 +466,13 @@ export function validateClientSdkContracts(): void {}
         'tests/client-sdk-contracts.test.ts': `
 import { test } from 'bun:test';
 test('client SDK placeholder', () => {});
+`,
+        'src/sdk-generation-plan/plan.ts': `
+export function buildSdkGenerationPlan(): void {}
+`,
+        'tests/sdk-generation-plan.test.ts': `
+import { test } from 'bun:test';
+test('SDK plan placeholder', () => {});
 `
       },
       async (repositoryRoot) => {
@@ -484,6 +491,13 @@ test('client SDK placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
+          file: 'package.json',
+          path: 'scripts.generation:plan',
+          message: 'Client SDKs package must declare `generation:plan` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
           file: 'src/client-sdk-contracts/validator.ts',
           path: 'source',
           message:
@@ -496,6 +510,22 @@ test('client SDK placeholder', () => {});
           path: 'source',
           message:
             'Client SDKs checker source must include `fails when SDKs consume a different generation input source`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'src/sdk-generation-plan/plan.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include `validateClientSdkContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'tests/sdk-generation-plan.test.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include `builds a deterministic SDK generation plan`.'
         });
       }
     );
@@ -709,9 +739,10 @@ function createValidClientSdkCheckerFiles(): Record<string, string> {
     'package.json': `
 {
   "scripts": {
-    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check": "tsc --noEmit && bun test && bun run contracts:check && bun run generation:plan -- --check",
     "test": "bun test",
-    "contracts:check": "bun scripts/check-client-sdk-contracts.ts"
+    "contracts:check": "bun scripts/check-client-sdk-contracts.ts",
+    "generation:plan": "bun scripts/plan-sdk-generation.ts"
   }
 }
 `,
@@ -730,6 +761,11 @@ function createValidClientSdkCheckerFiles(): Record<string, string> {
     'scripts/check-client-sdk-contracts.ts': `
 import { runClientSdkContractCheckCli } from '../src/client-sdk-contracts/cli';
 const exitCode = await runClientSdkContractCheckCli(process.argv.slice(2));
+process.exit(exitCode);
+`,
+    'scripts/plan-sdk-generation.ts': `
+import { runSdkGenerationPlanCli } from '../src/sdk-generation-plan/cli';
+const exitCode = await runSdkGenerationPlanCli(process.argv.slice(2));
 process.exit(exitCode);
 `,
     'src/client-sdk-contracts/cli.ts': `
@@ -831,6 +867,45 @@ const cases = [
   'fails when raw authorization headers become allowed SDK generation values',
   'fails when auth helpers store refresh tokens',
   'fails when upload clients expose raw provider URLs as public contracts'
+];
+export { cases };
+`,
+    'src/sdk-generation-plan/cli.ts': `
+import { loadClientSdkContracts } from '../client-sdk-contracts/parser';
+import { buildSdkGenerationPlan } from './plan';
+export async function runSdkGenerationPlanCli(argv: readonly string[]): Promise<number> {
+  loadClientSdkContracts();
+  buildSdkGenerationPlan;
+  return argv.includes('--check') || argv.includes('--json') ? 0 : 0;
+}
+`,
+    'src/sdk-generation-plan/plan.ts': `
+import { validateClientSdkContracts } from '../client-sdk-contracts/validator';
+const plannedPackages = ['@zdp/client-sdk', 'zdp_client_sdk', 'zdp-client-sdk'];
+const codes = [
+  'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
+  'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
+];
+export function buildSdkGenerationPlan(): void {
+  validateClientSdkContracts;
+  plannedPackages;
+  codes;
+}
+`,
+    'src/sdk-generation-plan/types.ts': `
+export interface SdkGenerationPlan {
+  readonly writesArtifacts: false;
+  readonly publishesPackages: false;
+}
+`,
+    'tests/sdk-generation-plan.test.ts': `
+const cases = [
+  'builds a deterministic SDK generation plan',
+  'fails when contract validation fails before planning',
+  'fails when libs source does not cover an SDK generation target',
+  'zdp-libs-ts/schema',
+  'request_id',
+  'trace_id'
 ];
 export { cases };
 `
