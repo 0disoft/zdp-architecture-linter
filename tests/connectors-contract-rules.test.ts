@@ -315,6 +315,65 @@ forbidden_values:
       });
     });
   });
+
+  test('fails when connectors checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidConnectorsFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit"
+  }
+}
+`,
+        'src/connectors-contracts/validator.ts': `
+const REQUIRED_PROVIDERS = [];
+`,
+        'tests/connectors-contracts.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryConnectorsContract({
+          repositoryRoot,
+          repositoryServiceContract: createConnectorsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Connectors package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message: 'Connectors package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'src/connectors-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include `CON_WEBHOOK_SIGNATURE_NOT_REQUIRED`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'tests/connectors-contracts.test.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include `fails when webhook replay drops signature verification`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -340,6 +399,67 @@ async function withRepositoryRoot(
 
 function createValidConnectorsFiles(): Record<string, string> {
   return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-connectors-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-connectors-contracts.ts': `
+import { runConnectorsContractCheckCli } from '../src/connectors-contracts/cli';
+`,
+    'src/connectors-contracts/cli.ts': `
+export async function runConnectorsContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/connectors-contracts/parser.ts': `
+const files = [
+  'service.yaml',
+  'contracts/provider-registry.yaml',
+  'contracts/sync-state.yaml',
+  'contracts/webhook-replay.yaml',
+  'contracts/provider-boundaries.yaml'
+];
+`,
+    'src/connectors-contracts/types.ts': `
+export interface ConnectorsContracts {}
+`,
+    'src/connectors-contracts/validator.ts': `
+const REQUIRED_PROVIDERS = ['google', 'microsoft', 'telegram'];
+const codes = [
+  'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+  'CON_SYNC_RAW_PAYLOAD_ALLOWED',
+  'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
+  'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
+  'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING'
+];
+`,
+    'tests/connectors-contracts.test.ts': `
+const cases = [
+  'fails when a required provider is missing',
+  'fails when a provider bypasses credential vault capability',
+  'fails when sync-state allows raw provider payload storage',
+  'fails when webhook replay drops signature verification',
+  'fails when webhook replay stores raw payloads instead of payload references',
+  'fails when provider boundaries allow final authorization ownership'
+];
+`,
     'contracts/provider-registry.yaml': `
 contract:
   version: 1
@@ -458,6 +578,8 @@ retry_policy:
   terminal_failure_reason_required: true
 forbidden_values:
   - raw_webhook_payload
+  - oauth_refresh_token_plaintext
+  - provider_api_credential_plaintext
   - webhook_secret_plaintext
   - authorization_header
   - cookie
@@ -496,6 +618,8 @@ forbidden_ownership:
 forbidden_values:
   - oauth_refresh_token_plaintext
   - provider_api_credential_plaintext
+  - authorization_header
+  - cookie
   - raw_mail_body
   - raw_message_body
   - raw_file_body

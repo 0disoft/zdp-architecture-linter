@@ -10,6 +10,28 @@ const PROVIDER_REGISTRY_FILE = 'contracts/provider-registry.yaml';
 const SYNC_STATE_FILE = 'contracts/sync-state.yaml';
 const WEBHOOK_REPLAY_FILE = 'contracts/webhook-replay.yaml';
 const PROVIDER_BOUNDARIES_FILE = 'contracts/provider-boundaries.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-connectors-contracts.ts';
+const CHECKER_CLI_FILE = 'src/connectors-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/connectors-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/connectors-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/connectors-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/connectors-contracts.test.ts';
+
+const REQUIRED_CONNECTORS_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_PROVIDERS = ['google', 'microsoft', 'telegram'] as const;
 
@@ -80,6 +102,8 @@ const REQUIRED_WEBHOOK_FIELDS = [
 
 const REQUIRED_WEBHOOK_FORBIDDEN_VALUES = [
   'raw_webhook_payload',
+  'oauth_refresh_token_plaintext',
+  'provider_api_credential_plaintext',
   'webhook_secret_plaintext',
   'authorization_header',
   'cookie',
@@ -108,6 +132,8 @@ const REQUIRED_FORBIDDEN_OWNERSHIP = [
 const REQUIRED_BOUNDARY_FORBIDDEN_VALUES = [
   'oauth_refresh_token_plaintext',
   'provider_api_credential_plaintext',
+  'authorization_header',
+  'cookie',
   'raw_mail_body',
   'raw_message_body',
   'raw_file_body'
@@ -147,12 +173,14 @@ export async function validateRepositoryConnectorsContract(input: {
       readRequiredYamlContract(input.repositoryRoot, WEBHOOK_REPLAY_FILE),
       readRequiredYamlContract(input.repositoryRoot, PROVIDER_BOUNDARIES_FILE)
     ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...providerRegistry.diagnostics,
     ...syncState.diagnostics,
     ...webhookReplay.diagnostics,
     ...providerBoundaries.diagnostics,
+    ...packageJson.diagnostics,
     ...(providerRegistry.value === null
       ? []
       : validateProviderRegistryContract(providerRegistry.value)),
@@ -165,8 +193,10 @@ export async function validateRepositoryConnectorsContract(input: {
     ...(providerBoundaries.value === null
       ? []
       : validateProviderBoundariesContract(providerBoundaries.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
-    ...validateRequiredLinterRule(input.repositoryServiceContract)
+    ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -216,6 +246,83 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createConnectorsDiagnostic(
+            file,
+            'repository.root',
+            `Connectors repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createConnectorsDiagnostic(
+          file,
+          'json',
+          `Connectors contract \`${file}\` must be valid JSON: ${formatError(error)}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createConnectorsDiagnostic(
+            file,
+            'repository.root',
+            `Connectors repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -671,6 +778,130 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       ]
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createConnectorsDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Connectors package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_CONNECTORS_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runConnectorsContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: [
+            'service.yaml',
+            PROVIDER_REGISTRY_FILE,
+            SYNC_STATE_FILE,
+            WEBHOOK_REPLAY_FILE,
+            PROVIDER_BOUNDARIES_FILE
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'REQUIRED_PROVIDERS',
+            'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+            'CON_SYNC_RAW_PAYLOAD_ALLOWED',
+            'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
+            'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
+            'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when a required provider is missing',
+            'fails when a provider bypasses credential vault capability',
+            'fails when sync-state allows raw provider payload storage',
+            'fails when webhook replay drops signature verification',
+            'fails when webhook replay stores raw payloads instead of payload references',
+            'fails when provider boundaries allow final authorization ownership'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createConnectorsDiagnostic(
+        input.file,
+        'source',
+        `Connectors checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredLinterRule(value: unknown): readonly Diagnostic[] {

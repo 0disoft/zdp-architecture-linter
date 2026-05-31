@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.1
+
+- `ZDP-CONNECTORS-001`이 `zdp-connectors-platform`의 repo-local checker skeleton까지 검사하도록 강화했다.
+- connectors package scripts와 `scripts/check-connectors-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.37.0
 
 - `ZDP-CONNECTORS-001`을 추가해 `zdp-connectors-platform`의 provider registry, sync-state, webhook replay, provider boundary 계약을 repository validate gate로 검사한다.
