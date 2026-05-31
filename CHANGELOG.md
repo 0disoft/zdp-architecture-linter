@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.10
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 API export dry-run plan handoff 검증 표면까지 검사하도록 강화했다.
+- SDK generation plan이 OpenAPI, SDK input, docs contract, webhook schema 계획과 `request_id`, `trace_id`, dry-run 보장을 보지 않으면 실패하도록 했다.
+
 ## 0.35.9
 
 - `ZDP-API-CONTRACTS-001`이 `zdp-api-contracts`의 API export dry-run plan skeleton과 `export:plan` script까지 검사하도록 강화했다.

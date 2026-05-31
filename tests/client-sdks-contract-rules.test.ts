@@ -533,6 +533,22 @@ test('SDK plan placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
+          file: 'src/sdk-generation-plan/api-input.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include `loadApiExportPlanHandoff`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'src/sdk-generation-plan/plan.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include `CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
           file: 'tests/sdk-generation-plan.test.ts',
           path: 'source',
           message:
@@ -883,11 +899,12 @@ export { cases };
 `,
     'src/sdk-generation-plan/cli.ts': `
 import { loadClientSdkContracts } from '../client-sdk-contracts/parser';
-import { loadApiSdkGenerationInput } from './api-input';
+import { loadApiExportPlanHandoff, loadApiSdkGenerationInput } from './api-input';
 import { buildSdkGenerationPlan } from './plan';
 export async function runSdkGenerationPlanCli(argv: readonly string[]): Promise<number> {
   loadClientSdkContracts();
   loadApiSdkGenerationInput();
+  loadApiExportPlanHandoff();
   buildSdkGenerationPlan;
   return argv.includes('--api-contracts-root') || argv.includes('--check') || argv.includes('--json') ? 0 : 0;
 }
@@ -902,9 +919,21 @@ const fields = [
   'required_webhook_metadata',
   'forbidden_values'
 ];
+const apiExportPlan = [
+  'package.json',
+  'export:plan',
+  'src/api-export-plan/plan.ts',
+  'sdk_generation_input',
+  'docs_contract',
+  'writesArtifacts',
+  'publishesSchemas'
+];
 export function loadApiSdkGenerationInput(): void {
   file;
   fields;
+}
+export function loadApiExportPlanHandoff(): void {
+  apiExportPlan;
 }
 `,
     'src/sdk-generation-plan/plan.ts': `
@@ -916,22 +945,34 @@ const codes = [
   'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
   'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
   'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
-  'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT'
+  'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
+  'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
+  'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
+  'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS'
 ];
 const apiInputSourceContracts = [];
+const apiExportPlanOutputKinds = [];
+const apiExportPlanTraceFields = [];
 function validateApiGenerationInput(): void {}
+function validateApiExportPlanHandoff(): void {}
 export function buildSdkGenerationPlan(): void {
   validateClientSdkContracts;
   validateApiGenerationInput;
+  validateApiExportPlanHandoff;
   apiInputSourceContracts;
+  apiExportPlanOutputKinds;
+  apiExportPlanTraceFields;
   plannedPackages;
   codes;
 }
 `,
     'src/sdk-generation-plan/types.ts': `
+export interface ApiExportPlanHandoff {}
 export interface SdkGenerationPlan {
   readonly writesArtifacts: false;
   readonly publishesPackages: false;
+  readonly apiExportPlanOutputKinds: readonly string[];
+  readonly apiExportPlanTraceFields: readonly string[];
 }
 `,
     'tests/sdk-generation-plan.test.ts': `
@@ -940,6 +981,8 @@ const cases = [
   'fails when contract validation fails before planning',
   'fails when libs source does not cover an SDK generation target',
   'fails when API SDK generation input drifts from client SDK source',
+  'fails when API export plan no longer exposes SDK generation output',
+  'fails when API export plan can write artifacts before SDK generation',
   'zdp-libs-ts/schema',
   'request_id',
   'trace_id'

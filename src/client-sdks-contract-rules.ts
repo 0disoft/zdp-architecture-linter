@@ -724,6 +724,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'buildSdkGenerationPlan',
             'loadApiSdkGenerationInput',
+            'loadApiExportPlanHandoff',
             'loadClientSdkContracts',
             '--api-contracts-root',
             '--check',
@@ -743,7 +744,15 @@ async function validateCheckerSurface(
             'required_route_metadata',
             'required_error_metadata',
             'required_webhook_metadata',
-            'forbidden_values'
+            'forbidden_values',
+            'loadApiExportPlanHandoff',
+            'package.json',
+            'export:plan',
+            'src/api-export-plan/plan.ts',
+            'sdk_generation_input',
+            'docs_contract',
+            'writesArtifacts',
+            'publishesSchemas'
           ]
         })),
     ...(generationPlanSource.source === null
@@ -758,11 +767,17 @@ async function validateCheckerSurface(
             'zdp_client_sdk',
             'zdp-client-sdk',
             'validateApiGenerationInput',
+            'validateApiExportPlanHandoff',
             'apiInputSourceContracts',
+            'apiExportPlanOutputKinds',
+            'apiExportPlanTraceFields',
             'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
             'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
             'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
             'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
+            'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
+            'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
+            'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS',
             'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
             'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
           ]
@@ -775,7 +790,10 @@ async function validateCheckerSurface(
           requiredFragments: [
             'SdkGenerationPlan',
             'writesArtifacts: false',
-            'publishesPackages: false'
+            'publishesPackages: false',
+            'ApiExportPlanHandoff',
+            'apiExportPlanOutputKinds',
+            'apiExportPlanTraceFields'
           ]
         })),
     ...(generationPlanTestSource.source === null
@@ -788,6 +806,8 @@ async function validateCheckerSurface(
             'fails when contract validation fails before planning',
             'fails when libs source does not cover an SDK generation target',
             'fails when API SDK generation input drifts from client SDK source',
+            'fails when API export plan no longer exposes SDK generation output',
+            'fails when API export plan can write artifacts before SDK generation',
             'zdp-libs-ts/schema',
             'request_id',
             'trace_id'
