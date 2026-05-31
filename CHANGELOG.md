@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.0
+
+- `ZDP-SECURITY-001`을 추가해 `zdp-platform-security`의 security baseline, threat model template, secret handling, dependency review 계약을 repository validate gate로 검사한다.
+- 보안 리뷰가 raw secret, provider account id, 고객 payload, exploit payload, private incident evidence를 repo 증거로 남기거나 critical path dependency review 없이 promotion되는 구조를 차단한다.
+
 ## 0.37.7
 
 - `ZDP-RUNTIME-001`이 runtime smoke target에 `connectors-platform`을 요구하도록 강화했다.
