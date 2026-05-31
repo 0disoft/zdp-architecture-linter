@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.32.4
+
+- `ZDP-RUNTIME-001`이 runtime smoke target에 `money-api`를 요구하도록 강화했다.
+- `money-api`의 `/healthz`, `/readyz`, contracts readiness, 결제·환불·크레딧 변경 없는 smoke 경계를 검증한다.
+
 ## 0.32.3
 
 - `ZDP-MONEY-PLATFORM-001`이 `zdp-money-platform`의 최소 Rust/Axum API skeleton까지 검사하도록 강화했다.

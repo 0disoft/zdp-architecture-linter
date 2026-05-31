@@ -201,6 +201,13 @@ targets:
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
           file: 'contracts/smoke-targets.yaml',
+          path: 'targets.money-api',
+          message: 'Runtime smoke contract must declare `money-api` target.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
           path: 'targets.core-api.readyz.expect_json.ready',
           message:
             'Runtime `core-api` readyz smoke target must expect `ready: true`.'
@@ -283,6 +290,76 @@ targets:
           path: 'targets.edge-webhook-ingress.blocked_production_when',
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `traceparent is not propagated when present` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when the money api smoke target drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          moneyApi: `
+  - id: money-api
+    repo: zdp-money-platform
+    service_id: money-api
+    process: worker
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: wrong-money-service
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: false
+        checks: []
+    blocked_production_when:
+      - readyz checks omit contracts
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.money-api.process',
+          message: 'Runtime `money-api` smoke target must declare process `web`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.money-api.healthz.expect_json.service',
+          message:
+            'Runtime `money-api` healthz smoke target must expect service `money-api`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.money-api.readyz.expect_json.ready',
+          message:
+            'Runtime `money-api` readyz smoke target must expect `ready: true`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.money-api.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `smoke check requires a real payment, refund, credit mutation, customer account, or provider credential` in `blocked_production_when`.'
         });
       }
     );
@@ -527,7 +604,8 @@ import { test } from 'bun:test';
 test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
   const malformed = 'malformed_json_response';
-  return [reason, malformed];
+  const target = 'money-api';
+  return [reason, malformed, target];
 });
 `
   };
@@ -536,6 +614,7 @@ test('fails closed when run mode has no base URL', () => {
 function createSmokeTargetsYaml(
   overrides: {
     readonly edgeWebhookIngress?: string;
+    readonly moneyApi?: string;
   } = {}
 ): string {
   const edgeWebhookIngress =
@@ -564,6 +643,34 @@ function createSmokeTargetsYaml(
       - x-request-id is not propagated
       - traceparent is not propagated when present
       - edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+`;
+  const moneyApi =
+    overrides.moneyApi ??
+    `
+  - id: money-api
+    repo: zdp-money-platform
+    service_id: money-api
+    process: web
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: money-api
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - healthz service id does not match money-api
+      - readyz checks omit contracts
+      - smoke check requires a real payment, refund, credit mutation, customer account, or provider credential
+      - money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists
 `;
 
   return `
@@ -619,5 +726,6 @@ targets:
       - ZDP_CORE_API_BASE_URL is missing
       - readyz does not report core-api as an upstream
       - app shell attempts direct core, money, privacy, or credential datastore access
-${edgeWebhookIngress}`;
+${edgeWebhookIngress}
+${moneyApi}`;
 }

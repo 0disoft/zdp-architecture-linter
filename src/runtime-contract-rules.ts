@@ -377,7 +377,8 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     ...validateAppConsoleSmokeTarget(targetById.get('app-console')),
     ...validateEdgeWebhookIngressSmokeTarget(
       targetById.get('edge-webhook-ingress')
-    )
+    ),
+    ...validateMoneyApiSmokeTarget(targetById.get('money-api'))
   );
 
   return diagnostics;
@@ -617,6 +618,76 @@ function validateEdgeWebhookIngressSmokeTarget(
   ];
 }
 
+function validateMoneyApiSmokeTarget(
+  target: Record<string, unknown> | undefined
+): readonly Diagnostic[] {
+  if (target === undefined) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'targets.money-api',
+        'Runtime smoke contract must declare `money-api` target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateTargetIdentity(target, 'money-api', 'zdp-money-platform'),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.process',
+      field: 'process',
+      expected: 'web',
+      message: 'Runtime `money-api` smoke target must declare process `web`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.healthz.expect_json.ok',
+      field: 'healthz.expect_json.ok',
+      expected: true,
+      message: 'Runtime `money-api` healthz smoke target must expect `ok: true`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.healthz.expect_json.service',
+      field: 'healthz.expect_json.service',
+      expected: 'money-api',
+      message:
+        'Runtime `money-api` healthz smoke target must expect service `money-api`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.readyz.expect_json.ready',
+      field: 'readyz.expect_json.ready',
+      expected: true,
+      message: 'Runtime `money-api` readyz smoke target must expect `ready: true`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.readyz.expect_json.checks',
+      field: 'readyz.expect_json.checks',
+      requiredEntries: ['contracts']
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'healthz service id does not match money-api',
+        'readyz checks omit contracts',
+        'smoke check requires a real payment, refund, credit mutation, customer account, or provider credential',
+        'money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists'
+      ]
+    })
+  ];
+}
+
 function validateTargetIdentity(
   target: Record<string, unknown>,
   id: string,
@@ -805,7 +876,8 @@ async function validateSmokeRunnerSurface(
           requiredFragments: [
             'fails closed when run mode has no base URL',
             'base_url_not_provided',
-            'malformed_json_response'
+            'malformed_json_response',
+            'money-api'
           ]
         }))
   ];
