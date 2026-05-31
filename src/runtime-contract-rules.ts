@@ -382,7 +382,8 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     ...validateConnectorsPlatformSmokeTarget(
       targetById.get('connectors-platform')
     ),
-    ...validatePlatformSecurityContractCheck(value)
+    ...validatePlatformSecurityContractCheck(value),
+    ...validatePlatformInfraContractCheck(value)
   );
 
   return diagnostics;
@@ -873,6 +874,110 @@ function validatePlatformSecurityContractCheck(value: unknown): readonly Diagnos
   ];
 }
 
+function validatePlatformInfraContractCheck(value: unknown): readonly Diagnostic[] {
+  const contractChecks = readPath(value, 'contract_checks');
+
+  if (!Array.isArray(contractChecks)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks',
+        'Runtime smoke contract must declare a `contract_checks` array.'
+      )
+    ];
+  }
+
+  const target = contractChecks.find(
+    (entry) =>
+      isRecord(entry) &&
+      readStringField(entry, 'id') === 'platform-infra-contracts'
+  );
+
+  if (!isRecord(target)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks.platform-infra-contracts',
+        'Runtime smoke contract must declare `platform-infra-contracts` contract check target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.repo',
+      field: 'repo',
+      expected: 'zdp-platform-infra',
+      message:
+        'Runtime `platform-infra-contracts` check target must reference repo `zdp-platform-infra`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.service_id',
+      field: 'service_id',
+      expected: 'platform-infra',
+      message:
+        'Runtime `platform-infra-contracts` check target must declare service id `platform-infra`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.process',
+      field: 'process',
+      expected: 'one-shot-checker',
+      message:
+        'Runtime `platform-infra-contracts` check target must declare process `one-shot-checker`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.command',
+      field: 'command',
+      expected: 'bun run contracts:check',
+      message:
+        'Runtime `platform-infra-contracts` check target must run `bun run contracts:check`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.required_files',
+      field: 'required_files',
+      requiredEntries: [
+        'contracts/resource-inventory.yaml',
+        'contracts/environment.schema.yaml',
+        'contracts/backup-restore.yaml',
+        'scripts/check-infra-contracts.ts',
+        'scripts/infra-plan.ts'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.expected_evidence',
+      field: 'expected_evidence',
+      requiredEntries: [
+        'infra contracts parse without diagnostics',
+        'provider-neutral dry-run plan has no provider calls',
+        'checker does not require account ids, server ips, dns challenge secrets, or provider tokens'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'infra contracts are missing or unparseable',
+        'contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state',
+        'infra promotion relies on dashboard-only provider evidence'
+      ]
+    })
+  ];
+}
+
 function validateTargetIdentity(
   target: Record<string, unknown>,
   id: string,
@@ -1062,6 +1167,7 @@ async function validateSmokeRunnerSurface(
             'fails closed when run mode has no base URL',
             'base_url_not_provided',
             'platform-security-contracts',
+            'platform-infra-contracts',
             'is plan-only',
             'malformed_json_response',
             'money-api',

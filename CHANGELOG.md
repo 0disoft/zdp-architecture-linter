@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.4
+
+- `ZDP-RUNTIME-001`이 `platform-infra-contracts` one-shot contract check target을 요구한다.
+- 이 검사로 runtime promotion 전에 인프라 계약이 provider 계정, 서버 IP, DNS 인증값, Terraform/OpenTofu state에 기대는지 확인하고, provider-neutral dry-run plan이 유지되도록 했다.
+
 ## 0.38.3
 
 - `ZDP-INFRA-001`이 `zdp-platform-infra`의 repo-local infra contract checker와 provider-neutral dry-run plan skeleton을 요구한다.
