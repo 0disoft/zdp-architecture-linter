@@ -378,7 +378,10 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     ...validateEdgeWebhookIngressSmokeTarget(
       targetById.get('edge-webhook-ingress')
     ),
-    ...validateMoneyApiSmokeTarget(targetById.get('money-api'))
+    ...validateMoneyApiSmokeTarget(targetById.get('money-api')),
+    ...validateConnectorsPlatformSmokeTarget(
+      targetById.get('connectors-platform')
+    )
   );
 
   return diagnostics;
@@ -688,6 +691,83 @@ function validateMoneyApiSmokeTarget(
   ];
 }
 
+function validateConnectorsPlatformSmokeTarget(
+  target: Record<string, unknown> | undefined
+): readonly Diagnostic[] {
+  if (target === undefined) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'targets.connectors-platform',
+        'Runtime smoke contract must declare `connectors-platform` target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateTargetIdentity(
+      target,
+      'connectors-platform',
+      'zdp-connectors-platform'
+    ),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.process',
+      field: 'process',
+      expected: 'web',
+      message:
+        'Runtime `connectors-platform` smoke target must declare process `web`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.healthz.expect_json.ok',
+      field: 'healthz.expect_json.ok',
+      expected: true,
+      message:
+        'Runtime `connectors-platform` healthz smoke target must expect `ok: true`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.healthz.expect_json.service',
+      field: 'healthz.expect_json.service',
+      expected: 'connectors-platform',
+      message:
+        'Runtime `connectors-platform` healthz smoke target must expect service `connectors-platform`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.readyz.expect_json.ready',
+      field: 'readyz.expect_json.ready',
+      expected: true,
+      message:
+        'Runtime `connectors-platform` readyz smoke target must expect `ready: true`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.readyz.expect_json.checks',
+      field: 'readyz.expect_json.checks',
+      requiredEntries: ['contracts']
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'healthz service id does not match connectors-platform',
+        'readyz checks omit contracts',
+        'smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync',
+        'connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented'
+      ]
+    })
+  ];
+}
+
 function validateTargetIdentity(
   target: Record<string, unknown>,
   id: string,
@@ -877,7 +957,8 @@ async function validateSmokeRunnerSurface(
             'fails closed when run mode has no base URL',
             'base_url_not_provided',
             'malformed_json_response',
-            'money-api'
+            'money-api',
+            'connectors-platform'
           ]
         }))
   ];

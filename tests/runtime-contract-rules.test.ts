@@ -208,6 +208,14 @@ targets:
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
           file: 'contracts/smoke-targets.yaml',
+          path: 'targets.connectors-platform',
+          message:
+            'Runtime smoke contract must declare `connectors-platform` target.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
           path: 'targets.core-api.readyz.expect_json.ready',
           message:
             'Runtime `core-api` readyz smoke target must expect `ready: true`.'
@@ -360,6 +368,77 @@ targets:
           path: 'targets.money-api.blocked_production_when',
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `smoke check requires a real payment, refund, credit mutation, customer account, or provider credential` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when the connectors platform smoke target drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          connectorsPlatform: `
+  - id: connectors-platform
+    repo: zdp-connectors-platform
+    service_id: connectors-platform
+    process: worker
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: wrong-connectors-service
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: false
+        checks: []
+    blocked_production_when:
+      - readyz checks omit contracts
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.connectors-platform.process',
+          message:
+            'Runtime `connectors-platform` smoke target must declare process `web`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.connectors-platform.healthz.expect_json.service',
+          message:
+            'Runtime `connectors-platform` healthz smoke target must expect service `connectors-platform`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.connectors-platform.readyz.expect_json.ready',
+          message:
+            'Runtime `connectors-platform` readyz smoke target must expect `ready: true`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.connectors-platform.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync` in `blocked_production_when`.'
         });
       }
     );
@@ -604,8 +683,9 @@ import { test } from 'bun:test';
 test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
   const malformed = 'malformed_json_response';
-  const target = 'money-api';
-  return [reason, malformed, target];
+  const moneyTarget = 'money-api';
+  const connectorsTarget = 'connectors-platform';
+  return [reason, malformed, moneyTarget, connectorsTarget];
 });
 `
   };
@@ -615,6 +695,7 @@ function createSmokeTargetsYaml(
   overrides: {
     readonly edgeWebhookIngress?: string;
     readonly moneyApi?: string;
+    readonly connectorsPlatform?: string;
   } = {}
 ): string {
   const edgeWebhookIngress =
@@ -672,6 +753,34 @@ function createSmokeTargetsYaml(
       - smoke check requires a real payment, refund, credit mutation, customer account, or provider credential
       - money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists
 `;
+  const connectorsPlatform =
+    overrides.connectorsPlatform ??
+    `
+  - id: connectors-platform
+    repo: zdp-connectors-platform
+    service_id: connectors-platform
+    process: web
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: connectors-platform
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - healthz service id does not match connectors-platform
+      - readyz checks omit contracts
+      - smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync
+      - connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented
+`;
 
   return `
 targets:
@@ -727,5 +836,6 @@ targets:
       - readyz does not report core-api as an upstream
       - app shell attempts direct core, money, privacy, or credential datastore access
 ${edgeWebhookIngress}
-${moneyApi}`;
+${moneyApi}
+${connectorsPlatform}`;
 }

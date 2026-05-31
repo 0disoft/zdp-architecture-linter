@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.7
+
+- `ZDP-RUNTIME-001`이 runtime smoke target에 `connectors-platform`을 요구하도록 강화했다.
+- `connectors-platform`의 `/healthz`, `/readyz`, contracts readiness, 실제 OAuth provider·원문 source payload·평문 credential 없는 smoke 경계를 검증한다.
+
 ## 0.37.6
 
 - `ZDP-CONNECTORS-001`이 `zdp-connectors-platform`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.
