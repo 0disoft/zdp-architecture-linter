@@ -98,6 +98,7 @@ import { validateRepositoryInfraContract } from './infra-contract-rules.ts';
 import { validateRepositoryDataPlatformContract } from './data-platform-contract-rules.ts';
 import { validateRepositoryGrowthLabContract } from './growth-lab-contract-rules.ts';
 import { validateRepositoryLibsContract } from './libs-contract-rules.ts';
+import { validateRepositoryClientSdksContract } from './client-sdks-contract-rules.ts';
 import { validateRepositoryMoneyPlatformContract } from './money-platform-contract-rules.ts';
 import { validateRepositoryPrivacyContract } from './privacy-contract-rules.ts';
 import {
@@ -258,6 +259,13 @@ export async function validateArchitecture(
     input.repositoryRoot === undefined
       ? []
       : await validateRepositoryLibsContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
+  const repositoryClientSdksContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryClientSdksContract({
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
@@ -494,6 +502,7 @@ export async function validateArchitecture(
       ...repositoryRuntimeContractDiagnostics,
       ...repositoryApiContractsContractDiagnostics,
       ...repositoryLibsContractDiagnostics,
+      ...repositoryClientSdksContractDiagnostics,
       ...repositoryEdgeContractDiagnostics,
       ...repositoryObservabilityContractDiagnostics,
       ...repositoryInfraContractDiagnostics,

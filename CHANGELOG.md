@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.0
+
+- `ZDP-CLIENT-SDKS-001`을 추가해 `zdp-client-sdks`의 sdk surface/auth helper/upload client 계약과 checker skeleton을 repository validate gate로 검사한다.
+- TypeScript, Dart, Rust SDK 표면, request_id 전파, 표준 에러 envelope, refresh token 저장 금지, 최종 권한 판단 금지, raw provider URL 공개 계약 금지 경계가 사라지면 실패하도록 했다.
+
 ## 0.34.0
 
 - `ZDP-LIBS-001`을 추가해 `zdp-libs-ts`의 package/schema/env/event/error/i18n 계약과 checker skeleton을 repository validate gate로 검사한다.
