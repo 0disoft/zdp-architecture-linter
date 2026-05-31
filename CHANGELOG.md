@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.32.0
+
+- `ZDP-MONEY-PLATFORM-001`을 추가했다.
+- `zdp-money-platform` 저장소의 money boundary, command envelope, ledger entry, payment webhook, entitlement-credit 계약 파일을 검사한다.
+- money platform이 제품 저장소 잔액 변경, 중복 웹훅 원장 반영, raw 결제 데이터 저장, billing의 credit balance truth 소유로 흐르지 않도록 검증한다.
+
 ## 0.31.0
 
 - `ZDP-PRIVACY-001`을 추가했다.
