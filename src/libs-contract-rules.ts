@@ -17,6 +17,7 @@ const PACKAGE_FILE = 'package.json';
 const BUN_LOCK_FILE = 'bun.lock';
 const TSCONFIG_FILE = 'tsconfig.json';
 const CHECKER_SCRIPT_FILE = 'scripts/check-libs-contracts.ts';
+const CHECKER_API_SOURCE_FILE = 'src/libs-contracts/api-source.ts';
 const CHECKER_CLI_FILE = 'src/libs-contracts/cli.ts';
 const CHECKER_PARSER_FILE = 'src/libs-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/libs-contracts/types.ts';
@@ -34,6 +35,7 @@ const REQUIRED_LIBS_CHECKER_FILES = [
   BUN_LOCK_FILE,
   TSCONFIG_FILE,
   CHECKER_SCRIPT_FILE,
+  CHECKER_API_SOURCE_FILE,
   CHECKER_CLI_FILE,
   CHECKER_PARSER_FILE,
   CHECKER_TYPES_FILE,
@@ -633,6 +635,20 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const contractsCheck = readPath(value, 'scripts.contracts:check');
+  if (
+    typeof contractsCheck !== 'string' ||
+    !contractsCheck.includes('--api-contracts-root ../zdp-api-contracts')
+  ) {
+    diagnostics.push(
+      createLibsDiagnostic(
+        PACKAGE_FILE,
+        'scripts.contracts:check',
+        'Libs package `contracts:check` must read sibling `zdp-api-contracts` with `--api-contracts-root ../zdp-api-contracts`.'
+      )
+    );
+  }
+
   return diagnostics;
 }
 
@@ -676,6 +692,7 @@ async function validateCheckerSurface(
     bunLock,
     tsconfig,
     script,
+    apiSourceSource,
     cliSource,
     parserSource,
     typesSource,
@@ -698,6 +715,7 @@ async function validateCheckerSurface(
     ...bunLock.diagnostics,
     ...tsconfig.diagnostics,
     ...script.diagnostics,
+    ...apiSourceSource.diagnostics,
     ...cliSource.diagnostics,
     ...parserSource.diagnostics,
     ...typesSource.diagnostics,
@@ -716,6 +734,35 @@ async function validateCheckerSurface(
           file: CHECKER_SCRIPT_FILE,
           source: script.source,
           requiredFragments: ['runLibsContractCheckCli']
+        })),
+    ...(apiSourceSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_API_SOURCE_FILE,
+          source: apiSourceSource.source,
+          requiredFragments: [
+            'loadApiContractsInput',
+            'contracts/route-contract.yaml',
+            'contracts/error-envelope.yaml',
+            'contracts/webhook-contract.yaml',
+            'contracts/sdk-generation-input.yaml',
+            'required_per_route',
+            'required_fields',
+            'required_controls',
+            'generation_targets',
+            'forbidden_values'
+          ]
+        })),
+    ...(cliSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_CLI_FILE,
+          source: cliSource.source,
+          requiredFragments: [
+            'loadApiContractsInput',
+            '--api-contracts-root',
+            'zdp-api-contracts'
+          ]
         })),
     ...(parserSource.source === null
       ? []
@@ -741,6 +788,9 @@ async function validateCheckerSurface(
             'REQUIRED_PACKAGE_NAMES',
             'REQUIRED_API_SOURCE_CONTRACTS',
             'REQUIRED_API_SOURCE_HANDOFF_METADATA',
+            'validateApiContractInputHandoff',
+            'LIBS_API_INPUT_SDK_ERROR_METADATA_MISSING',
+            'LIBS_API_INPUT_FORBIDDEN_VALUE_MISSING',
             'REQUIRED_SCHEMA_METADATA',
             'REQUIRED_ENV_METADATA',
             'REQUIRED_EVENT_TRACE_FIELDS',
@@ -765,6 +815,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'fails when a required package boundary disappears',
             'fails when API contract source handoff drifts',
+            'fails when API source input no longer carries handoff metadata',
             'fails when schema contracts stop targeting Rust generation',
             'fails when env contracts allow provider tokens as values',
             'fails when event contracts drop trace fields',

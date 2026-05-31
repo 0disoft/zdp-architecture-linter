@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.35.8
+
+- `ZDP-LIBS-001`이 `zdp-libs-ts`의 API source input drift 검증 표면까지 검사하도록 강화했다.
+- `contracts:check --api-contracts-root ../zdp-api-contracts`, `src/libs-contracts/api-source.ts`, API route/error/webhook/SDK input handoff 실패 테스트가 사라지면 실패하도록 했다.
+
 ## 0.35.7
 
 - `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 API SDK generation input drift 검증 표면까지 검사하도록 강화했다.

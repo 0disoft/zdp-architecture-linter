@@ -407,6 +407,14 @@ test('libs placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
           severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Libs package `contracts:check` must read sibling `zdp-api-contracts` with `--api-contracts-root ../zdp-api-contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
           file: 'src/libs-contracts/validator.ts',
           path: 'source',
           message:
@@ -739,7 +747,7 @@ function createValidLibsCheckerFiles(): Record<string, string> {
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
     "test": "bun test",
-    "contracts:check": "bun scripts/check-libs-contracts.ts"
+    "contracts:check": "bun scripts/check-libs-contracts.ts --api-contracts-root ../zdp-api-contracts"
   }
 }
 `,
@@ -760,8 +768,31 @@ import { runLibsContractCheckCli } from '../src/libs-contracts/cli';
 const exitCode = await runLibsContractCheckCli(process.argv.slice(2));
 process.exit(exitCode);
 `,
+    'src/libs-contracts/api-source.ts': `
+const files = [
+  'contracts/route-contract.yaml',
+  'contracts/error-envelope.yaml',
+  'contracts/webhook-contract.yaml',
+  'contracts/sdk-generation-input.yaml'
+];
+const fields = [
+  'required_per_route',
+  'required_fields',
+  'required_controls',
+  'generation_targets',
+  'forbidden_values'
+];
+function loadApiContractsInput() {
+  return { files, fields };
+}
+export { loadApiContractsInput };
+`,
     'src/libs-contracts/cli.ts': `
+import { loadApiContractsInput } from './api-source';
 export async function runLibsContractCheckCli(): Promise<number> {
+  const root = '--api-contracts-root';
+  const defaultRoot = '../zdp-api-contracts';
+  loadApiContractsInput();
   return 0;
 }
 `,
@@ -786,6 +817,9 @@ export interface LibsContractDiagnostic {
 const REQUIRED_PACKAGE_NAMES = [];
 const REQUIRED_API_SOURCE_CONTRACTS = [];
 const REQUIRED_API_SOURCE_HANDOFF_METADATA = [];
+const validateApiContractInputHandoff = () => {};
+const LIBS_API_INPUT_SDK_ERROR_METADATA_MISSING = 'LIBS_API_INPUT_SDK_ERROR_METADATA_MISSING';
+const LIBS_API_INPUT_FORBIDDEN_VALUE_MISSING = 'LIBS_API_INPUT_FORBIDDEN_VALUE_MISSING';
 const REQUIRED_SCHEMA_METADATA = [];
 const REQUIRED_ENV_METADATA = [];
 const REQUIRED_EVENT_TRACE_FIELDS = [];
@@ -804,6 +838,9 @@ export {
   REQUIRED_PACKAGE_NAMES,
   REQUIRED_API_SOURCE_CONTRACTS,
   REQUIRED_API_SOURCE_HANDOFF_METADATA,
+  validateApiContractInputHandoff,
+  LIBS_API_INPUT_SDK_ERROR_METADATA_MISSING,
+  LIBS_API_INPUT_FORBIDDEN_VALUE_MISSING,
   REQUIRED_SCHEMA_METADATA,
   REQUIRED_ENV_METADATA,
   REQUIRED_EVENT_TRACE_FIELDS,
@@ -824,6 +861,7 @@ export {
 const cases = [
   'fails when a required package boundary disappears',
   'fails when API contract source handoff drifts',
+  'fails when API source input no longer carries handoff metadata',
   'fails when schema contracts stop targeting Rust generation',
   'fails when env contracts allow provider tokens as values',
   'fails when event contracts drop trace fields',
