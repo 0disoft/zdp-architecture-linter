@@ -317,6 +317,66 @@ logging:
       });
     });
   });
+
+  test('fails when privacy broker checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit"
+  }
+}
+`,
+        'src/privacy-contracts/validator.ts': `
+const MAX_CAPABILITY_TTL_SECONDS = 300;
+`,
+        'tests/privacy-contracts.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Privacy broker package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Privacy broker package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'src/privacy-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Privacy broker checker source must include `PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'tests/privacy-contracts.test.ts',
+          path: 'source',
+          message:
+            'Privacy broker checker source must include `fails when growth or analytics can receive subject-level raw streams`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -382,6 +442,66 @@ function createPrivacyServiceContract(): Record<string, unknown> {
 
 function createValidPrivacyFiles(): Record<string, string> {
   return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-privacy-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-privacy-contracts.ts': `
+import { runPrivacyContractCheckCli } from '../src/privacy-contracts/cli';
+`,
+    'src/privacy-contracts/cli.ts': `
+export async function runPrivacyContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/privacy-contracts/parser.ts': `
+const files = [
+  'service.yaml',
+  'contracts/privacy-access-policy.yaml',
+  'contracts/capability-grants.yaml',
+  'contracts/data-minimization.yaml',
+  'contracts/access-capability.yaml'
+];
+`,
+    'src/privacy-contracts/types.ts': `
+export interface PrivacyContracts {}
+`,
+    'src/privacy-contracts/validator.ts': `
+const MAX_CAPABILITY_TTL_SECONDS = 300;
+const codes = [
+  'PRIV_POLICY_DEFAULT_NOT_DENY',
+  'PRIV_CAPABILITY_TTL_TOO_HIGH',
+  'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+  'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
+  'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED'
+];
+`,
+    'tests/privacy-contracts.test.ts': `
+const cases = [
+  'fails when access policy does not default deny',
+  'fails when capability ttl is longer than five minutes',
+  'fails when capability can skip policy recheck',
+  'fails when data minimization can retain raw source data',
+  'fails when growth or analytics can receive subject-level raw streams'
+];
+`,
     'contracts/privacy-access-policy.yaml': `
 contract:
   version: 1

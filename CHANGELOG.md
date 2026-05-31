@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.3
+
+- `ZDP-PRIVACY-001`이 `zdp-privacy-access-broker`의 repo-local checker skeleton까지 검사하도록 강화했다.
+- privacy broker package scripts와 `scripts/check-privacy-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.37.2
 
 - `ZDP-CREDENTIAL-001`이 `zdp-privacy-credential-vault`의 repo-local checker skeleton까지 검사하도록 강화했다.

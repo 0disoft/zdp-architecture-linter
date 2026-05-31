@@ -10,6 +10,28 @@ const PRIVACY_ACCESS_POLICY_FILE = 'contracts/privacy-access-policy.yaml';
 const CAPABILITY_GRANTS_FILE = 'contracts/capability-grants.yaml';
 const DATA_MINIMIZATION_FILE = 'contracts/data-minimization.yaml';
 const ACCESS_CAPABILITY_FILE = 'contracts/access-capability.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-privacy-contracts.ts';
+const CHECKER_CLI_FILE = 'src/privacy-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/privacy-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/privacy-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/privacy-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/privacy-contracts.test.ts';
+
+const REQUIRED_PRIVACY_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_POLICY_CONTEXT = [
   'actor_id',
@@ -160,12 +182,14 @@ export async function validateRepositoryPrivacyContract(input: {
     readRequiredYamlContract(input.repositoryRoot, DATA_MINIMIZATION_FILE),
     readRequiredYamlContract(input.repositoryRoot, ACCESS_CAPABILITY_FILE)
   ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...accessPolicy.diagnostics,
     ...capabilityGrants.diagnostics,
     ...dataMinimization.diagnostics,
     ...accessCapability.diagnostics,
+    ...packageJson.diagnostics,
     ...(accessPolicy.value === null
       ? []
       : validateAccessPolicyContract(accessPolicy.value)),
@@ -178,8 +202,10 @@ export async function validateRepositoryPrivacyContract(input: {
     ...(accessCapability.value === null
       ? []
       : validateAccessCapabilityContract(accessCapability.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
-    ...validateRequiredLinterRule(input.repositoryServiceContract)
+    ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -229,6 +255,85 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createPrivacyDiagnostic(
+            file,
+            'repository.root',
+            `Privacy broker repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createPrivacyDiagnostic(
+          file,
+          'json',
+          `Privacy broker contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createPrivacyDiagnostic(
+            file,
+            'repository.root',
+            `Privacy broker repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -606,6 +711,129 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       ]
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createPrivacyDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Privacy broker package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_PRIVACY_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runPrivacyContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: [
+            'service.yaml',
+            PRIVACY_ACCESS_POLICY_FILE,
+            CAPABILITY_GRANTS_FILE,
+            DATA_MINIMIZATION_FILE,
+            ACCESS_CAPABILITY_FILE
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'MAX_CAPABILITY_TTL_SECONDS',
+            'PRIV_POLICY_DEFAULT_NOT_DENY',
+            'PRIV_CAPABILITY_TTL_TOO_HIGH',
+            'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+            'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
+            'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when access policy does not default deny',
+            'fails when capability ttl is longer than five minutes',
+            'fails when capability can skip policy recheck',
+            'fails when data minimization can retain raw source data',
+            'fails when growth or analytics can receive subject-level raw streams'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createPrivacyDiagnostic(
+        input.file,
+        'source',
+        `Privacy broker checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredLinterRule(value: unknown): readonly Diagnostic[] {
