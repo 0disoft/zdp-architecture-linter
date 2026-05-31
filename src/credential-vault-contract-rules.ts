@@ -19,6 +19,16 @@ const CHECKER_PARSER_FILE = 'src/credential-vault-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/credential-vault-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/credential-vault-contracts/validator.ts';
 const CHECKER_TEST_FILE = 'tests/credential-vault-contracts.test.ts';
+const CARGO_FILE = 'Cargo.toml';
+const CARGO_LOCK_FILE = 'Cargo.lock';
+const RUNTIME_LIB_FILE = 'src/lib.rs';
+const RUNTIME_MAIN_FILE = 'src/main.rs';
+const RUNTIME_BOUNDARY_MOD_FILE = 'src/boundaries/mod.rs';
+const RUNTIME_CREDENTIAL_BOUNDARY_FILE = 'src/boundaries/credential_boundary.rs';
+const RUNTIME_CAPABILITY_ISSUANCE_FILE =
+  'src/boundaries/capability_issuance.rs';
+const RUNTIME_ACCESS_AUDIT_FILE = 'src/boundaries/access_audit.rs';
+const RUNTIME_STORAGE_BOUNDARY_FILE = 'src/boundaries/storage_boundary.rs';
 
 const REQUIRED_CREDENTIAL_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -32,6 +42,18 @@ const REQUIRED_CREDENTIAL_CHECKER_FILES = [
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+
+const REQUIRED_CREDENTIAL_RUNTIME_FILES = [
+  CARGO_FILE,
+  CARGO_LOCK_FILE,
+  RUNTIME_LIB_FILE,
+  RUNTIME_MAIN_FILE,
+  RUNTIME_BOUNDARY_MOD_FILE,
+  RUNTIME_CREDENTIAL_BOUNDARY_FILE,
+  RUNTIME_CAPABILITY_ISSUANCE_FILE,
+  RUNTIME_ACCESS_AUDIT_FILE,
+  RUNTIME_STORAGE_BOUNDARY_FILE
+] as const;
 
 const REQUIRED_CREDENTIAL_CLASSES = [
   'oauth_refresh_token',
@@ -179,7 +201,8 @@ export async function validateRepositoryCredentialVaultContract(input: {
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateServiceContract(input.repositoryServiceContract),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
-    ...(await validateCheckerSurface(input.repositoryRoot))
+    ...(await validateCheckerSurface(input.repositoryRoot)),
+    ...(await validateRuntimeSurface(input.repositoryRoot))
   ];
 }
 
@@ -846,6 +869,190 @@ async function validateCheckerSurface(
             'fails when connector repositories can persist capabilities',
             'fails when audit records can include encrypted credential payloads',
             'fails when restore evidence can include secret values'
+          ]
+        }))
+  ];
+}
+
+async function validateRuntimeSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    cargo,
+    cargoLock,
+    libSource,
+    mainSource,
+    boundaryModSource,
+    credentialBoundarySource,
+    capabilityIssuanceSource,
+    accessAuditSource,
+    storageBoundarySource
+  ] = await Promise.all(
+    REQUIRED_CREDENTIAL_RUNTIME_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...cargo.diagnostics,
+    ...cargoLock.diagnostics,
+    ...libSource.diagnostics,
+    ...mainSource.diagnostics,
+    ...boundaryModSource.diagnostics,
+    ...credentialBoundarySource.diagnostics,
+    ...capabilityIssuanceSource.diagnostics,
+    ...accessAuditSource.diagnostics,
+    ...storageBoundarySource.diagnostics,
+    ...(cargo.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CARGO_FILE,
+          source: cargo.source,
+          requiredFragments: ['axum', 'tokio', 'serde', 'serde_json', 'tower']
+        })),
+    ...(libSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_LIB_FILE,
+          source: libSource.source,
+          requiredFragments: [
+            'pub const SERVICE_ID',
+            '"credential-vault"',
+            'pub const DEFAULT_BIND_ADDR',
+            '"127.0.0.1:3005"',
+            'ZDP_CREDENTIAL_VAULT_BIND_ADDR',
+            '.route("/healthz", get(healthz))',
+            '.route("/readyz", get(readyz))',
+            'ready: true',
+            'checks:',
+            '"contracts"',
+            'healthz_returns_credential_vault_identity',
+            'readyz_reports_contract_readiness_only',
+            'credential_boundaries_do_not_export_or_cache_plaintext_secret_material',
+            'can_export_plaintext_secret',
+            'can_cache_in_connector',
+            'can_write_secret_to_audit_or_restore_evidence',
+            'MAX_CAPABILITY_TTL_SECONDS'
+          ]
+        })),
+    ...(mainSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_MAIN_FILE,
+          source: mainSource.source,
+          requiredFragments: ['bind_addr_from_env', 'serve']
+        })),
+    ...(boundaryModSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_BOUNDARY_MOD_FILE,
+          source: boundaryModSource.source,
+          requiredFragments: [
+            'credential_boundary',
+            'capability_issuance',
+            'access_audit',
+            'storage_boundary',
+            'can_export_plaintext_secret',
+            'can_cache_in_connector',
+            'can_write_secret_to_audit_or_restore_evidence'
+          ]
+        })),
+    ...(credentialBoundarySource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_CREDENTIAL_BOUNDARY_FILE,
+          source: credentialBoundarySource.source,
+          requiredFragments: [
+            'id: "credential_boundary"',
+            'can_export_plaintext_secret: false',
+            'can_cache_in_connector: false',
+            'can_write_secret_to_audit_or_restore_evidence: false',
+            'REQUIRED_CREDENTIAL_CLASSES',
+            'oauth_refresh_token',
+            'webhook_secret',
+            'provider_api_credential',
+            'FORBIDDEN_CREDENTIAL_VALUES',
+            'raw_oauth_refresh_token',
+            'raw_webhook_secret',
+            'raw_provider_api_credential',
+            'authorization_header',
+            'cookie'
+          ]
+        })),
+    ...(capabilityIssuanceSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_CAPABILITY_ISSUANCE_FILE,
+          source: capabilityIssuanceSource.source,
+          requiredFragments: [
+            'MAX_CAPABILITY_TTL_SECONDS',
+            '= 300',
+            'id: "capability_issuance"',
+            'can_export_plaintext_secret: false',
+            'can_cache_in_connector: false',
+            'can_write_secret_to_audit_or_restore_evidence: false',
+            'REQUIRED_CAPABILITY_REQUEST_FIELDS',
+            'service_id',
+            'actor_id',
+            'tenant_id',
+            'purpose',
+            'credential_ref',
+            'scope',
+            'idempotency_key',
+            'request_id',
+            'trace_id',
+            'FORBIDDEN_CAPABILITY_VALUES',
+            'plaintext_secret_return',
+            'connector_local_cache',
+            'analytics_event_export'
+          ]
+        })),
+    ...(accessAuditSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_ACCESS_AUDIT_FILE,
+          source: accessAuditSource.source,
+          requiredFragments: [
+            'id: "access_audit"',
+            'can_export_plaintext_secret: false',
+            'can_cache_in_connector: false',
+            'can_write_secret_to_audit_or_restore_evidence: false',
+            'REQUIRED_AUDIT_EVENTS',
+            'credential.capability.issued',
+            'credential.access.denied',
+            'credential.break_glass.used',
+            'credential.rotation.performed',
+            'FORBIDDEN_AUDIT_VALUES',
+            'raw_secret',
+            'raw_token',
+            'authorization_header',
+            'cookie',
+            'provider_payload',
+            'encrypted_payload'
+          ]
+        })),
+    ...(storageBoundarySource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: RUNTIME_STORAGE_BOUNDARY_FILE,
+          source: storageBoundarySource.source,
+          requiredFragments: [
+            'id: "storage_boundary"',
+            'can_export_plaintext_secret: false',
+            'can_cache_in_connector: false',
+            'can_write_secret_to_audit_or_restore_evidence: false',
+            'ALLOWED_INTERFACES',
+            'capability_issue',
+            'credential_proxy_use',
+            'webhook_signature_verify',
+            'credential_rotation',
+            'credential_revoke',
+            'FORBIDDEN_STORAGE_LOCATIONS',
+            'product_repository',
+            'connector_repository',
+            'analytics_event',
+            'logs',
+            'public_discovery'
           ]
         }))
   ];

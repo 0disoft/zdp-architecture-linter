@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.37.5
+
+- `ZDP-CREDENTIAL-001`이 `zdp-privacy-credential-vault`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.
+- `/healthz`, `/readyz`, `ZDP_CREDENTIAL_VAULT_BIND_ADDR`, boundary marker, plaintext export/connector cache/audit restore secret 금지 표면을 검증한다.
+
 ## 0.37.4
 
 - `ZDP-PRIVACY-001`이 `zdp-privacy-access-broker`의 최소 Rust/Axum skeleton까지 검사하도록 강화했다.

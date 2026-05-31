@@ -7,6 +7,8 @@ import {
   withArchitectureFiles
 } from './cli-test-helpers.ts';
 
+const GIT_BACKED_CLI_TEST_TIMEOUT_MS = 15_000;
+
 describe('diff CLI', () => {
   test('compares a git ref with the current worktree', async () => {
     await withArchitectureFiles(
@@ -90,7 +92,7 @@ repositories:
         );
       }
     );
-  });
+  }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);
 
   test('prints usage when base ref is missing', async () => {
     const result = await runCli(['diff', '--architecture', '.']);
