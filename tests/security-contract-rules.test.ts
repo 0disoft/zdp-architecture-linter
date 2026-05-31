@@ -258,6 +258,64 @@ promotion_blocking:
       }
     );
   });
+
+  test('fails when security checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidSecurityFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun test"
+  }
+}
+`,
+        'src/security-contracts/validator.ts': `
+export function validateSecurityContracts(): void {}
+`,
+        'tests/security-contracts.test.ts': `
+import { test } from 'bun:test';
+test('security placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositorySecurityContract({
+          repositoryRoot,
+          repositoryServiceContract: createSecurityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test',
+          message: 'Security package must declare `test` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message: 'Security package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'src/security-contracts/validator.ts',
+          path: 'source',
+          message: 'Security checker source must include `REQUIRED_REVIEWS`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'tests/security-contracts.test.ts',
+          path: 'source',
+          message:
+            'Security checker source must include `fails when a required review trigger is missing`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -305,6 +363,7 @@ function createSecurityServiceContract(): unknown {
 
 function createValidSecurityFiles(): Record<string, string> {
   return {
+    ...createValidSecurityCheckerFiles(),
     'contracts/security-baseline.yaml': `
 contract:
   version: 1
@@ -461,6 +520,81 @@ promotion_blocking:
   - critical path dependency has no replacement plan
   - high maintainer risk accepted without owner
   - known critical vulnerability has no mitigation or accepted-risk record
+`
+  };
+}
+
+function createValidSecurityCheckerFiles(): Record<string, string> {
+  return {
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-security-contracts.ts"
+  }
+}
+`,
+    'bun.lock': `
+{
+  "lockfileVersion": 1
+}
+`,
+    'tsconfig.json': `
+{
+  "compilerOptions": {
+    "strict": true
+  }
+}
+`,
+    'scripts/check-security-contracts.ts': `
+import { runSecurityContractCheckCli } from '../src/security-contracts/cli';
+const exitCode = await runSecurityContractCheckCli(process.argv.slice(2));
+process.exit(exitCode);
+`,
+    'src/security-contracts/cli.ts': `
+export async function runSecurityContractCheckCli(): Promise<number> {
+  return 0;
+}
+`,
+    'src/security-contracts/parser.ts': `
+const files = [
+  'contracts/security-baseline.yaml',
+  'contracts/threat-model-template.yaml',
+  'contracts/secret-handling.yaml',
+  'contracts/dependency-review.yaml'
+];
+export { files };
+`,
+    'src/security-contracts/types.ts': `
+export interface SecurityDiagnostic {
+  readonly code: string;
+}
+`,
+    'src/security-contracts/validator.ts': `
+const REQUIRED_REVIEWS = [];
+const REQUIRED_THREAT_MODEL_FIELDS = [];
+const REQUIRED_SECRET_FORBIDDEN_VALUES = [];
+const REQUIRED_DEPENDENCY_FIELDS = [];
+const SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED =
+  'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED';
+export {
+  REQUIRED_REVIEWS,
+  REQUIRED_THREAT_MODEL_FIELDS,
+  REQUIRED_SECRET_FORBIDDEN_VALUES,
+  REQUIRED_DEPENDENCY_FIELDS,
+  SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED
+};
+`,
+    'tests/security-contracts.test.ts': `
+const cases = [
+  'fails when a required review trigger is missing',
+  'fails when threat models stop requiring server-side authorization controls',
+  'fails when the repository can store secret values',
+  'fails when critical path dependencies can be single-maintainer by default',
+  'fails when critical path dependencies no longer require a replacement plan'
+];
+export { cases };
 `
   };
 }

@@ -10,6 +10,28 @@ const SECURITY_BASELINE_FILE = 'contracts/security-baseline.yaml';
 const THREAT_MODEL_TEMPLATE_FILE = 'contracts/threat-model-template.yaml';
 const SECRET_HANDLING_FILE = 'contracts/secret-handling.yaml';
 const DEPENDENCY_REVIEW_FILE = 'contracts/dependency-review.yaml';
+const PACKAGE_FILE = 'package.json';
+const BUN_LOCK_FILE = 'bun.lock';
+const TSCONFIG_FILE = 'tsconfig.json';
+const CHECKER_SCRIPT_FILE = 'scripts/check-security-contracts.ts';
+const CHECKER_CLI_FILE = 'src/security-contracts/cli.ts';
+const CHECKER_PARSER_FILE = 'src/security-contracts/parser.ts';
+const CHECKER_TYPES_FILE = 'src/security-contracts/types.ts';
+const CHECKER_VALIDATOR_FILE = 'src/security-contracts/validator.ts';
+const CHECKER_TEST_FILE = 'tests/security-contracts.test.ts';
+
+const REQUIRED_SECURITY_CHECKER_FILES = [
+  BUN_LOCK_FILE,
+  TSCONFIG_FILE,
+  CHECKER_SCRIPT_FILE,
+  CHECKER_CLI_FILE,
+  CHECKER_PARSER_FILE,
+  CHECKER_TYPES_FILE,
+  CHECKER_VALIDATOR_FILE,
+  CHECKER_TEST_FILE
+] as const;
+
+const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_REVIEWS = [
   'critical_service_boundary',
@@ -191,12 +213,14 @@ export async function validateRepositorySecurityContract(input: {
       readRequiredYamlContract(input.repositoryRoot, SECRET_HANDLING_FILE),
       readRequiredYamlContract(input.repositoryRoot, DEPENDENCY_REVIEW_FILE)
     ]);
+  const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
   return [
     ...securityBaseline.diagnostics,
     ...threatModel.diagnostics,
     ...secretHandling.diagnostics,
     ...dependencyReview.diagnostics,
+    ...packageJson.diagnostics,
     ...(securityBaseline.value === null
       ? []
       : validateSecurityBaselineContract(securityBaseline.value)),
@@ -209,7 +233,9 @@ export async function validateRepositorySecurityContract(input: {
     ...(dependencyReview.value === null
       ? []
       : validateDependencyReviewContract(dependencyReview.value)),
-    ...validateServiceContract(input.repositoryServiceContract)
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...validateServiceContract(input.repositoryServiceContract),
+    ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -259,6 +285,83 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonContract(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createSecurityDiagnostic(
+            file,
+            'repository.root',
+            `Security repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createSecurityDiagnostic(
+          file,
+          'json',
+          `Security contract \`${file}\` must be valid JSON: ${formatError(error)}`
+        )
+      ]
+    };
+  }
+}
+
+async function readOptionalTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createSecurityDiagnostic(
+            file,
+            'repository.root',
+            `Security repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -512,6 +615,127 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       ]
     })
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createSecurityDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Security package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [
+    bunLock,
+    tsconfig,
+    script,
+    cliSource,
+    parserSource,
+    typesSource,
+    validatorSource,
+    testSource
+  ] = await Promise.all(
+    REQUIRED_SECURITY_CHECKER_FILES.map((file) =>
+      readOptionalTextFile(repositoryRoot, file)
+    )
+  );
+
+  return [
+    ...bunLock.diagnostics,
+    ...tsconfig.diagnostics,
+    ...script.diagnostics,
+    ...cliSource.diagnostics,
+    ...parserSource.diagnostics,
+    ...typesSource.diagnostics,
+    ...validatorSource.diagnostics,
+    ...testSource.diagnostics,
+    ...(script.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_SCRIPT_FILE,
+          source: script.source,
+          requiredFragments: ['runSecurityContractCheckCli']
+        })),
+    ...(parserSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_PARSER_FILE,
+          source: parserSource.source,
+          requiredFragments: [
+            SECURITY_BASELINE_FILE,
+            THREAT_MODEL_TEMPLATE_FILE,
+            SECRET_HANDLING_FILE,
+            DEPENDENCY_REVIEW_FILE
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'REQUIRED_REVIEWS',
+            'REQUIRED_THREAT_MODEL_FIELDS',
+            'REQUIRED_SECRET_FORBIDDEN_VALUES',
+            'REQUIRED_DEPENDENCY_FIELDS',
+            'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED'
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredFragments: [
+            'fails when a required review trigger is missing',
+            'fails when threat models stop requiring server-side authorization controls',
+            'fails when the repository can store secret values',
+            'fails when critical path dependencies can be single-maintainer by default',
+            'fails when critical path dependencies no longer require a replacement plan'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createSecurityDiagnostic(
+        input.file,
+        'source',
+        `Security checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredStringArrayEntries(input: {

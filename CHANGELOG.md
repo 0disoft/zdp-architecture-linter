@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.1
+
+- `ZDP-SECURITY-001`이 `zdp-platform-security`의 repo-local checker skeleton까지 검사하도록 강화했다.
+- security package scripts와 `scripts/check-security-contracts.ts`, checker source, checker test 표면을 검증한다.
+
 ## 0.38.0
 
 - `ZDP-SECURITY-001`을 추가해 `zdp-platform-security`의 security baseline, threat model template, secret handling, dependency review 계약을 repository validate gate로 검사한다.
