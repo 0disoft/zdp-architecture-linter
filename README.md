@@ -28,7 +28,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-data-platform` 저장소 루트의 analytics ingest, ClickHouse storage, deletion/anonymization 계약, architecture-aware checker skeleton, validator-only runtime skeleton이 GA4 대체 분석 gate로 유지되는지 검사한다.
 - `zdp-edge-workers` 저장소 루트의 request boundary, webhook ingress, queue envelope, analytics ingress 계약과 data-platform runtime-compatible precheck source/test가 Worker 구현 전 gate로 유지되는지 검사한다.
 - `zdp-platform-observability` 저장소 루트의 telemetry convention, dashboard inventory, alert rule 계약과 checker skeleton이 provider 연결 전 gate로 유지되는지 검사한다.
-- `zdp-platform-infra` 저장소 루트의 resource inventory, environment schema, backup/restore 계약이 provider 연결 전 gate로 유지되는지 검사한다.
+- `zdp-platform-infra` 저장소 루트의 resource inventory, environment schema, backup/restore 계약과 repo-local checker, provider-neutral dry-run plan skeleton이 provider 연결 전 gate로 유지되는지 검사한다.
 - `zdp-platform-security` 저장소 루트의 security baseline, threat model template, secret handling, dependency review 계약과 checker skeleton이 scanner 구현 전 gate로 유지되는지 검사한다.
 - `zdp-data-platform` 저장소 루트의 analytics ingest, ClickHouse storage, deletion/anonymization 계약과 architecture-aware checker skeleton이 GA4 대체 구현 전 gate로 유지되는지 검사한다.
 - `zdp-growth-lab` 저장소 루트의 funnel metric, growth experiment, experiment safety 계약과 checker skeleton이 CAC/LTV/CLV 정본이나 직접 DB 조회로 번지지 않는지 검사한다.

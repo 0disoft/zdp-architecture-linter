@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.3
+
+- `ZDP-INFRA-001`이 `zdp-platform-infra`의 repo-local infra contract checker와 provider-neutral dry-run plan skeleton을 요구한다.
+- 이 검사로 인프라 계약이 문서에만 남는 문제를 막고, provider 계정 연결 전에도 resource inventory, environment schema, backup/restore 기준을 기계적으로 재현할 수 있게 했다.
+
 ## 0.38.2
 
 - `ZDP-RUNTIME-001`이 `platform-security-contracts` one-shot contract check target을 요구한다.

@@ -62,6 +62,21 @@ describe('infra contract rules', () => {
         message:
           'Infrastructure repository must include `contracts/backup-restore.yaml`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-INFRA-001',
+        severity: 'error',
+        file: 'package.json',
+        path: 'repository.root',
+        message: 'Infrastructure repository must include `package.json`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-INFRA-001',
+        severity: 'error',
+        file: 'scripts/infra-plan.ts',
+        path: 'repository.root',
+        message:
+          'Infrastructure repository must include `scripts/infra-plan.ts`.'
+      });
     });
   });
 
@@ -247,6 +262,68 @@ restore_drills:
       }
     );
   });
+
+  test('fails when infra checker files and scripts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidInfraFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun test"
+  }
+}
+`,
+        'src/infra-contracts/plan.ts': `
+export function createInfrastructurePlan(): unknown {
+  return {};
+}
+`,
+        'tests/infra-contracts.test.ts': `
+import { test } from 'bun:test';
+test('placeholder', () => {});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryInfraContract({
+          repositoryRoot,
+          repositoryServiceContract: createInfraServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Infrastructure package must declare `contracts:check` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.infra:plan',
+          message: 'Infrastructure package must declare `infra:plan` script.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'src/infra-contracts/plan.ts',
+          path: 'source',
+          message:
+            'Infrastructure checker source must include `providerCalls: []`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'tests/infra-contracts.test.ts',
+          path: 'source',
+          message:
+            'Infrastructure checker source must include `provider-neutral dry-run plan`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -338,6 +415,48 @@ restore_drills:
       - restore start and end time
       - data integrity check result
       - rollback notes
+`,
+    'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check && bun run infra:plan",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-infra-contracts.ts",
+    "infra:plan": "bun scripts/infra-plan.ts plan"
+  }
+}
+`,
+    'scripts/check-infra-contracts.ts': `
+import { runInfraContractCheckCli } from '../src/infra-contracts/cli';
+await runInfraContractCheckCli([]);
+`,
+    'scripts/infra-plan.ts': `
+import { runInfraPlanCli } from '../src/infra-contracts/cli';
+await runInfraPlanCli(['plan']);
+`,
+    'src/infra-contracts/parser.ts': `
+export const files = ['resource-inventory.yaml', 'environment.schema.yaml', 'backup-restore.yaml'];
+`,
+    'src/infra-contracts/validator.ts': `
+export const checks = ['repository-contract-first', 'backfill-contract-or-revert-dashboard', 'least-privilege', 'server ips', 'rollback notes'];
+`,
+    'src/infra-contracts/plan.ts': `
+export function createInfrastructurePlan(): unknown {
+  return {
+    providerCalls: [],
+    blockedActions: ['terraform apply', 'opentofu apply', 'restore execution']
+  };
+}
+`,
+    'tests/infra-contracts.test.ts': `
+import { test } from 'bun:test';
+test('provider-neutral dry-run plan', () => {
+  const sourceOfTruth = 'INFRA_SOURCE_OF_TRUTH_INVALID';
+  const environment = 'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID';
+  const forbidden = 'INFRA_FORBIDDEN_VALUE_MISSING';
+  const restore = 'INFRA_RESTORE_EVIDENCE_FIELD_MISSING';
+  return [sourceOfTruth, environment, forbidden, restore];
+});
 `
   };
 }

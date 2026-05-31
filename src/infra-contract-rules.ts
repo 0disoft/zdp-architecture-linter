@@ -9,6 +9,29 @@ const INFRA_CONTRACT_RULE_ID = 'ZDP-INFRA-001';
 const RESOURCE_INVENTORY_FILE = 'contracts/resource-inventory.yaml';
 const ENVIRONMENT_SCHEMA_FILE = 'contracts/environment.schema.yaml';
 const BACKUP_RESTORE_FILE = 'contracts/backup-restore.yaml';
+const PACKAGE_FILE = 'package.json';
+const INFRA_CHECK_SCRIPT_FILE = 'scripts/check-infra-contracts.ts';
+const INFRA_PLAN_SCRIPT_FILE = 'scripts/infra-plan.ts';
+const INFRA_PARSER_FILE = 'src/infra-contracts/parser.ts';
+const INFRA_VALIDATOR_FILE = 'src/infra-contracts/validator.ts';
+const INFRA_PLAN_FILE = 'src/infra-contracts/plan.ts';
+const INFRA_TEST_FILE = 'tests/infra-contracts.test.ts';
+
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'test',
+  'contracts:check',
+  'infra:plan'
+] as const;
+
+const REQUIRED_INFRA_CHECKER_FILES = [
+  INFRA_CHECK_SCRIPT_FILE,
+  INFRA_PLAN_SCRIPT_FILE,
+  INFRA_PARSER_FILE,
+  INFRA_VALIDATOR_FILE,
+  INFRA_PLAN_FILE,
+  INFRA_TEST_FILE
+] as const;
 
 const REQUIRED_CLOUDFLARE_RESOURCES = [
   'dns_zones',
@@ -58,16 +81,19 @@ export async function validateRepositoryInfraContract(input: {
     return [];
   }
 
-  const [resourceInventory, environmentSchema, backupRestore] = await Promise.all([
-    readRequiredYamlContract(input.repositoryRoot, RESOURCE_INVENTORY_FILE),
-    readRequiredYamlContract(input.repositoryRoot, ENVIRONMENT_SCHEMA_FILE),
-    readRequiredYamlContract(input.repositoryRoot, BACKUP_RESTORE_FILE)
-  ]);
+  const [resourceInventory, environmentSchema, backupRestore, packageJson] =
+    await Promise.all([
+      readRequiredYamlContract(input.repositoryRoot, RESOURCE_INVENTORY_FILE),
+      readRequiredYamlContract(input.repositoryRoot, ENVIRONMENT_SCHEMA_FILE),
+      readRequiredYamlContract(input.repositoryRoot, BACKUP_RESTORE_FILE),
+      readRequiredJsonFile(input.repositoryRoot, PACKAGE_FILE)
+    ]);
 
   return [
     ...resourceInventory.diagnostics,
     ...environmentSchema.diagnostics,
     ...backupRestore.diagnostics,
+    ...packageJson.diagnostics,
     ...(resourceInventory.value === null
       ? []
       : validateResourceInventoryContract(resourceInventory.value)),
@@ -76,7 +102,9 @@ export async function validateRepositoryInfraContract(input: {
       : validateEnvironmentSchemaContract(environmentSchema.value)),
     ...(backupRestore.value === null
       ? []
-      : validateBackupRestoreContract(backupRestore.value))
+      : validateBackupRestoreContract(backupRestore.value)),
+    ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
+    ...(await validateInfraCheckerSurface(input.repositoryRoot))
   ];
 }
 
@@ -126,6 +154,85 @@ async function readRequiredYamlContract(
         )
       ]
     };
+  }
+}
+
+async function readRequiredJsonFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: unknown | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, file), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createInfraDiagnostic(
+            file,
+            'repository.root',
+            `Infrastructure repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
+
+  try {
+    return {
+      value: JSON.parse(source) as unknown,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      value: null,
+      diagnostics: [
+        createInfraDiagnostic(
+          file,
+          'json',
+          `Infrastructure contract \`${file}\` must be valid JSON: ${formatError(
+            error
+          )}`
+        )
+      ]
+    };
+  }
+}
+
+async function readRequiredTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly source: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      source: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        source: null,
+        diagnostics: [
+          createInfraDiagnostic(
+            file,
+            'repository.root',
+            `Infrastructure repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
   }
 }
 
@@ -287,6 +394,135 @@ function validateBackupRestoreContract(value: unknown): readonly Diagnostic[] {
     }),
     ...validateRestoreDrill(value)
   ];
+}
+
+function validatePackageScripts(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const script of REQUIRED_PACKAGE_SCRIPTS) {
+    const actual = readPath(value, `scripts.${script}`);
+
+    if (typeof actual === 'string' && actual.trim().length > 0) {
+      continue;
+    }
+
+    diagnostics.push(
+      createInfraDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${script}`,
+        `Infrastructure package must declare \`${script}\` script.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateInfraCheckerSurface(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const [checkScript, planScript, parser, validator, plan, test] =
+    await Promise.all(
+      REQUIRED_INFRA_CHECKER_FILES.map((file) =>
+        readRequiredTextFile(repositoryRoot, file)
+      )
+    );
+
+  return [
+    ...checkScript.diagnostics,
+    ...planScript.diagnostics,
+    ...parser.diagnostics,
+    ...validator.diagnostics,
+    ...plan.diagnostics,
+    ...test.diagnostics,
+    ...(checkScript.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_CHECK_SCRIPT_FILE,
+          source: checkScript.source,
+          requiredFragments: ['runInfraContractCheckCli']
+        })),
+    ...(planScript.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_PLAN_SCRIPT_FILE,
+          source: planScript.source,
+          requiredFragments: ['runInfraPlanCli']
+        })),
+    ...(parser.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_PARSER_FILE,
+          source: parser.source,
+          requiredFragments: [
+            'resource-inventory.yaml',
+            'environment.schema.yaml',
+            'backup-restore.yaml'
+          ]
+        })),
+    ...(validator.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_VALIDATOR_FILE,
+          source: validator.source,
+          requiredFragments: [
+            'repository-contract-first',
+            'backfill-contract-or-revert-dashboard',
+            'least-privilege',
+            'server ips',
+            'rollback notes'
+          ]
+        })),
+    ...(plan.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_PLAN_FILE,
+          source: plan.source,
+          requiredFragments: [
+            'providerCalls: []',
+            'terraform apply',
+            'opentofu apply',
+            'restore execution'
+          ]
+        })),
+    ...(test.source === null
+      ? []
+      : validateSourceIncludes({
+          file: INFRA_TEST_FILE,
+          source: test.source,
+          requiredFragments: [
+            'provider-neutral dry-run plan',
+            'INFRA_SOURCE_OF_TRUTH_INVALID',
+            'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID',
+            'INFRA_FORBIDDEN_VALUE_MISSING',
+            'INFRA_RESTORE_EVIDENCE_FIELD_MISSING'
+          ]
+        }))
+  ];
+}
+
+function validateSourceIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (input.source.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createInfraDiagnostic(
+        input.file,
+        'source',
+        `Infrastructure checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRestoreDrill(value: unknown): readonly Diagnostic[] {
