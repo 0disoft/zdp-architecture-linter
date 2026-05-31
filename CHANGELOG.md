@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.36.0
+
+- `ZDP-CREDENTIAL-001`을 추가해 `zdp-privacy-credential-vault`의 credential boundary, capability issuance, access audit, storage boundary 계약을 repository validate gate로 검사한다.
+- OAuth refresh token, webhook secret, provider credential 원문이 connector/product/AI/analytics 경계로 새거나 audit/restore/log에 raw secret 값이 남는 구조를 차단한다.
+
 ## 0.35.10
 
 - `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 API export dry-run plan handoff 검증 표면까지 검사하도록 강화했다.

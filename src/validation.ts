@@ -101,6 +101,7 @@ import { validateRepositoryLibsContract } from './libs-contract-rules.ts';
 import { validateRepositoryClientSdksContract } from './client-sdks-contract-rules.ts';
 import { validateRepositoryMoneyPlatformContract } from './money-platform-contract-rules.ts';
 import { validateRepositoryPrivacyContract } from './privacy-contract-rules.ts';
+import { validateRepositoryCredentialVaultContract } from './credential-vault-contract-rules.ts';
 import {
   validateRepositorySplitCandidates,
   validateSplitTriggerCatalog
@@ -311,6 +312,13 @@ export async function validateArchitecture(
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
+  const repositoryCredentialVaultContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryCredentialVaultContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
   const repositoryMoneyPlatformContractDiagnostics =
     input.repositoryRoot === undefined
       ? []
@@ -509,6 +517,7 @@ export async function validateArchitecture(
       ...repositoryDataPlatformContractDiagnostics,
       ...repositoryGrowthLabContractDiagnostics,
       ...repositoryPrivacyContractDiagnostics,
+      ...repositoryCredentialVaultContractDiagnostics,
       ...repositoryMoneyPlatformContractDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
