@@ -383,7 +383,8 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
       targetById.get('connectors-platform')
     ),
     ...validatePlatformSecurityContractCheck(value),
-    ...validatePlatformInfraContractCheck(value)
+    ...validatePlatformInfraContractCheck(value),
+    ...validatePlatformObservabilityContractCheck(value)
   );
 
   return diagnostics;
@@ -978,6 +979,111 @@ function validatePlatformInfraContractCheck(value: unknown): readonly Diagnostic
   ];
 }
 
+function validatePlatformObservabilityContractCheck(
+  value: unknown
+): readonly Diagnostic[] {
+  const contractChecks = readPath(value, 'contract_checks');
+
+  if (!Array.isArray(contractChecks)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks',
+        'Runtime smoke contract must declare a `contract_checks` array.'
+      )
+    ];
+  }
+
+  const target = contractChecks.find(
+    (entry) =>
+      isRecord(entry) &&
+      readStringField(entry, 'id') === 'platform-observability-contracts'
+  );
+
+  if (!isRecord(target)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks.platform-observability-contracts',
+        'Runtime smoke contract must declare `platform-observability-contracts` contract check target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.repo',
+      field: 'repo',
+      expected: 'zdp-platform-observability',
+      message:
+        'Runtime `platform-observability-contracts` check target must reference repo `zdp-platform-observability`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.service_id',
+      field: 'service_id',
+      expected: 'platform-observability',
+      message:
+        'Runtime `platform-observability-contracts` check target must declare service id `platform-observability`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.process',
+      field: 'process',
+      expected: 'one-shot-checker',
+      message:
+        'Runtime `platform-observability-contracts` check target must declare process `one-shot-checker`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.command',
+      field: 'command',
+      expected: 'bun run contracts:check',
+      message:
+        'Runtime `platform-observability-contracts` check target must run `bun run contracts:check`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.required_files',
+      field: 'required_files',
+      requiredEntries: [
+        'contracts/telemetry-conventions.yaml',
+        'contracts/dashboard-inventory.yaml',
+        'contracts/alert-rules.yaml',
+        'scripts/check-observability-contracts.ts'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.expected_evidence',
+      field: 'expected_evidence',
+      requiredEntries: [
+        'observability contracts parse without diagnostics',
+        'checker does not connect to telemetry providers',
+        'checker does not require provider tokens, dashboard urls, raw logs, or trace samples'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        'observability contracts are missing or unparseable',
+        'contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload',
+        'observability promotion relies on dashboard-only provider evidence'
+      ]
+    })
+  ];
+}
+
 function validateTargetIdentity(
   target: Record<string, unknown>,
   id: string,
@@ -1168,6 +1274,7 @@ async function validateSmokeRunnerSurface(
             'base_url_not_provided',
             'platform-security-contracts',
             'platform-infra-contracts',
+            'platform-observability-contracts',
             'is plan-only',
             'malformed_json_response',
             'money-api',

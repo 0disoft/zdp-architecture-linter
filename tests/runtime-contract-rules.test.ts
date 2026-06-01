@@ -605,6 +605,115 @@ contract_checks:
     );
   });
 
+  test('fails when the platform observability contract check target drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          contractChecks: `
+contract_checks:
+  - id: platform-security-contracts
+    repo: zdp-platform-security
+    service_id: platform-security
+    process: one-shot-checker
+    command: bun run contracts:check
+    required_files:
+      - contracts/security-baseline.yaml
+      - contracts/threat-model-template.yaml
+      - contracts/secret-handling.yaml
+      - contracts/dependency-review.yaml
+      - scripts/check-security-contracts.ts
+    expected_evidence:
+      - security contracts parse without diagnostics
+      - checker does not connect to scanners or providers
+      - checker does not require exploit payloads, private incident details, or secret values
+    blocked_production_when:
+      - security baseline contracts are missing or unparseable
+      - contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
+      - security promotion relies on dashboard-only scanner evidence
+  - id: platform-infra-contracts
+    repo: zdp-platform-infra
+    service_id: platform-infra
+    process: one-shot-checker
+    command: bun run contracts:check
+    required_files:
+      - contracts/resource-inventory.yaml
+      - contracts/environment.schema.yaml
+      - contracts/backup-restore.yaml
+      - scripts/check-infra-contracts.ts
+      - scripts/infra-plan.ts
+    expected_evidence:
+      - infra contracts parse without diagnostics
+      - provider-neutral dry-run plan has no provider calls
+      - checker does not require account ids, server ips, dns challenge secrets, or provider tokens
+    blocked_production_when:
+      - infra contracts are missing or unparseable
+      - contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
+      - infra promotion relies on dashboard-only provider evidence
+  - id: platform-observability-contracts
+    repo: zdp-platform-observability
+    service_id: platform-observability
+    process: web
+    command: bun test
+    required_files:
+      - contracts/telemetry-conventions.yaml
+    expected_evidence:
+      - observability contracts parse without diagnostics
+    blocked_production_when:
+      - observability contracts are missing or unparseable
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-observability-contracts.process',
+          message:
+            'Runtime `platform-observability-contracts` check target must declare process `one-shot-checker`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-observability-contracts.command',
+          message:
+            'Runtime `platform-observability-contracts` check target must run `bun run contracts:check`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-observability-contracts.required_files',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `contracts/dashboard-inventory.yaml` in `required_files`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-observability-contracts.expected_evidence',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `checker does not connect to telemetry providers` in `expected_evidence`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'contract_checks.platform-observability-contracts.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
   test('fails when deployment and rollback contracts drift', async () => {
     await withRepositoryRoot(
       {
@@ -845,6 +954,7 @@ test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
   const securityTarget = 'platform-security-contracts';
   const infraTarget = 'platform-infra-contracts';
+  const observabilityTarget = 'platform-observability-contracts';
   const planOnly = 'is plan-only';
   const malformed = 'malformed_json_response';
   const moneyTarget = 'money-api';
@@ -853,6 +963,7 @@ test('fails closed when run mode has no base URL', () => {
     reason,
     securityTarget,
     infraTarget,
+    observabilityTarget,
     planOnly,
     malformed,
     moneyTarget,
@@ -996,6 +1107,24 @@ contract_checks:
       - infra contracts are missing or unparseable
       - contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
       - infra promotion relies on dashboard-only provider evidence
+  - id: platform-observability-contracts
+    repo: zdp-platform-observability
+    service_id: platform-observability
+    process: one-shot-checker
+    command: bun run contracts:check
+    required_files:
+      - contracts/telemetry-conventions.yaml
+      - contracts/dashboard-inventory.yaml
+      - contracts/alert-rules.yaml
+      - scripts/check-observability-contracts.ts
+    expected_evidence:
+      - observability contracts parse without diagnostics
+      - checker does not connect to telemetry providers
+      - checker does not require provider tokens, dashboard urls, raw logs, or trace samples
+    blocked_production_when:
+      - observability contracts are missing or unparseable
+      - contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload
+      - observability promotion relies on dashboard-only provider evidence
 `;
 
   return `

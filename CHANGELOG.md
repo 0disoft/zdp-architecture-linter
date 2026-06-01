@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.38.5
+
+- `ZDP-RUNTIME-001`이 `platform-observability-contracts` one-shot contract check target을 요구한다.
+- 이 검사로 runtime promotion 전에 관측성 계약이 provider dashboard, provider token, dashboard URL, raw log, raw trace에 기대는지 확인하고, telemetry/dashboard/alert 계약 checker가 유지되도록 했다.
+
 ## 0.38.4
 
 - `ZDP-RUNTIME-001`이 `platform-infra-contracts` one-shot contract check target을 요구한다.
