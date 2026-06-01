@@ -53,6 +53,9 @@ export interface RepositoryCatalogRecord {
   readonly kind: string | null;
   readonly area: string | null;
   readonly purpose: string | null;
+  readonly riskLevel: string | null;
+  readonly ownsData: readonly string[];
+  readonly splitTargets: readonly string[];
   readonly path: string;
 }
 
@@ -109,6 +112,9 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
         kind: readStringField(repository, 'kind'),
         area: readStringField(repository, 'area'),
         purpose: readStringField(repository, 'purpose'),
+        riskLevel: readStringField(repository, 'risk_level'),
+        ownsData: readStringArray(repository.owns_data),
+        splitTargets: readStringArray(repository.split_targets),
         path: getRepositoryDiagnosticPath(repository, index)
       }
     ]);

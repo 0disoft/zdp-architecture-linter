@@ -18,13 +18,75 @@ describe('repository baseline rules', () => {
 
   test('passes when required baseline files exist', async () => {
     await withRepositoryRoot(
-      Object.fromEntries(
-        REPOSITORY_BASELINE_REQUIRED_FILES.map((fileName) => [fileName, 'ok\n'])
-      ),
+      createBaselineFiles(),
       async (repositoryRoot) => {
         const diagnostics = await validateRepositoryBaselineFiles(repositoryRoot);
 
         expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('fails when baseline files omit required line-ending policy text', async () => {
+    await withRepositoryRoot(
+      {
+        ...createBaselineFiles(),
+        '.editorconfig': 'root = true\n[*]\ncharset = utf-8\n',
+        '.gitattributes': '*.png binary\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryBaselineFiles(repositoryRoot);
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.editorconfig',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.editorconfig` must include `end_of_line = lf`.'
+          },
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.editorconfig',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.editorconfig` must include `insert_final_newline = true`.'
+          },
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.editorconfig',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.editorconfig` must include `indent_style = space`.'
+          },
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.editorconfig',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.editorconfig` must include `indent_size = 2`.'
+          },
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.editorconfig',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.editorconfig` must include `trim_trailing_whitespace = true`.'
+          },
+          {
+            ruleId: 'ZDP-REPO-BASELINE-001',
+            severity: 'error',
+            file: '.gitattributes',
+            path: 'repository.root',
+            message:
+              'Repository baseline file `.gitattributes` must include `* text=auto eol=lf`.'
+          }
+        ]);
       }
     );
   });
@@ -64,7 +126,9 @@ describe('repository root markdown rules', () => {
   test('passes when a lab repository includes EXPERIMENT.md', async () => {
     await withRepositoryRoot(
       {
-        'EXPERIMENT.md': '# Experiment\n'
+        'EXPERIMENT.md': '# Experiment\n',
+        'RUNBOOK.md': '# Runbook\n',
+        'product-spec.md': '# Product spec\n'
       },
       async (repositoryRoot) => {
         const diagnostics = await validateRepositoryRootMarkdownFiles({
@@ -115,6 +179,120 @@ describe('repository root markdown rules', () => {
         }
       ]);
     });
+  });
+
+  test('fails when an operational tier2 repository is missing RUNBOOK.md', async () => {
+    await withRepositoryRoot({}, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryRootMarkdownFiles({
+        repositoryRoot,
+        repositoryServiceContract: {
+          service: {
+            repo: 'zdp-desktop-tauri',
+            tier: 'tier2'
+          }
+        },
+        repositoryIndex: createRepositoryIndex({
+          name: 'zdp-desktop-tauri',
+          repoStage: 'conditional_deploy_unit',
+          kind: 'deploy_unit',
+          area: 'desktop',
+          riskLevel: 'medium'
+        })
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-REPO-MARKDOWN-003',
+        severity: 'error',
+        file: 'RUNBOOK.md',
+        path: 'repository.root',
+        message:
+          'Operational repository `zdp-desktop-tauri` must include root `RUNBOOK.md`.'
+      });
+    });
+  });
+
+  test('fails when a high-risk sensitive repository is missing SECURITY.md and BOUNDARY.md', async () => {
+    await withRepositoryRoot(
+      {
+        'RUNBOOK.md': '# Runbook\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRootMarkdownFiles({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-ai-platform',
+              tier: 'tier1',
+              risk_level: 'critical'
+            },
+            data: {
+              ai_user_data: true,
+              datastores: []
+            }
+          },
+          repositoryIndex: createRepositoryIndex({
+            name: 'zdp-ai-platform',
+            repoStage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'ai',
+            riskLevel: 'critical'
+          })
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-REPO-MARKDOWN-004',
+          severity: 'error',
+          file: 'SECURITY.md',
+          path: 'repository.root',
+          message:
+            'Sensitive repository `zdp-ai-platform` must include root `SECURITY.md`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-REPO-MARKDOWN-005',
+          severity: 'error',
+          file: 'BOUNDARY.md',
+          path: 'repository.root',
+          message:
+            'Boundary-heavy repository `zdp-ai-platform` must include root `BOUNDARY.md`.'
+        });
+      }
+    );
+  });
+
+  test('fails when zdp-products-lab is missing product-spec.md', async () => {
+    await withRepositoryRoot(
+      {
+        'EXPERIMENT.md': '# Experiment\n',
+        'RUNBOOK.md': '# Runbook\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRootMarkdownFiles({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-products-lab',
+              tier: 'tier3'
+            }
+          },
+          repositoryIndex: createRepositoryIndex({
+            name: 'zdp-products-lab',
+            repoStage: 'deploy_unit',
+            kind: 'deploy_unit',
+            area: 'labs',
+            riskLevel: 'low'
+          })
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-REPO-MARKDOWN-006',
+          severity: 'error',
+          file: 'product-spec.md',
+          path: 'repository.root',
+          message:
+            'Product repository `zdp-products-lab` must include root `product-spec.md`.'
+        });
+      }
+    );
   });
 
   test('skips EXPERIMENT.md when the repository is not a lab', async () => {
@@ -274,6 +452,9 @@ function createRepositoryIndex(repository: {
   readonly kind: string;
   readonly area: string;
   readonly purpose?: string;
+  readonly riskLevel?: string;
+  readonly ownsData?: readonly string[];
+  readonly splitTargets?: readonly string[];
 }): RepositoryIndex {
   return {
     byName: new Map([
@@ -282,9 +463,32 @@ function createRepositoryIndex(repository: {
         {
           ...repository,
           purpose: repository.purpose ?? null,
+          riskLevel: repository.riskLevel ?? null,
+          ownsData: repository.ownsData ?? [],
+          splitTargets: repository.splitTargets ?? [],
           path: `repositories[0:${repository.name}]`
         }
       ]
     ])
+  };
+}
+
+function createBaselineFiles(): Record<string, string> {
+  return {
+    '.editorconfig': [
+      'root = true',
+      '',
+      '[*]',
+      'charset = utf-8',
+      'end_of_line = lf',
+      'insert_final_newline = true',
+      'indent_style = space',
+      'indent_size = 2',
+      'trim_trailing_whitespace = true',
+      ''
+    ].join('\n'),
+    '.gitattributes': '* text=auto eol=lf\n',
+    'AGENTS.md': '# Agents\n',
+    'README.md': '# Readme\n'
   };
 }

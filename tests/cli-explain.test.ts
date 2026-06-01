@@ -65,9 +65,21 @@ datastores:
         'rules/ai-data-access.rules.yaml': 'rules: []\n',
         'rules/data-access.rules.yaml': 'rules: []\n',
         'rules/tier.rules.yaml': 'rules: []\n',
-        'repo/.editorconfig': 'root = true\n',
+        'repo/.editorconfig': [
+          'root = true',
+          '',
+          '[*]',
+          'charset = utf-8',
+          'end_of_line = lf',
+          'insert_final_newline = true',
+          'indent_style = space',
+          'indent_size = 2',
+          'trim_trailing_whitespace = true',
+          ''
+        ].join('\n'),
         'repo/.gitattributes': '* text=auto eol=lf\n',
         'repo/AGENTS.md': '# Agents\n',
+        'repo/BOUNDARY.md': '# Boundary\n',
         'repo/README.md': '# Repository\n',
         'repo/service.yaml': `
 service:

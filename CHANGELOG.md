@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.0
+
+- `ZDP-REPO-BASELINE-001`이 `.editorconfig`와 `.gitattributes`의 최소 줄바꿈 정책 문구까지 검사하도록 강화했다.
+- `ZDP-REPO-MARKDOWN-003`부터 `ZDP-REPO-MARKDOWN-006`까지 추가해 운영 저장소의 `RUNBOOK.md`, 민감 저장소의 `SECURITY.md`, 경계가 두꺼운 저장소의 `BOUNDARY.md`, 제품 저장소의 `product-spec.md` 누락을 차단한다.
+- 이 검사로 `zdp-platform-devex`가 만든 초기 저장소 골격이 루트 문서만 있는 빈 껍데기로 통과하지 않고, 위험도·tier·데이터 접근 경계에 맞는 운영 문서를 갖췄는지 확인한다.
+
 ## 0.38.5
 
 - `ZDP-RUNTIME-001`이 `platform-observability-contracts` one-shot contract check target을 요구한다.
