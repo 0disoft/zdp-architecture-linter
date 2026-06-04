@@ -70,6 +70,7 @@ interface FixtureRecord {
   readonly file: string;
   readonly value: unknown;
   readonly folderExpectation: 'pass' | 'fail';
+  readonly loadDiagnostics: readonly Diagnostic[];
 }
 
 export async function validateFixtureExpectations(
@@ -123,12 +124,30 @@ async function loadFixtureRecordsFromDirectory(
     fixtureFiles.map(async (fileName) => {
       const absolutePath = join(directory, fileName);
       const source = await readFile(absolutePath, 'utf8');
+      const file = relative(architectureRoot, absolutePath).replaceAll('\\', '/');
 
-      return {
-        file: relative(architectureRoot, absolutePath).replaceAll('\\', '/'),
-        value: parse(source) as unknown,
-        folderExpectation
-      };
+      try {
+        return {
+          file,
+          value: parse(source) as unknown,
+          folderExpectation,
+          loadDiagnostics: []
+        };
+      } catch (error) {
+        return {
+          file,
+          value: null,
+          folderExpectation,
+          loadDiagnostics: [
+            createFixtureDiagnostic(
+              FIXTURE_INVALID_RULE_ID,
+              file,
+              'fixture',
+              `Fixture YAML could not be parsed: ${formatError(error)}`
+            )
+          ]
+        };
+      }
     })
   );
 }
@@ -137,6 +156,10 @@ function validateFixtureRecord(
   fixture: FixtureRecord,
   context: FixtureValidationContext
 ): readonly Diagnostic[] {
+  if (fixture.loadDiagnostics.length > 0) {
+    return fixture.loadDiagnostics;
+  }
+
   if (!isRecord(fixture.value)) {
     return [
       createFixtureDiagnostic(
@@ -352,6 +375,10 @@ function formatRuleIds(ruleIds: readonly string[]): string {
 
 function unique(values: readonly string[]): readonly string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function readStringArray(value: unknown): readonly string[] {

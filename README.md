@@ -87,6 +87,8 @@ catalogs/split-triggers.yaml
 catalogs/services.yaml
 catalogs/datastores.yaml
 catalogs/data-classes.yaml
+catalogs/cost-budgets.yaml
+catalogs/slo-tiers.yaml
 catalogs/events.yaml
 ROADMAP.md
 docs/26-eighteen-month-roadmap.md
@@ -97,7 +99,13 @@ rules/*.yaml
 rules/repository.rules.yaml
 fixtures/pass/**
 fixtures/fail/**
+fixtures/service-schema/pass/**
+fixtures/service-schema/fail/**
 ```
+
+`fixtures/pass`와 `fixtures/fail`은 정책 gate용 축약 fixture다. 전체 `service.yaml` 스키마 fixture는 `fixtures/service-schema/pass`와 `fixtures/service-schema/fail`에 둔다. 실제 저장소 루트의 `service.yaml`은 `schemas/service.schema.json`을 통과해야 한다.
+
+`catalogs/cost-budgets.yaml`과 `catalogs/slo-tiers.yaml`은 기계가 읽을 수 있는 YAML 원천이며, linter는 예산·자동 조치·SLO tier mapping의 기본 구조와 내부 참조 무결성을 검사한다.
 
 ## 구현 순서
 

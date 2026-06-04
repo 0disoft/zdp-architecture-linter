@@ -74,6 +74,9 @@ export function createMinimalArchitectureFiles(
     'catalogs/services.yaml': 'services: []\n',
     'catalogs/datastores.yaml': 'datastores: []\n',
     'catalogs/data-classes.yaml': 'data_classes: []\n',
+    'catalogs/cost-budgets.yaml':
+      'service_budgets: []\nproduct_unit_budgets: []\nautomatic_action_policies: []\n',
+    'catalogs/slo-tiers.yaml': 'tiers: []\nservice_tier_mapping: {}\n',
     'catalogs/events.yaml': 'events: []\n',
     'catalogs/external-providers.yaml': 'providers: []\n',
     'rules/repository.rules.yaml': 'repository_area_rules: {}\n',

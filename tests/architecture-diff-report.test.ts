@@ -179,6 +179,8 @@ function createCatalogs(
     services: {},
     datastores: {},
     dataClasses: {},
+    costBudgets: {},
+    sloTiers: {},
     events: {},
     externalProviders: {},
     repositoryRules: {},

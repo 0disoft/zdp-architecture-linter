@@ -20,10 +20,14 @@
 - `catalogs/services.yaml`
 - `catalogs/datastores.yaml`
 - `catalogs/data-classes.yaml`
+- `catalogs/cost-budgets.yaml`
+- `catalogs/slo-tiers.yaml`
 - `catalogs/events.yaml`
 - `rules/*.yaml`
 - `fixtures/pass/**`
 - `fixtures/fail/**`
+- `fixtures/service-schema/pass/**`
+- `fixtures/service-schema/fail/**`
 - `docs/24-service-contract.md`
 - `docs/30-platform-registry-cli.md`
 
@@ -55,4 +59,3 @@
 - 생성하면 안 되는 저장소 단계를 실제 배포 저장소처럼 다루는 실수 차단
 - money, core, privacy, credential, AI 경계를 넘는 직접 데이터 저장소 접근 차단
 - 로컬 개발과 CI에서 사용할 수 있는 안정적인 CLI 출력 제공
-

@@ -55,6 +55,10 @@ cost:
   gross_margin_floor_percent: null
   automatic_actions: []
 
+monetization:
+  model: none
+  primary_unit: none
+
 data:
   owner_domain: null
   classes: []

@@ -9,6 +9,8 @@ export interface ArchitectureCatalogs {
   readonly services: ServicesCatalog;
   readonly datastores: DatastoresCatalog;
   readonly dataClasses: DataClassesCatalog;
+  readonly costBudgets?: CostBudgetsCatalog;
+  readonly sloTiers?: SloTiersCatalog;
   readonly events: EventsCatalog;
   readonly externalProviders: ExternalProvidersCatalog;
   readonly repositoryRules: RepositoryRulesCatalog;
@@ -38,6 +40,17 @@ export interface DatastoresCatalog {
 
 export interface DataClassesCatalog {
   readonly data_classes?: unknown;
+}
+
+export interface CostBudgetsCatalog {
+  readonly service_budgets?: unknown;
+  readonly product_unit_budgets?: unknown;
+  readonly automatic_action_policies?: unknown;
+}
+
+export interface SloTiersCatalog {
+  readonly tiers?: unknown;
+  readonly service_tier_mapping?: unknown;
 }
 
 export interface EventsCatalog {
@@ -104,6 +117,14 @@ export async function loadArchitectureCatalogs(
     dataClasses: await loadYamlFile<DataClassesCatalog>(
       architectureRoot,
       'catalogs/data-classes.yaml'
+    ),
+    costBudgets: await loadYamlFile<CostBudgetsCatalog>(
+      architectureRoot,
+      'catalogs/cost-budgets.yaml'
+    ),
+    sloTiers: await loadYamlFile<SloTiersCatalog>(
+      architectureRoot,
+      'catalogs/slo-tiers.yaml'
     ),
     events: await loadYamlFile<EventsCatalog>(
       architectureRoot,

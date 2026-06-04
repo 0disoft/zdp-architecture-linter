@@ -168,6 +168,38 @@ api:
       }
     );
   });
+
+  test('reports malformed fixture YAML as fixture metadata failure', async () => {
+    await withFixtureRoot(
+      {
+        'fixtures/fail/broken.yaml': `
+fixture:
+  id: broken
+  expect: fail
+  expected_failures:
+    - ZDP-API-001
+service:
+  id: broken
+  - not-valid
+`
+      },
+      async (architectureRoot) => {
+        const diagnostics = await validateFixtureExpectations(
+          createFixtureContext(architectureRoot)
+        );
+
+        expect(diagnostics).toEqual([
+          expect.objectContaining({
+            ruleId: 'ZDP-FIXTURE-001',
+            severity: 'error',
+            file: 'fixtures/fail/broken.yaml',
+            path: 'fixture',
+            message: expect.stringContaining('Fixture YAML could not be parsed:')
+          })
+        ]);
+      }
+    );
+  });
 });
 
 function createFixtureContext(architectureRoot: string) {

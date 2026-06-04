@@ -70,6 +70,10 @@ import {
   validateRepositoryRootMarkdownFiles
 } from './repository-baseline-rules.ts';
 import {
+  validateCostBudgetCatalog,
+  validateSloTierCatalog
+} from './operational-catalog-rules.ts';
+import {
   validateServiceDependencyReferences,
   validateRepositoryServiceContractRepositoryReference,
   validateRepositoryServiceContractServiceCatalogReference,
@@ -439,6 +443,8 @@ export async function validateArchitecture(
       ...validateEventDataClassReferences(catalogs.events, dataClassIndex),
       ...validateEventRepositoryReferences(catalogs.events, repositoryIndex),
       ...validateDataClassDeletionEventReferences(catalogs.dataClasses, eventIndex),
+      ...validateCostBudgetCatalog(catalogs.costBudgets),
+      ...validateSloTierCatalog(catalogs.sloTiers, repositoryIndex, serviceIndex),
       ...validateExternalProviderCatalog(catalogs.externalProviders),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),

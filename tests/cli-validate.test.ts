@@ -6,6 +6,21 @@ import {
 } from './cli-test-helpers.ts';
 
 describe('validate CLI', () => {
+  test('rejects unknown options before validation runs', async () => {
+    const result = await runCli([
+      'validate',
+      '--architecture',
+      '.',
+      '--unknown-option'
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain(
+      'zdp-arch validate --architecture <path> [--repository <path>] [--json]'
+    );
+  });
+
   test('returns success when validation only produces warnings', async () => {
     await withArchitectureFiles(
       createMinimalArchitectureFiles({

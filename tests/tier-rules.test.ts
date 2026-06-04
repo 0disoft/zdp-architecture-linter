@@ -74,6 +74,36 @@ const tier3RiskyExperimentPolicy = buildTier3RiskyExperimentPolicy({
   ]
 });
 
+const whitespaceFlexibleTierOperationalContractPolicy =
+  buildTierOperationalContractPolicy({
+    rules: [
+      {
+        id: 'ZDP-TIER-001',
+        condition: {
+          expression: 'service.tier   in   [ tier2 , tier1 , tier0 ]'
+        },
+        assertions: {
+          require_fields: ['cost.cost_center']
+        }
+      }
+    ]
+  });
+
+const whitespaceFlexibleTierCriticalControlsPolicy =
+  buildTierCriticalControlsPolicy({
+    rules: [
+      {
+        id: 'ZDP-TIER-002',
+        condition: {
+          expression: 'service.tier==tier0'
+        },
+        assertions: {
+          require_fields: ['release.change_approval']
+        }
+      }
+    ]
+  });
+
 describe('tier operational contracts', () => {
   test('passes when a tier2 service declares the required operating contract', () => {
     const diagnostics = validateTierOperationalContracts(
@@ -243,6 +273,31 @@ describe('tier operational contracts', () => {
         file: 'catalogs/services.yaml',
         path: 'services',
         message: '`services` must be a YAML array.'
+      }
+    ]);
+  });
+
+  test('parses tier membership expressions with flexible whitespace', () => {
+    const diagnostics = validateTierOperationalContracts(
+      {
+        services: [
+          {
+            id: 'public-api',
+            tier: 'tier1',
+            cost: {}
+          }
+        ]
+      },
+      whitespaceFlexibleTierOperationalContractPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-001',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:public-api].cost.cost_center',
+        message: 'Tier `tier1` service `public-api` must set `cost.cost_center`.'
       }
     ]);
   });
@@ -565,6 +620,32 @@ describe('tier critical controls', () => {
         file: 'catalogs/services.yaml',
         path: 'services',
         message: '`services` must be a YAML array.'
+      }
+    ]);
+  });
+
+  test('parses tier equality expressions without fixed spacing', () => {
+    const diagnostics = validateTierCriticalControls(
+      {
+        services: [
+          {
+            id: 'ledger-writer',
+            tier: 'tier0',
+            release: {}
+          }
+        ]
+      },
+      whitespaceFlexibleTierCriticalControlsPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-TIER-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:ledger-writer].release.change_approval',
+        message:
+          'Tier `tier0` service `ledger-writer` must set `release.change_approval`.'
       }
     ]);
   });

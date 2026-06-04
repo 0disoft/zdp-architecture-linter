@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.1
+
+- `check:tsgo` fast typecheck 스크립트와 pinned `@typescript/native-preview` 의존성을 추가했다.
+
 ## 0.39.0
 
 - `ZDP-REPO-BASELINE-001`이 `.editorconfig`와 `.gitattributes`의 최소 줄바꿈 정책 문구까지 검사하도록 강화했다.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import { loadArchitectureGraph } from './architecture-graph-loader.ts';
 import {
@@ -53,6 +54,42 @@ type ParsedCommand =
   | ParsedDoctorCommand
   | ParsedNormalizeCommand
   | ParsedListCommand;
+
+const CLI_OPTION_CONFIG = {
+  architecture: {
+    type: 'string'
+  },
+  repository: {
+    type: 'string'
+  },
+  json: {
+    type: 'boolean'
+  },
+  repo: {
+    type: 'string'
+  },
+  task: {
+    type: 'string'
+  },
+  out: {
+    type: 'string'
+  },
+  check: {
+    type: 'boolean'
+  },
+  base: {
+    type: 'string'
+  },
+  head: {
+    type: 'string'
+  },
+  stage: {
+    type: 'string'
+  },
+  area: {
+    type: 'string'
+  }
+} as const;
 
 interface ParsedValidateCommand {
   readonly name: 'validate';
@@ -472,7 +509,13 @@ async function main(argv: readonly string[]): Promise<number> {
 }
 
 function parseCommand(argv: readonly string[]): ParsedCommand | null {
-  const [commandName, ...rest] = argv;
+  const parsed = parseCliArgs(argv);
+
+  if (parsed === null) {
+    return null;
+  }
+
+  const [commandName, ...positionals] = parsed.positionals;
 
   if (
     commandName !== 'validate' &&
@@ -488,21 +531,28 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     return null;
   }
 
-  const architecture = readOption(rest, '--architecture');
+  const architecture = readStringOption(parsed.values.architecture);
 
   if (architecture === null) {
     return null;
   }
 
   if (commandName === 'pack') {
-    const repo = readOption(rest, '--repo');
-    const task = readOption(rest, '--task');
+    if (positionals.length > 0) {
+      return null;
+    }
+
+    const repo = readStringOption(parsed.values.repo);
+    const task = readStringOption(parsed.values.task);
 
     if (repo === null || task === null) {
       return null;
     }
 
-    if (rest.includes('--check') && readOption(rest, '--out') === null) {
+    const out = readStringOption(parsed.values.out);
+    const check = parsed.values.check === true;
+
+    if (check && out === null) {
       return null;
     }
 
@@ -511,14 +561,18 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       repo,
       task,
-      out: readOption(rest, '--out') ?? undefined,
-      check: rest.includes('--check'),
-      json: rest.includes('--json')
+      out: out ?? undefined,
+      check,
+      json: parsed.values.json === true
     };
   }
 
   if (commandName === 'diff') {
-    const base = readOption(rest, '--base');
+    if (positionals.length > 0) {
+      return null;
+    }
+
+    const base = readStringOption(parsed.values.base);
 
     if (base === null) {
       return null;
@@ -528,15 +582,18 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       name: 'diff',
       architectureRoot: resolve(architecture),
       base,
-      head: readOption(rest, '--head') ?? undefined,
-      json: rest.includes('--json')
+      head: readStringOption(parsed.values.head) ?? undefined,
+      json: parsed.values.json === true
     };
   }
 
   if (commandName === 'list') {
-    const [listKind] = rest;
+    const [listKind, ...extraPositionals] = positionals;
 
-    if (listKind !== 'repos' && listKind !== 'services') {
+    if (
+      extraPositionals.length > 0 ||
+      (listKind !== 'repos' && listKind !== 'services')
+    ) {
       return null;
     }
 
@@ -545,20 +602,23 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       listKind,
       filters: {
-        stage: readOption(rest, '--stage') ?? undefined,
-        area: readOption(rest, '--area') ?? undefined,
-        repo: readOption(rest, '--repo') ?? undefined
+        stage: readStringOption(parsed.values.stage) ?? undefined,
+        area: readStringOption(parsed.values.area) ?? undefined,
+        repo: readStringOption(parsed.values.repo) ?? undefined
       },
-      json: rest.includes('--json')
+      json: parsed.values.json === true
     };
   }
 
-  if (commandName === 'normalize' && rest.includes('--check')) {
-    const out = readOption(rest, '--out');
+  if (positionals.length > 0) {
+    return null;
+  }
 
-    if (out === null) {
-      return null;
-    }
+  const out = readStringOption(parsed.values.out);
+  const check = parsed.values.check === true;
+
+  if (commandName === 'normalize' && check && out === null) {
+    return null;
   }
 
   return {
@@ -567,32 +627,41 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     repositoryRoot:
       commandName === 'check-split'
         ? undefined
-        : readOptionalResolvedPath(rest, '--repository'),
+        : readOptionalResolvedPath(parsed.values.repository),
     out:
       commandName === 'normalize'
-        ? readOption(rest, '--out') ?? undefined
+        ? out ?? undefined
         : undefined,
-    check: commandName === 'normalize' && rest.includes('--check'),
-    json: rest.includes('--json')
+    check: commandName === 'normalize' && check,
+    json: parsed.values.json === true
   };
 }
 
-function readOption(args: readonly string[], name: string): string | null {
-  const index = args.indexOf(name);
+function parseCliArgs(argv: readonly string[]): {
+  readonly values: Record<string, string | boolean | undefined>;
+  readonly positionals: readonly string[];
+} | null {
+  try {
+    const parsed = parseArgs({
+      args: [...argv],
+      options: CLI_OPTION_CONFIG,
+      allowPositionals: true,
+      strict: true
+    });
 
-  if (index === -1) {
+    return parsed;
+  } catch {
     return null;
   }
-
-  const value = args[index + 1];
-
-  return value === undefined || value.startsWith('--') ? null : value;
 }
 
-function readOptionalResolvedPath(args: readonly string[], name: string): string | undefined {
-  const value = readOption(args, name);
+function readStringOption(value: string | boolean | undefined): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
 
-  return value === null ? undefined : resolve(value);
+function readOptionalResolvedPath(value: string | boolean | undefined): string | undefined {
+  const path = readStringOption(value);
+  return path === null ? undefined : resolve(path);
 }
 
 function printResult(result: ValidationResult, json: boolean): void {

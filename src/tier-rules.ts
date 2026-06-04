@@ -363,31 +363,30 @@ function validateServiceTier3RiskyExperimentContract(
 }
 
 function readServiceTierConditionValues(condition: unknown): readonly string[] {
-  const expression = readConditionExpressions(condition).find((entry) =>
-    entry.startsWith('service.tier in [')
-  );
+  const match = readConditionExpressions(condition)
+    .map((entry) => entry.match(/\bservice\.tier\s+in\s+\[([^\]]*)\]/u))
+    .find((candidate): candidate is RegExpMatchArray => candidate !== null);
 
-  if (expression === undefined || !expression.endsWith(']')) {
+  if (match === undefined) {
     return [];
   }
 
-  return expression
-    .slice('service.tier in ['.length, -1)
+  return match[1]
     .split(',')
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
 }
 
 function readServiceTierEqualityValue(condition: unknown): string | null {
-  const expression = readConditionExpressions(condition).find((entry) =>
-    entry.startsWith('service.tier == ')
-  );
+  const match = readConditionExpressions(condition)
+    .map((entry) => entry.match(/\bservice\.tier\s*==\s*([A-Za-z0-9_-]+)/u))
+    .find((candidate): candidate is RegExpMatchArray => candidate !== null);
 
-  if (expression === undefined) {
+  if (match === undefined) {
     return null;
   }
 
-  const value = expression.slice('service.tier == '.length).trim();
+  const value = match[1].trim();
 
   return value.length > 0 ? value : null;
 }

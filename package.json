@@ -1,6 +1,6 @@
 {
   "name": "@zdp/architecture-linter",
-  "version": "0.39.0",
+  "version": "0.39.1",
   "private": true,
   "type": "module",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
+    "check:tsgo": "tsgo --noEmit",
     "test": "bun test",
     "validate:architecture": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture",
     "validate:self": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture --repository ."
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.3",
+    "@typescript/native-preview": "7.0.0-dev.20260603.1",
     "typescript": "^5.9.3"
   }
 }
