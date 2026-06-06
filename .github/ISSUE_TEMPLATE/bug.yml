@@ -1,0 +1,39 @@
+name: 버그 제보
+description: 재현 가능한 문제를 남겨줘.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "비밀값, 실제 계정 ID, 결제 payload, 고객 원문 데이터는 적지 마."
+  - type: textarea
+    id: summary
+    attributes:
+      label: 무슨 문제가 생겼어?
+      placeholder: 어떤 validation이나 CLI 출력이 예상과 달랐는지 적어줘.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1. 어떤 architecture path 또는 fixture를 사용했는지
+        2. 어떤 명령이나 입력으로 재현되는지
+        3. 실제 출력이 무엇인지
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+      placeholder: 어떤 규칙 ID나 진단이 나와야 했는지 적어줘.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 영향 범위
+      placeholder: 돈, 권한, 개인정보, AI 사용자 데이터, credential, 배포 계약 중 영향이 있는지 적어줘.
+    validations:
+      required: false

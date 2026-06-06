@@ -1,0 +1,29 @@
+name: 기능 제안
+description: 새 검증 규칙이나 CLI 개선 제안을 남겨줘.
+title: "[Feature]: "
+labels: ["feature", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "새 정책은 이 저장소가 아니라 zdp-architecture 문서, 스키마, 카탈로그, 규칙, fixture 중 하나로 추적 가능해야 해."
+  - type: textarea
+    id: problem
+    attributes:
+      label: 어떤 문제가 있어?
+      placeholder: 지금 어떤 drift나 위험을 못 잡는지 적어줘.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: 정책 원천
+      placeholder: 관련 zdp-architecture 파일, 규칙 ID, fixture 경로를 적어줘.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 원하는 동작
+      placeholder: 실패/경고 조건과 사람이 고칠 메시지를 적어줘.
+    validations:
+      required: true

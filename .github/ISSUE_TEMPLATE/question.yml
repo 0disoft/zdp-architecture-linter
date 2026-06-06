@@ -1,0 +1,22 @@
+name: 질문
+description: 사용법이나 정책 원천이 헷갈릴 때 남겨줘.
+title: "[Question]: "
+labels: ["question", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "비공개 URL, 토큰, 고객 데이터, 실제 결제 payload는 적지 마."
+  - type: textarea
+    id: question
+    attributes:
+      label: 궁금한 점
+      placeholder: 어떤 규칙, CLI 출력, fixture가 헷갈리는지 적어줘.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 맥락
+      placeholder: 관련 저장소, service.yaml, zdp-architecture 문서 경로가 있으면 적어줘.
+    validations:
+      required: false

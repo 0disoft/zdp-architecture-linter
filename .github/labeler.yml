@@ -1,0 +1,35 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "package.json"
+          - "bun.lock"
+          - "renovate.json"
+
+architecture:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**/*rules*.ts"
+          - "src/**/validation*.ts"
+          - "src/**/graph*.ts"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - "**/*.test.ts"
+
+fixtures:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "fixtures/**"
