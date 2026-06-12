@@ -35,12 +35,24 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'localization-adoption-gate',
   'fixture catalog diagnostics 0',
   'generated large-catalog diagnostics 0',
-  'production fallback 0'
+  'production fallback 0',
+  'limited to the six app-shell navigation and page-title messages',
+  'keep the previous app-shell copy or i18n runtime path',
+  'does not require a runtime feature flag'
 ] as const;
 
 const REQUIRED_SURFACES = [
   { id: 'console', route: '/console', call: 'core-api' },
   { id: 'admin', route: '/admin', call: 'core-api' }
+] as const;
+
+const REQUIRED_LOCALIZATION_CANARY_MESSAGE_KEYS = [
+  'nav.app',
+  'nav.console',
+  'nav.admin',
+  'page.home.title',
+  'page.console.title',
+  'page.admin.title'
 ] as const;
 
 const FORBIDDEN_SOURCE_PATTERNS = [
@@ -203,8 +215,93 @@ function validateAppShellContract(value: unknown): readonly Diagnostic[] {
       field: 'forbidden',
       requiredEntries: REQUIRED_FORBIDDEN_CONTRACTS
     }),
+    ...validateLocalizationCanary(value),
     ...validateRequiredSurfaces(value)
   ];
+}
+
+function validateLocalizationCanary(value: unknown): readonly Diagnostic[] {
+  const canary = readPath(value, 'localization_canary');
+
+  if (!isRecord(canary)) {
+    return [
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary',
+        'App shell contract must declare a `localization_canary` object.'
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  const provider = readStringField(canary, 'provider');
+  const scope = readStringField(canary, 'scope');
+  const rollbackBoundary = readStringField(canary, 'rollback_boundary');
+
+  if (provider !== 'zdp-platform-localization') {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary.provider',
+        'App shell localization canary provider must be `zdp-platform-localization`.'
+      )
+    );
+  }
+
+  if (scope !== 'app-shell') {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary.scope',
+        'App shell localization canary scope must stay `app-shell`.'
+      )
+    );
+  }
+
+  if (canary.expansion_requires_review !== true) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary.expansion_requires_review',
+        'App shell localization canary expansion must require review.'
+      )
+    );
+  }
+
+  if (canary.runtime_feature_flag_required !== false) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary.runtime_feature_flag_required',
+        'App shell localization canary must keep runtime feature flag requirement disabled while rollback uses app-slice disablement and previous copy/runtime path.'
+      )
+    );
+  }
+
+  if (
+    rollbackBoundary === null ||
+    !rollbackBoundary.includes('previous app-shell copy or i18n runtime path')
+  ) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'localization_canary.rollback_boundary',
+        'App shell localization canary rollback boundary must keep previous app-shell copy or i18n runtime path available.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateExactStringArrayEntries({
+      value: canary,
+      file: APP_SHELL_CONTRACT_FILE,
+      path: 'localization_canary.message_keys',
+      field: 'message_keys',
+      expectedEntries: REQUIRED_LOCALIZATION_CANARY_MESSAGE_KEYS
+    })
+  );
+
+  return diagnostics;
 }
 
 function validateRequiredSurfaces(value: unknown): readonly Diagnostic[] {
@@ -386,6 +483,47 @@ function validateRequiredStringArrayEntries(input: {
         input.file,
         input.path,
         `App shell contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateExactStringArrayEntries(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly expectedEntries: readonly string[];
+}): readonly Diagnostic[] {
+  const entries = readStringArrayPath(input.value, input.field);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const expectedEntry of input.expectedEntries) {
+    if (entries.includes(expectedEntry)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAppShellDiagnostic(
+        input.file,
+        input.path,
+        `App shell localization canary must include \`${expectedEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  for (const entry of entries) {
+    if (input.expectedEntries.includes(entry)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAppShellDiagnostic(
+        input.file,
+        input.path,
+        `App shell localization canary must not include out-of-scope message key \`${entry}\` without expansion review.`
       )
     );
   }

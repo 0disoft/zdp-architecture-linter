@@ -334,6 +334,34 @@ domain_status = candidate
       });
     });
   });
+
+  test('fails when zdp-web-public localization canary contract drifts', async () => {
+    await withRepositoryRoot(createValidPublicWebRepositoryFiles(), async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryWebpubContract({
+        repositoryRoot,
+        repositoryServiceContract: createPublicWebServiceContract({
+          includeLocalizationCanaryNotes: false
+        })
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-WEBPUB-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.contract',
+        message:
+          'zdp-web-public service contract must document localization and glossary gates; missing `zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-WEBPUB-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.contract',
+        message:
+          'zdp-web-public service contract must document localization and glossary gates; missing `feature_flag_required":false`.'
+      });
+    });
+  });
 });
 
 async function withRepositoryRoot(
@@ -431,11 +459,13 @@ function createPublicWebServiceContract(
   options: {
     readonly includeOperationalGateNotes?: boolean;
     readonly includeOnlyRootGlossaryAdPolicyNote?: boolean;
+    readonly includeLocalizationCanaryNotes?: boolean;
   } = {}
 ): unknown {
   const includeOperationalGateNotes =
     options.includeOperationalGateNotes ??
     options.includeOnlyRootGlossaryAdPolicyNote !== true;
+  const includeLocalizationCanaryNotes = options.includeLocalizationCanaryNotes ?? true;
   const contract: Record<string, unknown> = {
     service: {
       repo: 'zdp-web-public'
@@ -451,6 +481,17 @@ function createPublicWebServiceContract(
     },
     api: {
       exposure: 'none'
+    },
+    release: {
+      migration_policy: includeLocalizationCanaryNotes
+        ? 'zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed'
+        : 'localization canary scope is not documented',
+      canary_policy: includeLocalizationCanaryNotes
+        ? 'home hero localization dogfood only; keep static Astro copy rollback available before expanding to more public copy'
+        : 'localization canary policy is not documented',
+      feature_flag_required: includeLocalizationCanaryNotes
+        ? false
+        : true
     }
   };
 
@@ -462,6 +503,12 @@ function createPublicWebServiceContract(
     };
     contract.notes = [
       'bun run check:localization runs zdp-platform-localization catalog check and strict production compile; fallback messages are not allowed in the public site localization manifest.',
+      ...(includeLocalizationCanaryNotes
+        ? [
+            'The first zdp-platform-localization product canary is intentionally limited to the home hero title and CTA messages.',
+            'Static Astro copy remains the rollback boundary for the localization canary, so this static public site does not require a runtime feature flag.'
+          ]
+        : []),
       'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check.',
       'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract.'
     ];

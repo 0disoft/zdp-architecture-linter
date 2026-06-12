@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.12
+
+- `ZDP-WEBPUB-001`이 `zdp-web-public` localization canary를 home hero title과 CTA 메시지로 제한하고, static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 검사하도록 강화했다.
+- `ZDP-APP-001`이 `zdp-web-apps`의 `contracts/app-shell.yaml` 안에 `localization_canary` scope, 6개 app-shell message key, expansion review, rollback boundary, runtime feature flag 불필요 계약이 유지되는지 검사하도록 강화했다.
+
 ## 0.39.11
 
 - `ZDP-WEBPUB-001`의 glossary 광고 계약을 Term Sheet 광고 슬롯 금지와 별도 detail-page experiment 계약 기준으로 조정했다.

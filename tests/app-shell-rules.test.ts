@@ -171,6 +171,84 @@ forbidden:
     });
   });
 
+  test('fails when app shell localization canary expands without review contract', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidAppShellFiles(),
+        'contracts/app-shell.yaml': `
+environment:
+  required:
+    - ZDP_CORE_API_BASE_URL
+surfaces:
+  - id: console
+    route: /console
+    calls:
+      - core-api
+  - id: admin
+    route: /admin
+    calls:
+      - core-api
+readiness:
+  routes:
+    - /healthz
+    - /readyz
+  required_env:
+    - ZDP_CORE_API_BASE_URL
+localization_canary:
+  provider: zdp-platform-localization
+  scope: full-product-ui
+  message_keys:
+    - nav.app
+    - nav.console
+    - nav.admin
+    - page.home.title
+    - page.console.title
+    - page.admin.title
+    - billing.invoice.title
+  expansion_requires_review: false
+  rollback_boundary: remove localization runtime
+  runtime_feature_flag_required: true
+allowed_upstreams:
+  - core-api
+forbidden:
+  - direct_database_reads
+  - final_authorization_in_ui
+  - refresh_token_storage
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'localization_canary.scope',
+          message: 'App shell localization canary scope must stay `app-shell`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'localization_canary.message_keys',
+          message:
+            'App shell localization canary must not include out-of-scope message key `billing.invoice.title` without expansion review.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'localization_canary.runtime_feature_flag_required',
+          message:
+            'App shell localization canary must keep runtime feature flag requirement disabled while rollback uses app-slice disablement and previous copy/runtime path.'
+        });
+      }
+    );
+  });
+
   test('fails when app shell source owns platform truth directly', async () => {
     await withRepositoryRoot(
       {
@@ -245,8 +323,17 @@ function createWebAppsServiceContract(): unknown {
         'provider zdp-platform-localization bun run check:adoption passes with fixture catalog diagnostics 0, generated large-catalog diagnostics 0, and production fallback 0 before this app shell consumes updated file dependencies'
       ]
     },
+    release: {
+      migration_policy:
+        'zdp-platform-localization adoption is limited to the six app-shell navigation and page-title messages until product UI slices are reviewed',
+      canary_policy:
+        'app-shell localization dogfood only; keep the previous app-shell copy or i18n runtime path available before expanding to product UI copy',
+      feature_flag_required: false
+    },
     notes: [
-      'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.'
+      'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.',
+      'The first zdp-platform-localization app canary is intentionally limited to the six app-shell navigation and page-title messages.',
+      'Disabling the affected app slice and keeping the previous app-shell copy or i18n runtime path is the rollback boundary for the localization canary, so this shell does not require a runtime feature flag.'
     ]
   };
 }
@@ -276,6 +363,19 @@ readiness:
     - /readyz
   required_env:
     - ZDP_CORE_API_BASE_URL
+localization_canary:
+  provider: zdp-platform-localization
+  scope: app-shell
+  message_keys:
+    - nav.app
+    - nav.console
+    - nav.admin
+    - page.home.title
+    - page.console.title
+    - page.admin.title
+  expansion_requires_review: true
+  rollback_boundary: disable affected app slice and keep previous app-shell copy or i18n runtime path
+  runtime_feature_flag_required: false
 allowed_upstreams:
   - core-api
 forbidden:

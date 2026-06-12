@@ -62,6 +62,11 @@ const REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS = [
   'bun run check:localization passes with catalog diagnostics 0 and production fallback count 0',
   'bun run check:localization runs zdp-platform-localization catalog check and strict production compile',
   'fallback messages are not allowed',
+  'zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed',
+  'home hero localization dogfood only; keep static Astro copy rollback available before expanding to more public copy',
+  'feature_flag_required":false',
+  'The first zdp-platform-localization product canary is intentionally limited to the home hero title and CTA messages',
+  'Static Astro copy remains the rollback boundary for the localization canary, so this static public site does not require a runtime feature flag',
   'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check',
   'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract'
 ] as const;
