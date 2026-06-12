@@ -10,6 +10,7 @@ const APP_SHELL_CONTRACT_FILE = 'contracts/app-shell.yaml';
 
 const REQUIRED_FILES = [
   APP_SHELL_CONTRACT_FILE,
+  '.github/workflows/ci.yml',
   'scripts/check-app-shell.ts',
   'src/lib/app-shell.ts',
   'src/lib/server/app-shell.ts',
@@ -39,6 +40,21 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'limited to the six app-shell navigation and page-title messages',
   'keep the previous app-shell copy or i18n runtime path',
   'does not require a runtime feature flag'
+] as const;
+
+const REQUIRED_CI_WORKFLOW_SNIPPETS = [
+  'actions/checkout@v6',
+  '0disoft/zdp-platform-localization',
+  'secrets.ZDP_CI_READ_TOKEN || github.token',
+  'projects/zdp-platforms/platform/zdp-platform-localization',
+  'projects/zdp-platforms/client-surfaces',
+  'oven-sh/setup-bun@v2',
+  'Install localization platform dependencies',
+  'Install web apps dependencies',
+  'bun install --frozen-lockfile',
+  'bun run check',
+  'bun run build',
+  'ZDP_CORE_API_BASE_URL'
 ] as const;
 
 const REQUIRED_SURFACES = [
@@ -101,6 +117,7 @@ export async function validateRepositoryAppShellContract(input: {
   diagnostics.push(
     ...validateServiceContractIncludes(input.repositoryServiceContract)
   );
+  diagnostics.push(...(await validateCiWorkflowIncludes(input.repositoryRoot)));
   diagnostics.push(...(await validateSourceBoundaries(input.repositoryRoot)));
 
   return diagnostics;
@@ -384,6 +401,40 @@ function validateServiceContractIncludes(value: unknown): readonly Diagnostic[] 
         'service.yaml',
         'service.contract',
         `App shell service contract must include \`${snippet}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+async function validateCiWorkflowIncludes(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  let source: string;
+
+  try {
+    source = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  for (const snippet of REQUIRED_CI_WORKFLOW_SNIPPETS) {
+    if (source.includes(snippet)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAppShellDiagnostic(
+        '.github/workflows/ci.yml',
+        'ci.workflow',
+        `App shell CI workflow must include \`${snippet}\`.`
       )
     );
   }

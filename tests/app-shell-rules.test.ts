@@ -48,9 +48,9 @@ describe('app shell contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-APP-001',
         severity: 'error',
-        file: 'src/routes/readyz/+server.ts',
+        file: '.github/workflows/ci.yml',
         path: 'repository.root',
-        message: 'App shell repository must include `src/routes/readyz/+server.ts`.'
+        message: 'App shell repository must include `.github/workflows/ci.yml`.'
       });
     });
   });
@@ -169,6 +169,56 @@ forbidden:
           'App shell service contract must include `platform-localization`.'
       });
     });
+  });
+
+  test('fails when app shell CI workflow loses private provider bootstrap', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidAppShellFiles(),
+        '.github/workflows/ci.yml': `
+name: CI
+
+jobs:
+  app-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'App shell CI workflow must include `0disoft/zdp-platform-localization`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'App shell CI workflow must include `secrets.ZDP_CI_READ_TOKEN || github.token`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'App shell CI workflow must include `Install localization platform dependencies`.'
+        });
+      }
+    );
   });
 
   test('fails when app shell localization canary expands without review contract', async () => {
@@ -340,6 +390,48 @@ function createWebAppsServiceContract(): unknown {
 
 function createValidAppShellFiles(): Record<string, string> {
   return {
+    '.github/workflows/ci.yml': `
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  app-shell:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/zdp-platforms/client-surfaces/zdp-web-apps
+    env:
+      ZDP_CORE_API_BASE_URL: http://127.0.0.1:3001
+    steps:
+      - name: Checkout web apps
+        uses: actions/checkout@v6
+        with:
+          path: projects/zdp-platforms/client-surfaces/zdp-web-apps
+      - name: Checkout localization platform
+        uses: actions/checkout@v6
+        with:
+          repository: 0disoft/zdp-platform-localization
+          token: \${{ secrets.ZDP_CI_READ_TOKEN || github.token }}
+          path: projects/zdp-platforms/platform/zdp-platform-localization
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install localization platform dependencies
+        working-directory: projects/zdp-platforms/platform/zdp-platform-localization
+        run: bun install --frozen-lockfile
+      - name: Install web apps dependencies
+        run: bun install --frozen-lockfile
+      - name: Check
+        run: bun run check
+      - name: Build
+        run: bun run build
+`,
     'contracts/app-shell.yaml': `
 environment:
   required:

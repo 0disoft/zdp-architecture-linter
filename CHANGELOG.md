@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.13
+
+- `ZDP-APP-001`이 `zdp-web-apps`의 GitHub Actions CI workflow에서 private `zdp-platform-localization` checkout, `ZDP_CI_READ_TOKEN`, provider workspace install, app install, `bun run check`, `bun run build` 계약이 유지되는지 검사하도록 강화했다.
+
 ## 0.39.12
 
 - `ZDP-WEBPUB-001`이 `zdp-web-public` localization canary를 home hero title과 CTA 메시지로 제한하고, static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 검사하도록 강화했다.
