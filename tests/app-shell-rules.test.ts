@@ -138,6 +138,39 @@ forbidden:
     );
   });
 
+  test('fails when app shell service contract loses localization provider prerequisites', async () => {
+    await withRepositoryRoot(createValidAppShellFiles(), async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryAppShellContract({
+        repositoryRoot,
+        repositoryServiceContract: {
+          service: {
+            repo: 'zdp-web-apps'
+          },
+          dependencies: {
+            services: ['core-api']
+          }
+        }
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-APP-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.contract',
+        message:
+          'App shell service contract must include `generated large-catalog diagnostics 0`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-APP-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'service.contract',
+        message:
+          'App shell service contract must include `platform-localization`.'
+      });
+    });
+  });
+
   test('fails when app shell source owns platform truth directly', async () => {
     await withRepositoryRoot(
       {
@@ -200,7 +233,21 @@ function createWebAppsServiceContract(): unknown {
   return {
     service: {
       repo: 'zdp-web-apps'
-    }
+    },
+    cost: {
+      unit_metrics: ['app-shell-validation', 'localization-adoption-gate']
+    },
+    dependencies: {
+      services: ['core-api', 'money-api', 'platform-localization']
+    },
+    exit: {
+      success_criteria: [
+        'provider zdp-platform-localization bun run check:adoption passes with fixture catalog diagnostics 0, generated large-catalog diagnostics 0, and production fallback 0 before this app shell consumes updated file dependencies'
+      ]
+    },
+    notes: [
+      'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.'
+    ]
   };
 }
 

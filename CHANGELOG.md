@@ -1,5 +1,55 @@
 # 변경 내역
 
+## 0.39.11
+
+- `ZDP-WEBPUB-001`의 glossary 광고 계약을 Term Sheet 광고 슬롯 금지와 별도 detail-page experiment 계약 기준으로 조정했다.
+- `zdp-web-public` glossary builder가 Term Sheet 광고를 금지하고 detail-page 예약 helper를 유지하는지 검사하도록 바꿨다.
+
+## 0.39.10
+
+- `ZDP-XCUT-TERM-ADS-001`, `ZDP-XCUT-TERM-ADS-002`, `ZDP-XCUT-TERM-001`, `ZDP-XCUT-TERM-007` repository gate를 추가했다.
+- glossary/Term Sheet 표면을 선언한 저장소에서 hover 광고 슬롯, 기본 off/명시적 실험 없는 Term Sheet 광고 provider, term_id 누락, generated manifest source 누락을 잡는다.
+
+## 0.39.9
+
+- `ZDP-WEBPUB-001`이 `zdp-web-public`의 glossary builder가 reviewed public terms, click-open Term Sheet placement, hover-card ad exclusion, reserved/off ad policy helpers를 유지하는지 검사하도록 강화했다.
+- `zdp-web-public` service contract가 Term Sheet 광고 슬롯 기본 off와 명시적 실험 선행 조건을 잃으면 repository validation에서 실패한다.
+
+## 0.39.8
+
+- `ZDP-LOCALIZATION-001`이 `zdp-platform-localization`의 내부 전용 posture를 더 강하게 검사하도록 조정했다.
+- `check-internal-posture`가 open source conversion을 고려 대상이나 미래 후보로 표현하는 문구까지 차단해야 repository validation을 통과한다.
+
+## 0.39.7
+
+- `ZDP-APP-001`이 `zdp-web-apps` app shell service contract의 `platform-localization` 의존성과 provider `check:adoption` 선행 조건을 검사하도록 강화했다.
+- app shell service contract가 fixture catalog diagnostics 0건, generated large-catalog diagnostics 0건, production fallback 0건 기준을 잃으면 repository validation에서 실패한다.
+
+## 0.39.6
+
+- `ZDP-LOCALIZATION-001`이 `check:adoption`의 generated large-catalog diagnostics 0건 증거와 `large-catalog-diagnostic-checks` 운영 metric을 요구하도록 강화했다.
+- `zdp-platform-localization`의 large-catalog measurement가 `zdp.localization.large-catalog-measurement@1` protocol 이름을 유지하는지 검사한다.
+
+## 0.39.5
+
+- `ZDP-LOCALIZATION-001`이 `zdp-platform-localization`의 필수 내부 package set, `@zdp/localization-*` package name, `private: true`, `zdp-localization` CLI bin 계약을 검사하도록 강화했다.
+- `check-internal-posture`가 package missing/name/bin drift 진단을 잃으면 repository validation에서 실패한다.
+
+## 0.39.4
+
+- `ZDP-WEBPUB-001`이 `zdp-web-public`의 앱 패키지 또는 zero-fallback/glossary 운영 gate 선언 이후 `check:localization` zero-fallback production compile gate와 glossary stale-manifest gate를 검사하도록 강화했다.
+- 루트 계약만 가진 초기 공개 웹 scaffold는 앱 checker 파일 없이도 `webpub.toml` 발행 계약 검증을 통과하도록 조정했다.
+- `package.json`의 `check`, `check:localization`, `check:glossary`, `glossary:generate` wiring과 `scripts/check-localization.ts`, `scripts/check-glossary.ts`, `service.yaml` 운영 계약 문구가 drift하면 repository validation에서 실패한다.
+
+## 0.39.3
+
+- `ZDP-LOCALIZATION-001`이 `zdp-platform-localization`의 내부 전용 posture까지 검사하도록 강화했다.
+- `check-internal-posture`의 Dora branding 금지, 공개 npm/publish 금지, open source escape-hatch 금지, README/AGENTS/ADR의 "open source conversion is not a roadmap item" 문구가 사라지면 repository validation에서 실패한다.
+
+## 0.39.2
+
+- `ZDP-LOCALIZATION-001`을 추가해 `zdp-platform-localization`의 `check:adoption` non-browser gate, zero-fallback production compile, large-catalog route-scope ratio 25% 기준, HMR 별도 검증 경계를 검사한다.
+
 ## 0.39.1
 
 - `check:tsgo` fast typecheck 스크립트와 pinned `@typescript/native-preview` 의존성을 추가했다.

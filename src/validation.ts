@@ -103,6 +103,7 @@ import { validateRepositorySecurityContract } from './security-contract-rules.ts
 import { validateRepositoryDataPlatformContract } from './data-platform-contract-rules.ts';
 import { validateRepositoryGrowthLabContract } from './growth-lab-contract-rules.ts';
 import { validateRepositoryLibsContract } from './libs-contract-rules.ts';
+import { validateRepositoryLocalizationContract } from './localization-contract-rules.ts';
 import { validateRepositoryClientSdksContract } from './client-sdks-contract-rules.ts';
 import { validateRepositoryMoneyPlatformContract } from './money-platform-contract-rules.ts';
 import { validateRepositoryPrivacyContract } from './privacy-contract-rules.ts';
@@ -121,6 +122,7 @@ import {
   validateTier3RiskyExperimentContracts
 } from './tier-rules.ts';
 import { validateRepositoryWebpubContract } from './webpub-rules.ts';
+import { validateRepositoryTermSheetContract } from './xcut-term-rules.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -234,6 +236,13 @@ export async function validateArchitecture(
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
+  const repositoryTermSheetDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryTermSheetContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
   const repositoryCoreContractDiagnostics =
     input.repositoryRoot === undefined
       ? []
@@ -266,6 +275,13 @@ export async function validateArchitecture(
     input.repositoryRoot === undefined
       ? []
       : await validateRepositoryLibsContract({
+          repositoryRoot: input.repositoryRoot,
+          repositoryServiceContract: repositoryServiceContract?.value ?? null
+        });
+  const repositoryLocalizationContractDiagnostics =
+    input.repositoryRoot === undefined
+      ? []
+      : await validateRepositoryLocalizationContract({
           repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         });
@@ -527,11 +543,13 @@ export async function validateArchitecture(
       ...repositoryBaselineDiagnostics,
       ...repositoryMarkdownDiagnostics,
       ...repositoryWebpubDiagnostics,
+      ...repositoryTermSheetDiagnostics,
       ...repositoryCoreContractDiagnostics,
       ...repositoryAppShellContractDiagnostics,
       ...repositoryRuntimeContractDiagnostics,
       ...repositoryApiContractsContractDiagnostics,
       ...repositoryLibsContractDiagnostics,
+      ...repositoryLocalizationContractDiagnostics,
       ...repositoryClientSdksContractDiagnostics,
       ...repositoryEdgeContractDiagnostics,
       ...repositoryObservabilityContractDiagnostics,

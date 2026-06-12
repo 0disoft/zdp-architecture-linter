@@ -30,6 +30,14 @@ const REQUIRED_FORBIDDEN_CONTRACTS = [
   'refresh_token_storage'
 ] as const;
 
+const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
+  'platform-localization',
+  'localization-adoption-gate',
+  'fixture catalog diagnostics 0',
+  'generated large-catalog diagnostics 0',
+  'production fallback 0'
+] as const;
+
 const REQUIRED_SURFACES = [
   { id: 'console', route: '/console', call: 'core-api' },
   { id: 'admin', route: '/admin', call: 'core-api' }
@@ -78,6 +86,9 @@ export async function validateRepositoryAppShellContract(input: {
     diagnostics.push(...validateAppShellContract(contract.value));
   }
 
+  diagnostics.push(
+    ...validateServiceContractIncludes(input.repositoryServiceContract)
+  );
   diagnostics.push(...(await validateSourceBoundaries(input.repositoryRoot)));
 
   return diagnostics;
@@ -262,6 +273,27 @@ function validateRequiredSurfaces(value: unknown): readonly Diagnostic[] {
   return diagnostics;
 }
 
+function validateServiceContractIncludes(value: unknown): readonly Diagnostic[] {
+  const source = stringify(value);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const snippet of REQUIRED_SERVICE_CONTRACT_SNIPPETS) {
+    if (source.includes(snippet)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAppShellDiagnostic(
+        'service.yaml',
+        'service.contract',
+        `App shell service contract must include \`${snippet}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 async function validateSourceBoundaries(
   repositoryRoot: string
 ): Promise<readonly Diagnostic[]> {
@@ -430,6 +462,10 @@ function isMissingPathError(error: unknown): boolean {
     'code' in error &&
     (error as NodeJS.ErrnoException).code === 'ENOENT'
   );
+}
+
+function stringify(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
