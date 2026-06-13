@@ -71,6 +71,21 @@ const REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS = [
   'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract'
 ] as const;
 
+const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
+  'public-site:',
+  'uses: actions/checkout@v6',
+  'path: projects/zdp-platforms/client-surfaces/zdp-web-public',
+  'repository: 0disoft/zdp-design-system',
+  'path: projects/zdp-platforms/client-surfaces/zdp-design-system',
+  'repository: 0disoft/zdp-platform-localization',
+  'secrets.ZDP_CI_READ_TOKEN || github.token',
+  'path: projects/zdp-platforms/platform/zdp-platform-localization',
+  'bun install --frozen-lockfile',
+  'bun run package:build',
+  'bun run check',
+  'bun run build'
+] as const;
+
 const WEB_PUBLIC_OPERATIONAL_GATE_SERVICE_TRIGGER_SNIPPETS = [
   'bun run check:localization passes with catalog diagnostics 0 and production fallback count 0',
   'bun run check:localization runs zdp-platform-localization catalog check and strict production compile',
@@ -458,6 +473,16 @@ async function validateWebPublicOperationalGates(
       description:
         'zdp-web-public service contract must document localization and glossary gates'
     })
+  );
+  diagnostics.push(
+    ...(await validateRequiredSourceSnippets({
+      repositoryRoot,
+      file: '.github/workflows/ci.yml',
+      path: 'github.workflow.ci',
+      snippets: REQUIRED_WEB_PUBLIC_CI_SNIPPETS,
+      description:
+        'zdp-web-public CI workflow must install private sibling providers and run public site check/build'
+    }))
   );
 
   return diagnostics;

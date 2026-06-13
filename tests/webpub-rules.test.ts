@@ -362,6 +362,38 @@ domain_status = candidate
       });
     });
   });
+
+  test('fails when zdp-web-public CI omits private sibling provider checks', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPublicWebRepositoryFiles(),
+        '.github/workflows/ci.yml': 'name: CI\njobs:\n  repository-contract:\n    steps: []\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryWebpubContract({
+          repositoryRoot,
+          repositoryServiceContract: createPublicWebServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-WEBPUB-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'github.workflow.ci',
+          message:
+            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `public-site:`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-WEBPUB-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'github.workflow.ci',
+          message:
+            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `secrets.ZDP_CI_READ_TOKEN || github.token`.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -435,6 +467,29 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       '}',
       'function createReservedDetailAdPolicy() {}',
       'function createForbiddenAdPolicy() {}'
+    ].join('\n'),
+    '.github/workflows/ci.yml': [
+      'name: CI',
+      'jobs:',
+      '  public-site:',
+      '    steps:',
+      '      - uses: actions/checkout@v6',
+      '        with:',
+      '          path: projects/zdp-platforms/client-surfaces/zdp-web-public',
+      '      - uses: actions/checkout@v6',
+      '        with:',
+      '          repository: 0disoft/zdp-design-system',
+      '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
+      '          path: projects/zdp-platforms/client-surfaces/zdp-design-system',
+      '      - uses: actions/checkout@v6',
+      '        with:',
+      '          repository: 0disoft/zdp-platform-localization',
+      '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
+      '          path: projects/zdp-platforms/platform/zdp-platform-localization',
+      '      - run: bun install --frozen-lockfile',
+      '      - run: bun run package:build',
+      '      - run: bun run check',
+      '      - run: bun run build'
     ].join('\n'),
     'glossary/terms/public.yaml': 'terms: []\n',
     'src/content/glossary-manifest.json': '[]\n'

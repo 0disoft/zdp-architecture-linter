@@ -21,7 +21,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - 패키지, CLI, SDK, 템플릿 성격의 저장소 루트에 `CONTRIBUTING.md`와 `CHANGELOG.md`가 있는지 검사한다.
 - 운영 저장소, 민감 저장소, 경계가 두꺼운 저장소, 제품 저장소가 각각 `RUNBOOK.md`, `SECURITY.md`, `BOUNDARY.md`, `product-spec.md`를 갖는지 검사한다.
 - 공개 정적 웹 저장소 루트에 `webpub.toml`이 있고, 후보 도메인과 robots 차단 정책이 `service.yaml`과 어긋나지 않는지 검사한다.
-- `zdp-web-public` 저장소가 앱 패키지나 zero-fallback/glossary gate를 선언한 뒤에는 `check:localization` zero-fallback production compile gate, glossary stale-manifest gate, click-open Term Sheet placement, hover-card ad exclusion이 공개 웹 dogfooding 계약으로 유지되는지 검사한다.
+- `zdp-web-public` 저장소가 앱 패키지나 zero-fallback/glossary gate를 선언한 뒤에는 `check:localization` zero-fallback production compile gate, glossary stale-manifest gate, click-open Term Sheet placement, hover-card ad exclusion, private sibling checkout과 check/build CI가 공개 웹 dogfooding 계약으로 유지되는지 검사한다.
 - glossary/Term Sheet 표면을 선언한 저장소가 hover tooltip/card 광고 슬롯, Term Sheet 광고 슬롯/provider, `term_id` 없는 용어 identity, generated manifest의 YAML source 누락을 갖는지 검사한다.
 - `zdp-api-contracts` 저장소 루트의 route/error/webhook/SDK generation input 계약, checker skeleton, API export dry-run plan gate가 API 구현 전 유지되는지 검사한다.
 - `zdp-libs-ts` 저장소 루트의 API contract source/package/schema/env/event/error/i18n 계약, checker skeleton, 최소 public export skeleton이 공통 TypeScript 패키지 구현 전 gate로 유지되는지 검사한다.
@@ -138,6 +138,8 @@ fixtures/service-schema/fail/**
 0.39.12부터 `ZDP-WEBPUB-001`은 `zdp-web-public` localization canary가 home hero title과 CTA 메시지로 제한되고 static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 유지하는지 검사한다. `ZDP-APP-001`은 `zdp-web-apps`의 `contracts/app-shell.yaml`에서 `localization_canary` scope, 6개 app-shell message key, expansion review, rollback boundary, runtime feature flag 불필요 계약을 검사한다.
 
 0.39.13부터 `ZDP-APP-001`은 `zdp-web-apps`의 GitHub Actions CI workflow가 private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v6`, provider workspace install, app install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
+
+0.39.14부터 `ZDP-WEBPUB-001`은 `zdp-web-public`의 GitHub Actions CI workflow가 private sibling `zdp-design-system`과 `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v6`, design-system package build, public site install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
 
 ## 개발 명령
 
