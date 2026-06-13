@@ -141,6 +141,8 @@ fixtures/service-schema/fail/**
 
 0.39.14부터 `ZDP-WEBPUB-001`은 `zdp-web-public`의 GitHub Actions CI workflow가 private sibling `zdp-design-system`과 `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v6`, design-system package build, public site install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
 
+0.39.15부터 `ZDP-WEBPUB-001`은 fresh CI의 local file dependency consumer install이 lockfile을 쓰려고 실패하지 않도록 `zdp-web-public` workflow의 public site install step이 `bun install --no-save`를 쓰는지도 검사한다.
+
 ## 개발 명령
 
 `ZDP-CREDENTIAL-001`은 0.37.5부터 `zdp-privacy-credential-vault`의 credential 계약과 checker skeleton뿐 아니라 최소 Rust/Axum runtime skeleton도 검사한다.

@@ -82,6 +82,7 @@ const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'path: projects/zdp-platforms/platform/zdp-platform-localization',
   'bun install --frozen-lockfile',
   'bun run package:build',
+  'bun install --no-save',
   'bun run check',
   'bun run build'
 ] as const;

@@ -488,6 +488,7 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       '          path: projects/zdp-platforms/platform/zdp-platform-localization',
       '      - run: bun install --frozen-lockfile',
       '      - run: bun run package:build',
+      '      - run: bun install --no-save',
       '      - run: bun run check',
       '      - run: bun run build'
     ].join('\n'),
