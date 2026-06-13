@@ -143,6 +143,8 @@ fixtures/service-schema/fail/**
 
 0.39.15부터 `ZDP-WEBPUB-001`은 fresh CI의 local file dependency consumer install이 lockfile을 쓰려고 실패하지 않도록 `zdp-web-public` workflow의 public site install step이 `bun install --no-save`를 쓰는지도 검사한다.
 
+0.39.16부터 `ZDP-WEBPUB-001`은 `zdp-web-public` glossary checks가 source import와 YAML source를 찾을 수 있도록 `zdp-platform-devex`와 `zdp-libs-ts` sibling checkout도 검사한다.
+
 ## 개발 명령
 
 `ZDP-CREDENTIAL-001`은 0.37.5부터 `zdp-privacy-credential-vault`의 credential 계약과 checker skeleton뿐 아니라 최소 Rust/Axum runtime skeleton도 검사한다.
