@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.18
+
+- `ZDP-APP-001`이 `zdp-web-apps`의 auth route promotion 계약에서 core-api auth/session route catalog source와 8개 required operation, live runtime handoff와 product review 전 route 차단 상태를 유지하는지 검사하도록 강화했다.
+
 ## 0.39.17
 
 - `ZDP-AUTH-ROUTE-001`을 추가해 `zdp-api-contracts`의 core-api auth/session route catalog가 registration, session issue/refresh/revoke, recovery, passkey, OAuth callback 계약과 owner/tenant/request/trace/session/credential metadata를 유지하는지 검사한다.

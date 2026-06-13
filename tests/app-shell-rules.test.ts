@@ -134,6 +134,109 @@ forbidden:
           message:
             'App shell contract `contracts/app-shell.yaml` must include `refresh_token_storage` in `forbidden`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion',
+          message:
+            'App shell contract must declare an `auth_route_promotion` object.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth route promotion opens before runtime handoff and review', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidAppShellFiles(),
+        'contracts/app-shell.yaml': `
+environment:
+  required:
+    - ZDP_CORE_API_BASE_URL
+surfaces:
+  - id: console
+    route: /console
+    calls:
+      - core-api
+  - id: admin
+    route: /admin
+    calls:
+      - core-api
+readiness:
+  routes:
+    - /healthz
+    - /readyz
+  required_env:
+    - ZDP_CORE_API_BASE_URL
+auth_route_promotion:
+  status: ready
+  catalog_source: local/auth.yaml
+  required_operations:
+    - core.auth.sessions.create
+  allowed_routes:
+    - /login
+  requires:
+    - product reviewer approval for auth UI paths
+localization_canary:
+  provider: zdp-platform-localization
+  scope: app-shell
+  message_keys:
+    - nav.app
+    - nav.console
+    - nav.admin
+    - page.home.title
+    - page.console.title
+    - page.admin.title
+  expansion_requires_review: true
+  rollback_boundary: disable affected app slice and keep previous app-shell copy or i18n runtime path
+  runtime_feature_flag_required: false
+allowed_upstreams:
+  - core-api
+forbidden:
+  - direct_database_reads
+  - final_authorization_in_ui
+  - refresh_token_storage
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.status',
+          message:
+            'App shell auth route promotion status must stay `blocked_until_core_auth_runtime_and_product_review`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.catalog_source',
+          message:
+            'App shell auth route promotion must reference `zdp-api-contracts/contracts/apis/catalog.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.required_operations',
+          message:
+            'App shell contract `contracts/app-shell.yaml` must include `core.auth.sessions.refresh` in `required_operations`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.allowed_routes',
+          message:
+            'App shell auth route promotion must keep `allowed_routes` empty before live runtime handoff and product reviewer approval; found `/login`.'
+        });
       }
     );
   });
@@ -244,6 +347,23 @@ readiness:
     - /readyz
   required_env:
     - ZDP_CORE_API_BASE_URL
+auth_route_promotion:
+  status: blocked_until_core_auth_runtime_and_product_review
+  catalog_source: zdp-api-contracts/contracts/apis/catalog.yaml
+  required_operations:
+    - core.auth.registrations.create
+    - core.auth.sessions.create
+    - core.auth.sessions.refresh
+    - core.auth.sessions.revoke_current
+    - core.auth.recovery_requests.create
+    - core.auth.passkey_challenges.create
+    - core.auth.passkey_assertions.verify
+    - core.auth.oauth_callbacks.accept
+  allowed_routes: []
+  requires:
+    - zdp-api-contracts core-api auth/session route catalog adoption
+    - zdp-core-platform live auth/session runtime handoff
+    - product reviewer approval for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
   scope: full-product-ui
@@ -376,12 +496,16 @@ function createWebAppsServiceContract(): unknown {
     release: {
       migration_policy:
         'zdp-platform-localization adoption is limited to the six app-shell navigation and page-title messages until product UI slices are reviewed',
+      change_approval:
+        'auth route promotion requires core auth/session route catalog adoption, live runtime handoff, credential ownership review, and manual approval for auth UI paths',
       canary_policy:
         'app-shell localization dogfood only; keep the previous app-shell copy or i18n runtime path available before expanding to product UI copy',
       feature_flag_required: false
     },
     notes: [
       'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.',
+      'auth route promotion remains blocked until the core auth/session route catalog is adopted, live runtime handoff exists, and auth UI paths have product reviewer approval.',
+      'Required auth catalog operations are core.auth.registrations.create, core.auth.sessions.create, core.auth.sessions.refresh, core.auth.sessions.revoke_current, core.auth.recovery_requests.create, core.auth.passkey_challenges.create, core.auth.passkey_assertions.verify, and core.auth.oauth_callbacks.accept.',
       'The first zdp-platform-localization app canary is intentionally limited to the six app-shell navigation and page-title messages.',
       'Disabling the affected app slice and keeping the previous app-shell copy or i18n runtime path is the rollback boundary for the localization canary, so this shell does not require a runtime feature flag.'
     ]
@@ -455,6 +579,23 @@ readiness:
     - /readyz
   required_env:
     - ZDP_CORE_API_BASE_URL
+auth_route_promotion:
+  status: blocked_until_core_auth_runtime_and_product_review
+  catalog_source: zdp-api-contracts/contracts/apis/catalog.yaml
+  required_operations:
+    - core.auth.registrations.create
+    - core.auth.sessions.create
+    - core.auth.sessions.refresh
+    - core.auth.sessions.revoke_current
+    - core.auth.recovery_requests.create
+    - core.auth.passkey_challenges.create
+    - core.auth.passkey_assertions.verify
+    - core.auth.oauth_callbacks.accept
+  allowed_routes: []
+  requires:
+    - zdp-api-contracts core-api auth/session route catalog adoption
+    - zdp-core-platform live auth/session runtime handoff
+    - product reviewer approval for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
   scope: app-shell

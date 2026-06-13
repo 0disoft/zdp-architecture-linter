@@ -127,6 +127,8 @@ fixtures/service-schema/fail/**
 
 0.39.17부터 `ZDP-AUTH-ROUTE-001`이 `zdp-api-contracts`의 core-api auth/session route catalog와 auth/session schema bundle을 검사한다. registration, session issue/refresh/revoke, recovery, passkey, OAuth callback route, identity owner boundary, request_id/trace_id, session effect, credential policy, 민감 payload 금지값이 사라지면 실패한다.
 
+0.39.18부터 `ZDP-APP-001`은 `zdp-web-apps` auth route promotion 계약이 `zdp-api-contracts/contracts/apis/catalog.yaml`의 core-api auth/session operation 목록을 명시하되, live core runtime handoff와 product reviewer approval 전에는 route를 열지 않는 상태를 유지하는지 검사한다.
+
 0.39.0부터 실제 저장소 루트 검사는 `.editorconfig`와 `.gitattributes`의 최소 줄바꿈 정책, `RUNBOOK.md`, `SECURITY.md`, `BOUNDARY.md`, `product-spec.md` 조건부 루트 Markdown도 함께 검사한다. 새 진단 ID는 `ZDP-REPO-MARKDOWN-003`, `ZDP-REPO-MARKDOWN-004`, `ZDP-REPO-MARKDOWN-005`, `ZDP-REPO-MARKDOWN-006`이다.
 
 0.39.5부터 `ZDP-LOCALIZATION-001`이 `zdp-platform-localization`의 필수 내부 package set, `@zdp/localization-*` package name, `private: true`, `zdp-localization` CLI bin 계약도 검사한다. `check-internal-posture`가 package missing/name/bin drift 진단을 잃으면 실패한다.

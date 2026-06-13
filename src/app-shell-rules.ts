@@ -30,6 +30,25 @@ const REQUIRED_FORBIDDEN_CONTRACTS = [
   'final_authorization_in_ui',
   'refresh_token_storage'
 ] as const;
+const REQUIRED_AUTH_ROUTE_PROMOTION_STATUS =
+  'blocked_until_core_auth_runtime_and_product_review';
+const REQUIRED_AUTH_ROUTE_CATALOG_SOURCE =
+  'zdp-api-contracts/contracts/apis/catalog.yaml';
+const REQUIRED_AUTH_ROUTE_OPERATIONS = [
+  'core.auth.registrations.create',
+  'core.auth.sessions.create',
+  'core.auth.sessions.refresh',
+  'core.auth.sessions.revoke_current',
+  'core.auth.recovery_requests.create',
+  'core.auth.passkey_challenges.create',
+  'core.auth.passkey_assertions.verify',
+  'core.auth.oauth_callbacks.accept'
+] as const;
+const REQUIRED_AUTH_ROUTE_PROMOTION_REQUIREMENTS = [
+  'zdp-api-contracts core-api auth/session route catalog adoption',
+  'zdp-core-platform live auth/session runtime handoff',
+  'product reviewer approval for auth UI paths'
+] as const;
 
 const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'platform-localization',
@@ -37,6 +56,9 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'fixture catalog diagnostics 0',
   'generated large-catalog diagnostics 0',
   'production fallback 0',
+  'auth route promotion requires core auth/session route catalog adoption',
+  'auth route promotion remains blocked until the core auth/session route catalog is adopted',
+  'Required auth catalog operations are core.auth.registrations.create',
   'limited to the six app-shell navigation and page-title messages',
   'keep the previous app-shell copy or i18n runtime path',
   'does not require a runtime feature flag'
@@ -232,9 +254,71 @@ function validateAppShellContract(value: unknown): readonly Diagnostic[] {
       field: 'forbidden',
       requiredEntries: REQUIRED_FORBIDDEN_CONTRACTS
     }),
+    ...validateAuthRoutePromotion(value),
     ...validateLocalizationCanary(value),
     ...validateRequiredSurfaces(value)
   ];
+}
+
+function validateAuthRoutePromotion(value: unknown): readonly Diagnostic[] {
+  const promotion = readPath(value, 'auth_route_promotion');
+
+  if (!isRecord(promotion)) {
+    return [
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'auth_route_promotion',
+        'App shell contract must declare an `auth_route_promotion` object.'
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  if (readStringField(promotion, 'status') !== REQUIRED_AUTH_ROUTE_PROMOTION_STATUS) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'auth_route_promotion.status',
+        `App shell auth route promotion status must stay \`${REQUIRED_AUTH_ROUTE_PROMOTION_STATUS}\`.`
+      )
+    );
+  }
+
+  if (readStringField(promotion, 'catalog_source') !== REQUIRED_AUTH_ROUTE_CATALOG_SOURCE) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'auth_route_promotion.catalog_source',
+        `App shell auth route promotion must reference \`${REQUIRED_AUTH_ROUTE_CATALOG_SOURCE}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value: promotion,
+      file: APP_SHELL_CONTRACT_FILE,
+      path: 'auth_route_promotion.required_operations',
+      field: 'required_operations',
+      requiredEntries: REQUIRED_AUTH_ROUTE_OPERATIONS
+    }),
+    ...validateEmptyStringArray({
+      value: promotion,
+      file: APP_SHELL_CONTRACT_FILE,
+      path: 'auth_route_promotion.allowed_routes',
+      field: 'allowed_routes'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: promotion,
+      file: APP_SHELL_CONTRACT_FILE,
+      path: 'auth_route_promotion.requires',
+      field: 'requires',
+      requiredEntries: REQUIRED_AUTH_ROUTE_PROMOTION_REQUIREMENTS
+    })
+  );
+
+  return diagnostics;
 }
 
 function validateLocalizationCanary(value: unknown): readonly Diagnostic[] {
@@ -580,6 +664,27 @@ function validateExactStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateEmptyStringArray(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const entries = readStringArrayPath(input.value, input.field);
+
+  if (entries.length === 0) {
+    return [];
+  }
+
+  return entries.map((entry) =>
+    createAppShellDiagnostic(
+      input.file,
+      input.path,
+      `App shell auth route promotion must keep \`${input.field}\` empty before live runtime handoff and product reviewer approval; found \`${entry}\`.`
+    )
+  );
 }
 
 function readRepositoryName(value: unknown): string | null {
