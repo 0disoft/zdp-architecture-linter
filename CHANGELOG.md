@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.17
+
+- `ZDP-AUTH-ROUTE-001`을 추가해 `zdp-api-contracts`의 core-api auth/session route catalog가 registration, session issue/refresh/revoke, recovery, passkey, OAuth callback 계약과 owner/tenant/request/trace/session/credential metadata를 유지하는지 검사한다.
+- auth/session payload schema bundle이 contract-only 상태와 identity owner boundary, request_id/trace_id/idempotency_key envelope, refresh token plaintext와 provider secret 금지값을 잃으면 실패하도록 했다.
+
 ## 0.39.13
 
 - `ZDP-APP-001`이 `zdp-web-apps`의 GitHub Actions CI workflow에서 private `zdp-platform-localization` checkout, `ZDP_CI_READ_TOKEN`, provider workspace install, app install, `bun run check`, `bun run build` 계약이 유지되는지 검사하도록 강화했다.

@@ -70,6 +70,22 @@ describe('api contracts repository rules', () => {
         message:
           'API contracts repository must include `contracts/sdk-generation-input.yaml`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-API-CONTRACTS-001',
+        severity: 'error',
+        file: 'contracts/apis/catalog.yaml',
+        path: 'repository.root',
+        message:
+          'API contracts repository must include `contracts/apis/catalog.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-API-CONTRACTS-001',
+        severity: 'error',
+        file: 'contracts/apis/core-api/auth-session.yaml',
+        path: 'repository.root',
+        message:
+          'API contracts repository must include `contracts/apis/core-api/auth-session.yaml`.'
+      });
     });
   });
 
@@ -136,9 +152,25 @@ route_contract:
           ruleId: 'ZDP-API-CONTRACTS-001',
           severity: 'error',
           file: 'contracts/route-contract.yaml',
+          path: 'route_contract.required_per_route',
+          message:
+            'API contract `contracts/route-contract.yaml` must include `session_effect` in `route_contract.required_per_route`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/route-contract.yaml',
           path: 'route_contract.forbidden_shapes',
           message:
             'API contract `contracts/route-contract.yaml` must include `screen_component_payload` in `route_contract.forbidden_shapes`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
+          file: 'contracts/route-contract.yaml',
+          path: 'route_contract.forbidden_shapes',
+          message:
+            'API contract `contracts/route-contract.yaml` must include `refresh_token_plaintext` in `route_contract.forbidden_shapes`.'
         });
       }
     );
@@ -338,6 +370,120 @@ sdk_generation_input:
     );
   });
 
+  test('fails when core auth session route catalog loses safety metadata', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidApiContractFiles(),
+        'contracts/apis/catalog.yaml': `
+api_catalog:
+  status: empty-until-service-routes-exist
+  route_definition_required_fields:
+    - operation_id
+  forbidden_values:
+    - raw_customer_payload
+routes:
+  - operation_id: core.auth.sessions.create
+    service_id: app-console
+    request_schema_ref: contracts/apis/app-console/auth.yaml#BadRequest
+    response_schema_ref: contracts/apis/app-console/auth.yaml#BadResponse
+    owner_boundary: app
+    session_effect: none
+    credential_policy: no_provider_secret
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryApiContractsContract({
+          repositoryRoot,
+          repositoryServiceContract: createApiContractsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'api_catalog.status',
+          message:
+            'API catalog must stay active once core auth/session routes are declared.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes',
+          message:
+            'Core auth/session route catalog must include `core.auth.sessions.refresh`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes.core.auth.sessions.create.service_id',
+          message:
+            'Core auth/session route `core.auth.sessions.create` must belong to `core-api`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes.core.auth.sessions.create.session_effect',
+          message:
+            'Core auth/session route `core.auth.sessions.create` must declare `issue` session effect.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes.core.auth.sessions.create.credential_policy',
+          message:
+            'Core auth/session route `core.auth.sessions.create` credential policy must include `no_refresh_token_plaintext`.'
+        });
+      }
+    );
+  });
+
+  test('fails when core auth session schema bundle allows sensitive payload values', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidApiContractFiles(),
+        'contracts/apis/core-api/auth-session.yaml': `
+schema_bundle:
+  service_id: core-api
+  owner_boundary: app
+  status: live
+  common_envelope:
+    required_request_metadata:
+      - request_id
+    required_response_metadata:
+      - request_id
+    forbidden_payload_values:
+      - authorization_header
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryApiContractsContract({
+          repositoryRoot,
+          repositoryServiceContract: createApiContractsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/core-api/auth-session.yaml',
+          path: 'schema_bundle.owner_boundary',
+          message: 'Auth/session schema bundle must keep `identity` owner boundary.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/core-api/auth-session.yaml',
+          path: 'schema_bundle.common_envelope.forbidden_payload_values',
+          message:
+            'API auth route contract `contracts/apis/core-api/auth-session.yaml` must include `provider_secret` in `schema_bundle.common_envelope.forbidden_payload_values`.'
+        });
+      }
+    );
+  });
+
   test('fails when API checker files and scripts drift', async () => {
     await withRepositoryRoot(
       {
@@ -406,6 +552,14 @@ test('api placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-API-CONTRACTS-001',
           severity: 'error',
+          file: 'src/api-contracts/validator.ts',
+          path: 'source',
+          message:
+            'API contracts checker source must include `API_CATALOG_ROUTE_FIELD_MISSING`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-API-CONTRACTS-001',
+          severity: 'error',
           file: 'tests/api-contracts.test.ts',
           path: 'source',
           message:
@@ -453,6 +607,14 @@ test('api placeholder', () => {});
         message:
           'API contracts service contract must require `ZDP-API-CONTRACTS-001`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-AUTH-ROUTE-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'policy_gates.required_linter_rules',
+        message:
+          'API contracts service contract must require `ZDP-AUTH-ROUTE-001`.'
+      });
     });
   });
 });
@@ -486,7 +648,8 @@ function createApiContractsServiceContract(): unknown {
       required_linter_rules: [
         'ZDP-REPO-BASELINE-001',
         'ZDP-REPO-MARKDOWN-002',
-        'ZDP-API-CONTRACTS-001'
+        'ZDP-API-CONTRACTS-001',
+        'ZDP-AUTH-ROUTE-001'
       ]
     }
   };
@@ -507,11 +670,20 @@ route_contract:
     - permission_check
     - audit_event
     - idempotency
+    - owner_boundary
+    - tenant_boundary
+    - request_id_required
+    - trace_id_required
+    - session_effect
+    - credential_policy
     - error_codes
   forbidden_shapes:
     - screen_component_payload
     - provider_specific_id_as_primary_id
     - raw_storage_url
+    - authorization_header_payload
+    - cookie_header_payload
+    - refresh_token_plaintext
 `,
     'contracts/error-envelope.yaml': `
 error_envelope:
@@ -554,6 +726,8 @@ sdk_generation_input:
     - contracts/route-contract.yaml
     - contracts/error-envelope.yaml
     - contracts/webhook-contract.yaml
+    - contracts/sdk-generation-input.yaml
+    - contracts/apis/catalog.yaml
   generation_targets:
     - typescript
     - dart
@@ -564,12 +738,19 @@ sdk_generation_input:
     - action
     - method
     - path
+    - success_statuses
     - request_schema_ref
     - response_schema_ref
     - auth_required
     - permission_check
     - audit_event
     - idempotency
+    - owner_boundary
+    - tenant_boundary
+    - request_id_required
+    - trace_id_required
+    - session_effect
+    - credential_policy
     - error_codes
   required_error_metadata:
     - code
@@ -600,8 +781,101 @@ sdk_generation_input:
     - authorization_header
     - cookie_header
     - screen_component_payload
+`,
+    'contracts/apis/catalog.yaml': `
+api_catalog:
+  status: route-catalog-active
+  route_definition_required_fields:
+    - operation_id
+    - service_id
+    - resource
+    - action
+    - method
+    - path
+    - success_statuses
+    - request_schema_ref
+    - response_schema_ref
+    - auth_required
+    - permission_check
+    - audit_event
+    - idempotency
+    - owner_boundary
+    - tenant_boundary
+    - request_id_required
+    - trace_id_required
+    - session_effect
+    - credential_policy
+    - error_codes
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - screen_component_payload
+routes:
+${createAuthSessionRouteCatalogFixture()}
+`,
+    'contracts/apis/core-api/auth-session.yaml': `
+schema_bundle:
+  service_id: core-api
+  owner_boundary: identity
+  status: contract-only
+  common_envelope:
+    required_request_metadata:
+      - request_id
+      - trace_id
+      - idempotency_key
+    required_response_metadata:
+      - request_id
+      - trace_id
+    forbidden_payload_values:
+      - authorization_header
+      - cookie_header
+      - refresh_token_plaintext
+      - provider_secret
+      - raw_provider_error
+      - customer_private_payload
 `
   };
+}
+
+function createAuthSessionRouteCatalogFixture(): string {
+  return [
+    ['core.auth.registrations.create', 'none'],
+    ['core.auth.sessions.create', 'issue'],
+    ['core.auth.sessions.refresh', 'refresh'],
+    ['core.auth.sessions.revoke_current', 'revoke'],
+    ['core.auth.recovery_requests.create', 'none'],
+    ['core.auth.passkey_challenges.create', 'none'],
+    ['core.auth.passkey_assertions.verify', 'issue'],
+    ['core.auth.oauth_callbacks.accept', 'issue']
+  ]
+    .map(
+      ([operationId, sessionEffect]) => `  - operation_id: ${operationId}
+    service_id: core-api
+    resource: auth_session
+    action: create
+    method: POST
+    path: /v1/auth/session-fixture
+    success_statuses:
+      - 201
+    request_schema_ref: contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureRequest
+    response_schema_ref: contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureResponse
+    auth_required: false
+    permission_check: core.identity.public_auth_entrypoint
+    audit_event: core.identity.fixture
+    idempotency: required_idempotency_key
+    owner_boundary: identity
+    tenant_boundary: organization
+    request_id_required: true
+    trace_id_required: true
+    session_effect: ${sessionEffect}
+    credential_policy: no_refresh_token_plaintext_no_provider_secret_no_authorization_or_cookie_header_payload
+    error_codes:
+      - validation_failed`
+    )
+    .join('\n');
 }
 
 function createValidApiCheckerFiles(): Record<string, string> {
@@ -648,7 +922,8 @@ const files = [
   'contracts/route-contract.yaml',
   'contracts/error-envelope.yaml',
   'contracts/webhook-contract.yaml',
-  'contracts/sdk-generation-input.yaml'
+  'contracts/sdk-generation-input.yaml',
+  'contracts/apis/catalog.yaml'
 ];
 export { files };
 `,
@@ -660,17 +935,23 @@ export interface ApiContractDiagnostic {
     'src/api-contracts/validator.ts': `
 const REQUIRED_ROUTE_FIELDS = [];
 const FORBIDDEN_ROUTE_SHAPES = [];
+const ALLOWED_SESSION_EFFECTS = [];
 const REQUIRED_ERROR_FIELDS = [];
 const FORBIDDEN_ERROR_FIELDS = [];
 const REQUIRED_WEBHOOK_CONTROLS = [];
 const FORBIDDEN_WEBHOOK_CONTROLS = [];
 const REQUIRED_SDK_GENERATION_TARGETS = [];
 const REQUIRED_SDK_ROUTE_METADATA = [];
+const API_CATALOG_REQUIRED_ROUTE_FIELDS = [];
+const REQUIRED_CREDENTIAL_POLICY_PARTS = [];
 const REQUIRED_SDK_ERROR_METADATA = [];
 const REQUIRED_SDK_WEBHOOK_METADATA = [];
 const FORBIDDEN_SDK_OWNERSHIP = [];
 const FORBIDDEN_SDK_VALUES = [];
 const API_ROUTE_REQUIRED_FIELD_MISSING = 'API_ROUTE_REQUIRED_FIELD_MISSING';
+const API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING = 'API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING';
+const API_CATALOG_ROUTE_FIELD_MISSING = 'API_CATALOG_ROUTE_FIELD_MISSING';
+const API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE = 'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE';
 const API_ERROR_FORBIDDEN_FIELD_MISSING = 'API_ERROR_FORBIDDEN_FIELD_MISSING';
 const API_WEBHOOK_REQUIRED_CONTROL_MISSING = 'API_WEBHOOK_REQUIRED_CONTROL_MISSING';
 const API_SDK_GENERATION_TARGET_MISSING = 'API_SDK_GENERATION_TARGET_MISSING';
@@ -679,17 +960,23 @@ const API_SDK_FORBIDDEN_VALUE_MISSING = 'API_SDK_FORBIDDEN_VALUE_MISSING';
 export {
   REQUIRED_ROUTE_FIELDS,
   FORBIDDEN_ROUTE_SHAPES,
+  ALLOWED_SESSION_EFFECTS,
   REQUIRED_ERROR_FIELDS,
   FORBIDDEN_ERROR_FIELDS,
   REQUIRED_WEBHOOK_CONTROLS,
   FORBIDDEN_WEBHOOK_CONTROLS,
   REQUIRED_SDK_GENERATION_TARGETS,
   REQUIRED_SDK_ROUTE_METADATA,
+  API_CATALOG_REQUIRED_ROUTE_FIELDS,
+  REQUIRED_CREDENTIAL_POLICY_PARTS,
   REQUIRED_SDK_ERROR_METADATA,
   REQUIRED_SDK_WEBHOOK_METADATA,
   FORBIDDEN_SDK_OWNERSHIP,
   FORBIDDEN_SDK_VALUES,
   API_ROUTE_REQUIRED_FIELD_MISSING,
+  API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING,
+  API_CATALOG_ROUTE_FIELD_MISSING,
+  API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE,
   API_ERROR_FORBIDDEN_FIELD_MISSING,
   API_WEBHOOK_REQUIRED_CONTROL_MISSING,
   API_SDK_GENERATION_TARGET_MISSING,
@@ -701,6 +988,7 @@ export {
 const cases = [
   'fails when route contracts stop requiring authorization hooks',
   'fails when route contracts allow screen-shaped payloads',
+  'keeps core auth session routes explicit in the API catalog',
   'fails when error envelopes stop carrying trace identifiers',
   'fails when error envelopes stop forbidding provider secrets',
   'fails when webhook contracts stop requiring idempotency',

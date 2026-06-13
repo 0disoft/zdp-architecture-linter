@@ -5,11 +5,15 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const API_CONTRACTS_REPOSITORY_NAME = 'zdp-api-contracts';
 const API_CONTRACTS_RULE_ID = 'ZDP-API-CONTRACTS-001';
+const AUTH_ROUTE_RULE_ID = 'ZDP-AUTH-ROUTE-001';
 
 const ROUTE_CONTRACT_FILE = 'contracts/route-contract.yaml';
 const ERROR_ENVELOPE_FILE = 'contracts/error-envelope.yaml';
 const WEBHOOK_CONTRACT_FILE = 'contracts/webhook-contract.yaml';
 const SDK_GENERATION_INPUT_FILE = 'contracts/sdk-generation-input.yaml';
+const API_CATALOG_FILE = 'contracts/apis/catalog.yaml';
+const CORE_AUTH_SESSION_SCHEMA_FILE =
+  'contracts/apis/core-api/auth-session.yaml';
 const PACKAGE_FILE = 'package.json';
 const BUN_LOCK_FILE = 'bun.lock';
 const TSCONFIG_FILE = 'tsconfig.json';
@@ -55,13 +59,22 @@ const REQUIRED_ROUTE_FIELDS = [
   'permission_check',
   'audit_event',
   'idempotency',
+  'owner_boundary',
+  'tenant_boundary',
+  'request_id_required',
+  'trace_id_required',
+  'session_effect',
+  'credential_policy',
   'error_codes'
 ] as const;
 
 const REQUIRED_FORBIDDEN_ROUTE_SHAPES = [
   'screen_component_payload',
   'provider_specific_id_as_primary_id',
-  'raw_storage_url'
+  'raw_storage_url',
+  'authorization_header_payload',
+  'cookie_header_payload',
+  'refresh_token_plaintext'
 ] as const;
 
 const REQUIRED_ERROR_FIELDS = [
@@ -112,12 +125,19 @@ const REQUIRED_SDK_ROUTE_METADATA = [
   'action',
   'method',
   'path',
+  'success_statuses',
   'request_schema_ref',
   'response_schema_ref',
   'auth_required',
   'permission_check',
   'audit_event',
   'idempotency',
+  'owner_boundary',
+  'tenant_boundary',
+  'request_id_required',
+  'trace_id_required',
+  'session_effect',
+  'credential_policy',
   'error_codes'
 ] as const;
 
@@ -158,6 +178,88 @@ const REQUIRED_FORBIDDEN_SDK_VALUES = [
   'screen_component_payload'
 ] as const;
 
+const REQUIRED_API_CATALOG_ROUTE_FIELDS = [
+  'operation_id',
+  'service_id',
+  'resource',
+  'action',
+  'method',
+  'path',
+  'success_statuses',
+  'request_schema_ref',
+  'response_schema_ref',
+  'auth_required',
+  'permission_check',
+  'audit_event',
+  'idempotency',
+  'owner_boundary',
+  'tenant_boundary',
+  'request_id_required',
+  'trace_id_required',
+  'session_effect',
+  'credential_policy',
+  'error_codes'
+] as const;
+
+const REQUIRED_API_CATALOG_FORBIDDEN_VALUES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'screen_component_payload'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_POLICY_FRAGMENTS = [
+  'no_refresh_token_plaintext',
+  'no_provider_secret',
+  'no_authorization_or_cookie_header_payload'
+] as const;
+
+const REQUIRED_AUTH_SCHEMA_FORBIDDEN_PAYLOAD_VALUES = [
+  'authorization_header',
+  'cookie_header',
+  'refresh_token_plaintext',
+  'provider_secret',
+  'raw_provider_error',
+  'customer_private_payload'
+] as const;
+
+const REQUIRED_AUTH_SESSION_ROUTES = [
+  {
+    operationId: 'core.auth.registrations.create',
+    sessionEffect: 'none'
+  },
+  {
+    operationId: 'core.auth.sessions.create',
+    sessionEffect: 'issue'
+  },
+  {
+    operationId: 'core.auth.sessions.refresh',
+    sessionEffect: 'refresh'
+  },
+  {
+    operationId: 'core.auth.sessions.revoke_current',
+    sessionEffect: 'revoke'
+  },
+  {
+    operationId: 'core.auth.recovery_requests.create',
+    sessionEffect: 'none'
+  },
+  {
+    operationId: 'core.auth.passkey_challenges.create',
+    sessionEffect: 'none'
+  },
+  {
+    operationId: 'core.auth.passkey_assertions.verify',
+    sessionEffect: 'issue'
+  },
+  {
+    operationId: 'core.auth.oauth_callbacks.accept',
+    sessionEffect: 'issue'
+  }
+] as const;
+
 export async function validateRepositoryApiContractsContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -175,6 +277,8 @@ export async function validateRepositoryApiContractsContract(input: {
     errorEnvelope,
     webhookContract,
     sdkGenerationInput,
+    apiCatalog,
+    coreAuthSessionSchema,
     packageJson
   ] =
     await Promise.all([
@@ -182,6 +286,8 @@ export async function validateRepositoryApiContractsContract(input: {
       readRequiredYamlContract(input.repositoryRoot, ERROR_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, WEBHOOK_CONTRACT_FILE),
       readRequiredYamlContract(input.repositoryRoot, SDK_GENERATION_INPUT_FILE),
+      readRequiredYamlContract(input.repositoryRoot, API_CATALOG_FILE),
+      readRequiredYamlContract(input.repositoryRoot, CORE_AUTH_SESSION_SCHEMA_FILE),
       readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE)
     ]);
 
@@ -190,6 +296,8 @@ export async function validateRepositoryApiContractsContract(input: {
     ...errorEnvelope.diagnostics,
     ...webhookContract.diagnostics,
     ...sdkGenerationInput.diagnostics,
+    ...apiCatalog.diagnostics,
+    ...coreAuthSessionSchema.diagnostics,
     ...packageJson.diagnostics,
     ...(routeContract.value === null
       ? []
@@ -203,6 +311,12 @@ export async function validateRepositoryApiContractsContract(input: {
     ...(sdkGenerationInput.value === null
       ? []
       : validateSdkGenerationInputContract(sdkGenerationInput.value)),
+    ...(apiCatalog.value === null
+      ? []
+      : validateAuthSessionRouteCatalog(apiCatalog.value)),
+    ...(coreAuthSessionSchema.value === null
+      ? []
+      : validateAuthSessionSchemaBundle(coreAuthSessionSchema.value)),
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...(await validateCheckerSurface(input.repositoryRoot)),
     ...validateRequiredLinterRule(input.repositoryServiceContract)
@@ -476,6 +590,212 @@ function validateSdkGenerationInputContract(value: unknown): readonly Diagnostic
   ];
 }
 
+function validateAuthSessionRouteCatalog(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [
+    ...validateAuthExactValue({
+      value,
+      file: API_CATALOG_FILE,
+      path: 'api_catalog.status',
+      expected: 'route-catalog-active',
+      message:
+        'API catalog must stay active once core auth/session routes are declared.'
+    }),
+    ...validateAuthRequiredStringArrayEntries({
+      value,
+      file: API_CATALOG_FILE,
+      path: 'api_catalog.route_definition_required_fields',
+      field: 'api_catalog.route_definition_required_fields',
+      requiredEntries: REQUIRED_API_CATALOG_ROUTE_FIELDS
+    }),
+    ...validateAuthRequiredStringArrayEntries({
+      value,
+      file: API_CATALOG_FILE,
+      path: 'api_catalog.forbidden_values',
+      field: 'api_catalog.forbidden_values',
+      requiredEntries: REQUIRED_API_CATALOG_FORBIDDEN_VALUES
+    })
+  ];
+  const routes = readRecordArrayPath(value, 'routes');
+  const routesByOperationId = new Map<string, Record<string, unknown>>();
+
+  for (const route of routes) {
+    const operationId = readStringField(route, 'operation_id');
+
+    if (operationId !== null) {
+      routesByOperationId.set(operationId, route);
+    }
+  }
+
+  for (const requiredRoute of REQUIRED_AUTH_SESSION_ROUTES) {
+    const route = routesByOperationId.get(requiredRoute.operationId);
+
+    if (route === undefined) {
+      diagnostics.push(
+        createAuthRouteDiagnostic(
+          API_CATALOG_FILE,
+          'routes',
+          `Core auth/session route catalog must include \`${requiredRoute.operationId}\`.`
+        )
+      );
+      continue;
+    }
+
+    diagnostics.push(
+      ...validateAuthRouteMetadata({
+        route,
+        operationId: requiredRoute.operationId,
+        sessionEffect: requiredRoute.sessionEffect
+      })
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateAuthRouteMetadata(input: {
+  readonly route: Record<string, unknown>;
+  readonly operationId: string;
+  readonly sessionEffect: string;
+}): readonly Diagnostic[] {
+  const path = `routes.${input.operationId}`;
+  const diagnostics: Diagnostic[] = [];
+
+  if (readStringField(input.route, 'service_id') !== 'core-api') {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.service_id`,
+        `Core auth/session route \`${input.operationId}\` must belong to \`core-api\`.`
+      )
+    );
+  }
+
+  if (readStringField(input.route, 'owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.owner_boundary`,
+        `Core auth/session route \`${input.operationId}\` must declare \`identity\` owner boundary.`
+      )
+    );
+  }
+
+  if (readStringField(input.route, 'tenant_boundary') === null) {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.tenant_boundary`,
+        `Core auth/session route \`${input.operationId}\` must declare tenant boundary.`
+      )
+    );
+  }
+
+  for (const field of ['request_id_required', 'trace_id_required'] as const) {
+    if (input.route[field] === true) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.${field}`,
+        `Core auth/session route \`${input.operationId}\` must require \`${field}\`.`
+      )
+    );
+  }
+
+  if (readStringField(input.route, 'session_effect') !== input.sessionEffect) {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.session_effect`,
+        `Core auth/session route \`${input.operationId}\` must declare \`${input.sessionEffect}\` session effect.`
+      )
+    );
+  }
+
+  const credentialPolicy = readStringField(input.route, 'credential_policy');
+  for (const fragment of REQUIRED_AUTH_CREDENTIAL_POLICY_FRAGMENTS) {
+    if (credentialPolicy?.includes(fragment) === true) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.credential_policy`,
+        `Core auth/session route \`${input.operationId}\` credential policy must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  for (const field of ['request_schema_ref', 'response_schema_ref'] as const) {
+    const value = readStringField(input.route, field);
+
+    if (value?.startsWith(`${CORE_AUTH_SESSION_SCHEMA_FILE}#`) === true) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.${field}`,
+        `Core auth/session route \`${input.operationId}\` must reference \`${CORE_AUTH_SESSION_SCHEMA_FILE}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateAuthSessionSchemaBundle(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateAuthExactValue({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.service_id',
+      expected: 'core-api',
+      message: 'Auth/session schema bundle must belong to `core-api`.'
+    }),
+    ...validateAuthExactValue({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.owner_boundary',
+      expected: 'identity',
+      message: 'Auth/session schema bundle must keep `identity` owner boundary.'
+    }),
+    ...validateAuthExactValue({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.status',
+      expected: 'contract-only',
+      message:
+        'Auth/session schema bundle must stay contract-only until live handlers exist.'
+    }),
+    ...validateAuthRequiredStringArrayEntries({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.common_envelope.required_request_metadata',
+      field: 'schema_bundle.common_envelope.required_request_metadata',
+      requiredEntries: ['request_id', 'trace_id', 'idempotency_key']
+    }),
+    ...validateAuthRequiredStringArrayEntries({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.common_envelope.required_response_metadata',
+      field: 'schema_bundle.common_envelope.required_response_metadata',
+      requiredEntries: ['request_id', 'trace_id']
+    }),
+    ...validateAuthRequiredStringArrayEntries({
+      value,
+      file: CORE_AUTH_SESSION_SCHEMA_FILE,
+      path: 'schema_bundle.common_envelope.forbidden_payload_values',
+      field: 'schema_bundle.common_envelope.forbidden_payload_values',
+      requiredEntries: REQUIRED_AUTH_SCHEMA_FORBIDDEN_PAYLOAD_VALUES
+    })
+  ];
+}
+
 function validatePackageScripts(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
@@ -549,7 +869,8 @@ async function validateCheckerSurface(
             ROUTE_CONTRACT_FILE,
             ERROR_ENVELOPE_FILE,
             WEBHOOK_CONTRACT_FILE,
-            SDK_GENERATION_INPUT_FILE
+            SDK_GENERATION_INPUT_FILE,
+            API_CATALOG_FILE
           ]
         })),
     ...(validatorSource.source === null
@@ -560,17 +881,23 @@ async function validateCheckerSurface(
           requiredFragments: [
             'REQUIRED_ROUTE_FIELDS',
             'FORBIDDEN_ROUTE_SHAPES',
+            'ALLOWED_SESSION_EFFECTS',
             'REQUIRED_ERROR_FIELDS',
             'FORBIDDEN_ERROR_FIELDS',
             'REQUIRED_WEBHOOK_CONTROLS',
             'FORBIDDEN_WEBHOOK_CONTROLS',
             'REQUIRED_SDK_GENERATION_TARGETS',
             'REQUIRED_SDK_ROUTE_METADATA',
+            'API_CATALOG_REQUIRED_ROUTE_FIELDS',
+            'REQUIRED_CREDENTIAL_POLICY_PARTS',
             'REQUIRED_SDK_ERROR_METADATA',
             'REQUIRED_SDK_WEBHOOK_METADATA',
             'FORBIDDEN_SDK_OWNERSHIP',
             'FORBIDDEN_SDK_VALUES',
             'API_ROUTE_REQUIRED_FIELD_MISSING',
+            'API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING',
+            'API_CATALOG_ROUTE_FIELD_MISSING',
+            'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE',
             'API_ERROR_FORBIDDEN_FIELD_MISSING',
             'API_WEBHOOK_REQUIRED_CONTROL_MISSING',
             'API_SDK_GENERATION_TARGET_MISSING',
@@ -586,6 +913,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'fails when route contracts stop requiring authorization hooks',
             'fails when route contracts allow screen-shaped payloads',
+            'keeps core auth session routes explicit in the API catalog',
             'fails when error envelopes stop carrying trace identifiers',
             'fails when error envelopes stop forbidding provider secrets',
             'fails when webhook contracts stop requiring idempotency',
@@ -655,18 +983,29 @@ function validateRequiredLinterRule(
     repositoryServiceContract,
     'policy_gates.required_linter_rules'
   );
+  const diagnostics: Diagnostic[] = [];
 
-  if (requiredRules.includes(API_CONTRACTS_RULE_ID)) {
-    return [];
+  if (!requiredRules.includes(API_CONTRACTS_RULE_ID)) {
+    diagnostics.push(
+      createApiContractsDiagnostic(
+        'service.yaml',
+        'policy_gates.required_linter_rules',
+        `API contracts service contract must require \`${API_CONTRACTS_RULE_ID}\`.`
+      )
+    );
   }
 
-  return [
-    createApiContractsDiagnostic(
-      'service.yaml',
-      'policy_gates.required_linter_rules',
-      `API contracts service contract must require \`${API_CONTRACTS_RULE_ID}\`.`
-    )
-  ];
+  if (!requiredRules.includes(AUTH_ROUTE_RULE_ID)) {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        'service.yaml',
+        'policy_gates.required_linter_rules',
+        `API contracts service contract must require \`${AUTH_ROUTE_RULE_ID}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateSourceIncludes(input: {
@@ -720,6 +1059,33 @@ function validateRequiredStringArrayEntries(input: {
   return diagnostics;
 }
 
+function validateAuthRequiredStringArrayEntries(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly requiredEntries: readonly string[];
+}): readonly Diagnostic[] {
+  const entries = readStringArrayPath(input.value, input.field);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const requiredEntry of input.requiredEntries) {
+    if (entries.includes(requiredEntry)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        input.file,
+        input.path,
+        `API auth route contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateExactValue(input: {
   readonly value: unknown;
   readonly file: string;
@@ -736,6 +1102,22 @@ function validateExactValue(input: {
   return [
     createApiContractsDiagnostic(input.file, input.path, input.message)
   ];
+}
+
+function validateAuthExactValue(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly expected: unknown;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const actual = readPath(input.value, input.path);
+
+  if (actual === input.expected) {
+    return [];
+  }
+
+  return [createAuthRouteDiagnostic(input.file, input.path, input.message)];
 }
 
 function readRepositoryName(value: unknown): string | null {
@@ -756,6 +1138,19 @@ function readStringArrayPath(value: unknown, path: string): readonly string[] {
   return candidate.flatMap((entry) =>
     typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
   );
+}
+
+function readRecordArrayPath(
+  value: unknown,
+  path: string
+): readonly Record<string, unknown>[] {
+  const candidate = readPath(value, path);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.filter(isRecord);
 }
 
 function readPath(value: unknown, path: string): unknown {
@@ -790,6 +1185,20 @@ function createApiContractsDiagnostic(
 ): Diagnostic {
   return {
     ruleId: API_CONTRACTS_RULE_ID,
+    severity: 'error',
+    file,
+    path,
+    message
+  };
+}
+
+function createAuthRouteDiagnostic(
+  file: string,
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: AUTH_ROUTE_RULE_ID,
     severity: 'error',
     file,
     path,
