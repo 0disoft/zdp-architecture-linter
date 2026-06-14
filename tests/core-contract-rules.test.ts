@@ -46,7 +46,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(4);
+      expect(diagnostics).toHaveLength(5);
     });
   });
 
@@ -141,6 +141,85 @@ required_fields:
           path: 'withdrawal_record',
           message:
             'Core platform consent contract must declare `withdrawal_record`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth session runtime handoff gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-session-runtime.yaml': `
+contract:
+  status: live
+  catalog_source: local
+required_operations:
+  - operation_id: core.auth.sessions.create
+    runtime_status: live
+    session_effect: none
+    handoff_owner: product
+required_handoff_controls:
+  - request_id_propagation
+promotion_blockers:
+  - no_identity_session_store
+forbidden_runtime_claims:
+  - live_login_handler
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth/session runtime contract must stay `contracted_no_live_handler` until live handlers are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'required_operations',
+          message:
+            'Core platform auth/session runtime contract must include operation `core.auth.registrations.create`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'required_operations.core.auth.sessions.create.runtime_status',
+          message:
+            'Core platform auth/session operation `core.auth.sessions.create` must stay `contracted_no_live_handler`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'required_operations.core.auth.sessions.create.session_effect',
+          message:
+            'Core platform auth/session operation `core.auth.sessions.create` must declare session_effect `issue`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'required_handoff_controls',
+          message:
+            'Core platform contract `contracts/auth-session-runtime.yaml` must include `trace_id_propagation` in `required_handoff_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
+          path: 'forbidden_runtime_claims',
+          message:
+            'Core platform contract `contracts/auth-session-runtime.yaml` must include `plaintext_refresh_token_storage` in `forbidden_runtime_claims`.'
         });
       }
     );
@@ -247,6 +326,70 @@ required_fields:
 withdrawal_record:
   required_fields:
     - withdrawal_id
+`,
+    'contracts/auth-session-runtime.yaml': `
+contract:
+  version: 1
+  status: contracted_no_live_handler
+  owner_repo: zdp-core-platform
+  catalog_source: zdp-api-contracts/contracts/apis/catalog.yaml
+required_operations:
+  - operation_id: core.auth.registrations.create
+    runtime_status: contracted_no_live_handler
+    session_effect: none
+    handoff_owner: identity
+  - operation_id: core.auth.sessions.create
+    runtime_status: contracted_no_live_handler
+    session_effect: issue
+    handoff_owner: identity
+  - operation_id: core.auth.sessions.refresh
+    runtime_status: contracted_no_live_handler
+    session_effect: refresh
+    handoff_owner: identity
+  - operation_id: core.auth.sessions.revoke_current
+    runtime_status: contracted_no_live_handler
+    session_effect: revoke
+    handoff_owner: identity
+  - operation_id: core.auth.recovery_requests.create
+    runtime_status: contracted_no_live_handler
+    session_effect: none
+    handoff_owner: identity
+  - operation_id: core.auth.passkey_challenges.create
+    runtime_status: contracted_no_live_handler
+    session_effect: none
+    handoff_owner: identity
+  - operation_id: core.auth.passkey_assertions.verify
+    runtime_status: contracted_no_live_handler
+    session_effect: issue
+    handoff_owner: identity
+  - operation_id: core.auth.oauth_callbacks.accept
+    runtime_status: contracted_no_live_handler
+    session_effect: issue
+    handoff_owner: identity
+required_handoff_controls:
+  - request_id_propagation
+  - trace_id_propagation
+  - idempotency_key_scope
+  - audit_event_emission
+  - session_store_contract
+  - credential_vault_handoff
+  - passkey_challenge_store_contract
+  - oauth_callback_state_verification
+  - refresh_token_rotation_without_plaintext_storage
+promotion_blockers:
+  - no_identity_session_store
+  - no_credential_vault_capability_handoff
+  - no_auth_audit_event_persistence
+  - no_idempotency_storage
+  - no_product_reviewer_approval
+forbidden_runtime_claims:
+  - live_login_handler
+  - live_session_issue_handler
+  - live_session_refresh_handler
+  - live_session_revoke_handler
+  - plaintext_refresh_token_storage
+  - provider_secret_storage
+  - product_authorization_decision
 `
   };
 }

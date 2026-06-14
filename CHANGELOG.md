@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.19
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-session-runtime.yaml`을 검사하도록 강화했다.
+- core auth/session operation이 `contracted_no_live_handler` 상태, catalog source, request/trace/idempotency/audit/session-store/credential-vault handoff, promotion blocker, refresh token plaintext와 provider secret 금지선을 잃으면 실패한다.
+
 ## 0.39.18
 
 - `ZDP-APP-001`이 `zdp-web-apps`의 auth route promotion 계약에서 core-api auth/session route catalog source와 8개 required operation, live runtime handoff와 product review 전 route 차단 상태를 유지하는지 검사하도록 강화했다.
