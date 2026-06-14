@@ -12,9 +12,18 @@ const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
 const CONSENT_RECORD_FILE = 'contracts/consent-record.yaml';
 const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
+const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
+  'contracts/auth-credential-vault-handoff.yaml';
+const AUTH_AUDIT_EVENT_PERSISTENCE_FILE =
+  'contracts/auth-audit-event-persistence.yaml';
+const AUTH_IDEMPOTENCY_STORAGE_FILE = 'contracts/auth-idempotency-storage.yaml';
 
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
+const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
+  'contract_only_no_capability_client';
+const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS = 'contract_only_no_append_store';
+const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
 
@@ -114,9 +123,9 @@ const REQUIRED_AUTH_SESSION_HANDOFF_CONTROLS = [
 
 const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
   'no_identity_session_store_implementation',
-  'no_credential_vault_capability_handoff',
-  'no_auth_audit_event_persistence',
-  'no_idempotency_storage',
+  'no_credential_vault_capability_handoff_implementation',
+  'no_auth_audit_event_persistence_implementation',
+  'no_idempotency_storage_implementation',
   'no_product_reviewer_approval'
 ] as const;
 
@@ -201,6 +210,166 @@ const REQUIRED_IDENTITY_SESSION_FORBIDDEN_STORAGE_VALUES = [
   'password_hash'
 ] as const;
 
+const REQUIRED_AUTH_CREDENTIAL_VAULT_FIELDS = [
+  'capability_ref',
+  'capability_subject_id',
+  'tenant_id',
+  'capability_scope',
+  'credential_kind',
+  'issued_at',
+  'expires_at',
+  'created_by_command_id',
+  'trace_id'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_KINDS = [
+  'oauth_refresh_token',
+  'passkey_credential',
+  'password_recovery_secret',
+  'session_refresh_token_material'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_SCOPES = [
+  'store_credential',
+  'read_credential_metadata',
+  'rotate_credential',
+  'revoke_credential'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_CONTROLS = [
+  'vault_capability_ref_only',
+  'short_lived_capability',
+  'tenant_actor_scope',
+  'request_id_propagation',
+  'trace_id_propagation',
+  'command_idempotency_reference',
+  'audit_event_reference',
+  'no_raw_secret_return',
+  'vault_access_audit_required'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES = [
+  'refresh_token_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'passkey_private_key',
+  'password_plaintext',
+  'password_hash',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_EVENT_FIELDS = [
+  'event_id',
+  'event_type',
+  'actor_id',
+  'tenant_id',
+  'subject_ref',
+  'auth_operation_id',
+  'auth_session_effect',
+  'command_id',
+  'idempotency_key',
+  'occurred_at',
+  'trace_id'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_EVENT_TYPES = [
+  'core.auth.registration.requested',
+  'core.auth.session.issued',
+  'core.auth.session.refreshed',
+  'core.auth.session.revoked',
+  'core.auth.recovery.requested',
+  'core.auth.passkey.challenge.created',
+  'core.auth.passkey.assertion.verified',
+  'core.auth.oauth.callback.accepted'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_EVENT_CONTROLS = [
+  'append_only_audit_store',
+  'transaction_or_outbox_reference',
+  'command_idempotency_reference',
+  'request_id_propagation',
+  'trace_id_propagation',
+  'tenant_actor_scope',
+  'redacted_summary_only',
+  'evidence_ref_for_privileged_payload',
+  'auth_failure_event_recorded',
+  'audit_write_failure_blocks_auth_success'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_EVENT_FORBIDDEN_VALUES = [
+  'refresh_token_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'passkey_private_key',
+  'password_plaintext',
+  'password_hash',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_error_payload'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS = [
+  'idempotency_key',
+  'command_id',
+  'command_type',
+  'actor_id',
+  'tenant_id',
+  'resource_ref',
+  'request_fingerprint_hash',
+  'processing_state',
+  'final_status',
+  'final_result_ref',
+  'first_seen_at',
+  'last_seen_at',
+  'expires_at',
+  'trace_id'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_STATES = [
+  'in_progress',
+  'succeeded',
+  'failed',
+  'conflicted',
+  'expired'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_CONTROLS = [
+  'tenant_actor_scope',
+  'command_type_scope',
+  'resource_scope',
+  'request_fingerprint_match',
+  'same_request_replay_returns_saved_result',
+  'different_fingerprint_conflict',
+  'in_progress_duplicate_suppression',
+  'ttl_enforced_by_storage',
+  'atomic_claim_or_unique_constraint',
+  'audit_event_reference',
+  'no_raw_payload_storage'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_UNIQUENESS = [
+  'tenant_id',
+  'actor_id',
+  'command_type',
+  'resource_ref',
+  'idempotency_key'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FORBIDDEN_VALUES = [
+  'raw_request_body',
+  'raw_secret',
+  'refresh_token_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'password_hash'
+] as const;
+
 export async function validateRepositoryCoreContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -218,14 +387,20 @@ export async function validateRepositoryCoreContract(input: {
     auditEvent,
     consentRecord,
     authSessionRuntime,
-    identitySessionStore
+    identitySessionStore,
+    authCredentialVaultHandoff,
+    authAuditEventPersistence,
+    authIdempotencyStorage
   ] = await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
       readRequiredYamlContract(input.repositoryRoot, COMMAND_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUDIT_EVENT_FILE),
       readRequiredYamlContract(input.repositoryRoot, CONSENT_RECORD_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
-      readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE)
+      readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_EVENT_PERSISTENCE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE)
     ]);
 
   return [
@@ -235,6 +410,9 @@ export async function validateRepositoryCoreContract(input: {
     ...consentRecord.diagnostics,
     ...authSessionRuntime.diagnostics,
     ...identitySessionStore.diagnostics,
+    ...authCredentialVaultHandoff.diagnostics,
+    ...authAuditEventPersistence.diagnostics,
+    ...authIdempotencyStorage.diagnostics,
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
       ? []
@@ -262,7 +440,16 @@ export async function validateRepositoryCoreContract(input: {
       : validateAuthSessionRuntimeContract(authSessionRuntime.value)),
     ...(identitySessionStore.value === null
       ? []
-      : validateIdentitySessionStoreContract(identitySessionStore.value))
+      : validateIdentitySessionStoreContract(identitySessionStore.value)),
+    ...(authCredentialVaultHandoff.value === null
+      ? []
+      : validateAuthCredentialVaultHandoffContract(authCredentialVaultHandoff.value)),
+    ...(authAuditEventPersistence.value === null
+      ? []
+      : validateAuthAuditEventPersistenceContract(authAuditEventPersistence.value)),
+    ...(authIdempotencyStorage.value === null
+      ? []
+      : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value))
   ];
 }
 
@@ -561,6 +748,222 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
       path: 'forbidden_storage_values',
       field: 'forbidden_storage_values',
       requiredEntries: REQUIRED_IDENTITY_SESSION_FORBIDDEN_STORAGE_VALUES
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthCredentialVaultHandoffContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (
+    readPath(value, 'contract.status') !== AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+        'contract.status',
+        `Core platform auth credential vault handoff contract must stay \`${AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS}\` until a capability client exists.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+        'contract.owner_boundary',
+        'Core platform auth credential vault handoff contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'contract.vault_owner_repo') !==
+    'zdp-privacy-credential-vault'
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+        'contract.vault_owner_repo',
+        'Core platform auth credential vault handoff contract must keep vault_owner_repo `zdp-privacy-credential-vault`.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'required_capability_fields',
+      field: 'required_capability_fields',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'required_credential_kinds',
+      field: 'required_credential_kinds',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'required_scopes',
+      field: 'required_scopes',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_SCOPES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'required_handoff_controls',
+      field: 'required_handoff_controls',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'forbidden_payload_values',
+      field: 'forbidden_payload_values',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthAuditEventPersistenceContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_AUDIT_EVENT_PERSISTENCE_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+        'contract.status',
+        `Core platform auth audit event persistence contract must stay \`${AUTH_AUDIT_EVENT_PERSISTENCE_STATUS}\` until append-only storage exists.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'audit') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+        'contract.owner_boundary',
+        'Core platform auth audit event persistence contract must keep owner_boundary `audit`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.source_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+        'contract.source_boundary',
+        'Core platform auth audit event persistence contract must keep source_boundary `identity`.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      path: 'required_auth_event_fields',
+      field: 'required_auth_event_fields',
+      requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      path: 'required_auth_event_types',
+      field: 'required_auth_event_types',
+      requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_TYPES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      path: 'forbidden_payload_values',
+      field: 'forbidden_payload_values',
+      requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_FORBIDDEN_VALUES
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthIdempotencyStorageContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_IDEMPOTENCY_STORAGE_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_IDEMPOTENCY_STORAGE_FILE,
+        'contract.status',
+        `Core platform auth idempotency storage contract must stay \`${AUTH_IDEMPOTENCY_STORAGE_STATUS}\` until durable storage exists.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_IDEMPOTENCY_STORAGE_FILE,
+        'contract.owner_boundary',
+        'Core platform auth idempotency storage contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'required_record_fields',
+      field: 'required_record_fields',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'state_values',
+      field: 'state_values',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_STATES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'uniqueness',
+      field: 'uniqueness',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'forbidden_storage_values',
+      field: 'forbidden_storage_values',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FORBIDDEN_VALUES
     })
   );
 

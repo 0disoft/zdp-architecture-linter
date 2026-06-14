@@ -46,7 +46,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(6);
+      expect(diagnostics).toHaveLength(9);
     });
   });
 
@@ -163,6 +163,9 @@ required_handoff_controls:
   - request_id_propagation
 promotion_blockers:
   - no_identity_session_store_implementation
+  - no_credential_vault_capability_handoff_implementation
+  - no_auth_audit_event_persistence_implementation
+  - no_idempotency_storage_implementation
 forbidden_runtime_claims:
   - live_login_handler
 `
@@ -294,6 +297,224 @@ forbidden_storage_values:
           path: 'forbidden_storage_values',
           message:
             'Core platform contract `contracts/identity-session-store.yaml` must include `session_secret_plaintext` in `forbidden_storage_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth credential vault handoff gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-credential-vault-handoff.yaml': `
+contract:
+  status: live
+  owner_boundary: product
+  vault_owner_repo: product-local-vault
+required_capability_fields:
+  - tenant_id
+required_credential_kinds:
+  - oauth_refresh_token
+required_scopes:
+  - store_credential
+required_handoff_controls:
+  - request_id_propagation
+forbidden_payload_values:
+  - refresh_token_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth credential vault handoff contract must stay `contract_only_no_capability_client` until a capability client exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'contract.vault_owner_repo',
+          message:
+            'Core platform auth credential vault handoff contract must keep vault_owner_repo `zdp-privacy-credential-vault`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'required_capability_fields',
+          message:
+            'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `capability_ref` in `required_capability_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'required_handoff_controls',
+          message:
+            'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `no_raw_secret_return` in `required_handoff_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'forbidden_payload_values',
+          message:
+            'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `provider_secret` in `forbidden_payload_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth audit event persistence gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-audit-event-persistence.yaml': `
+contract:
+  status: live
+  owner_boundary: identity
+  source_boundary: product
+required_auth_event_fields:
+  - event_id
+required_auth_event_types:
+  - core.auth.session.issued
+required_controls:
+  - request_id_propagation
+forbidden_payload_values:
+  - refresh_token_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-event-persistence.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth audit event persistence contract must stay `contract_only_no_append_store` until append-only storage exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-event-persistence.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth audit event persistence contract must keep owner_boundary `audit`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-event-persistence.yaml',
+          path: 'required_auth_event_fields',
+          message:
+            'Core platform contract `contracts/auth-audit-event-persistence.yaml` must include `auth_operation_id` in `required_auth_event_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-event-persistence.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-audit-event-persistence.yaml` must include `append_only_audit_store` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-event-persistence.yaml',
+          path: 'forbidden_payload_values',
+          message:
+            'Core platform contract `contracts/auth-audit-event-persistence.yaml` must include `raw_provider_payload` in `forbidden_payload_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth idempotency storage gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-idempotency-storage.yaml': `
+contract:
+  status: live
+  owner_boundary: product
+required_record_fields:
+  - idempotency_key
+state_values:
+  - in_progress
+required_controls:
+  - tenant_actor_scope
+uniqueness:
+  - idempotency_key
+forbidden_storage_values:
+  - raw_request_body
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth idempotency storage contract must stay `contract_only_no_storage` until durable storage exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth idempotency storage contract must keep owner_boundary `identity`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'required_record_fields',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `request_fingerprint_hash` in `required_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `same_request_replay_returns_saved_result` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'uniqueness',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `tenant_id` in `uniqueness`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'forbidden_storage_values',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `provider_secret` in `forbidden_storage_values`.'
         });
       }
     );
@@ -452,9 +673,9 @@ required_handoff_controls:
   - refresh_token_rotation_without_plaintext_storage
 promotion_blockers:
   - no_identity_session_store_implementation
-  - no_credential_vault_capability_handoff
-  - no_auth_audit_event_persistence
-  - no_idempotency_storage
+  - no_credential_vault_capability_handoff_implementation
+  - no_auth_audit_event_persistence_implementation
+  - no_idempotency_storage_implementation
   - no_product_reviewer_approval
 forbidden_runtime_claims:
   - live_login_handler
@@ -522,6 +743,161 @@ uniqueness:
 forbidden_storage_values:
   - refresh_token_plaintext
   - session_secret_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - password_hash
+`,
+    'contracts/auth-credential-vault-handoff.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_capability_client
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  vault_owner_repo: zdp-privacy-credential-vault
+required_capability_fields:
+  - capability_ref
+  - capability_subject_id
+  - tenant_id
+  - capability_scope
+  - credential_kind
+  - issued_at
+  - expires_at
+  - created_by_command_id
+  - trace_id
+required_credential_kinds:
+  - oauth_refresh_token
+  - passkey_credential
+  - password_recovery_secret
+  - session_refresh_token_material
+required_scopes:
+  - store_credential
+  - read_credential_metadata
+  - rotate_credential
+  - revoke_credential
+required_handoff_controls:
+  - vault_capability_ref_only
+  - short_lived_capability
+  - tenant_actor_scope
+  - request_id_propagation
+  - trace_id_propagation
+  - command_idempotency_reference
+  - audit_event_reference
+  - no_raw_secret_return
+  - vault_access_audit_required
+forbidden_payload_values:
+  - refresh_token_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - passkey_private_key
+  - password_plaintext
+  - password_hash
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+`,
+    'contracts/auth-audit-event-persistence.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_append_store
+  owner_repo: zdp-core-platform
+  owner_boundary: audit
+  source_boundary: identity
+required_auth_event_fields:
+  - event_id
+  - event_type
+  - actor_id
+  - tenant_id
+  - subject_ref
+  - auth_operation_id
+  - auth_session_effect
+  - command_id
+  - idempotency_key
+  - occurred_at
+  - trace_id
+required_auth_event_types:
+  - core.auth.registration.requested
+  - core.auth.session.issued
+  - core.auth.session.refreshed
+  - core.auth.session.revoked
+  - core.auth.recovery.requested
+  - core.auth.passkey.challenge.created
+  - core.auth.passkey.assertion.verified
+  - core.auth.oauth.callback.accepted
+required_controls:
+  - append_only_audit_store
+  - transaction_or_outbox_reference
+  - command_idempotency_reference
+  - request_id_propagation
+  - trace_id_propagation
+  - tenant_actor_scope
+  - redacted_summary_only
+  - evidence_ref_for_privileged_payload
+  - auth_failure_event_recorded
+  - audit_write_failure_blocks_auth_success
+forbidden_payload_values:
+  - refresh_token_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - passkey_private_key
+  - password_plaintext
+  - password_hash
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_error_payload
+`,
+    'contracts/auth-idempotency-storage.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_storage
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+required_record_fields:
+  - idempotency_key
+  - command_id
+  - command_type
+  - actor_id
+  - tenant_id
+  - resource_ref
+  - request_fingerprint_hash
+  - processing_state
+  - final_status
+  - final_result_ref
+  - first_seen_at
+  - last_seen_at
+  - expires_at
+  - trace_id
+state_values:
+  - in_progress
+  - succeeded
+  - failed
+  - conflicted
+  - expired
+required_controls:
+  - tenant_actor_scope
+  - command_type_scope
+  - resource_scope
+  - request_fingerprint_match
+  - same_request_replay_returns_saved_result
+  - different_fingerprint_conflict
+  - in_progress_duplicate_suppression
+  - ttl_enforced_by_storage
+  - atomic_claim_or_unique_constraint
+  - audit_event_reference
+  - no_raw_payload_storage
+uniqueness:
+  - tenant_id
+  - actor_id
+  - command_type
+  - resource_ref
+  - idempotency_key
+forbidden_storage_values:
+  - raw_request_body
+  - raw_secret
+  - refresh_token_plaintext
   - oauth_refresh_token_plaintext
   - provider_secret
   - authorization_header

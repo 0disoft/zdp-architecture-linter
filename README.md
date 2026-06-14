@@ -27,7 +27,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-libs-ts` 저장소 루트의 API contract source/package/schema/env/event/error/i18n 계약, checker skeleton, 최소 public export skeleton이 공통 TypeScript 패키지 구현 전 gate로 유지되는지 검사한다.
 - `zdp-platform-localization` 저장소 루트의 `check:adoption` non-browser gate, fixture catalog diagnostics 0건, generated large-catalog diagnostics 0건, production zero-fallback manifest, large-catalog route-scope ratio 기준, HMR 별도 검증 경계, 내부 전용 posture, 필수 `@zdp/localization-*` package boundary가 내부 채택 전 유지되는지 검사한다.
 - `zdp-client-sdks` 저장소 루트의 SDK generation source handoff, API SDK generation input drift check, API export dry-run plan handoff, libs export source handoff, sdk surface, auth helper, upload client 계약과 checker skeleton, dry-run generation plan skeleton이 SDK 구현 전 gate로 유지되는지 검사한다.
-- `zdp-core-platform` 저장소 루트의 core boundary, command envelope, audit event, consent record, auth/session runtime handoff, identity session store 계약 파일이 구현 전 gate로 유지되는지 검사한다.
+- `zdp-core-platform` 저장소 루트의 core boundary, command envelope, audit event, consent record, auth/session runtime handoff, identity session store, auth credential vault handoff, auth audit event persistence, auth idempotency storage 계약 파일이 구현 전 gate로 유지되는지 검사한다.
 - `zdp-web-apps` 저장소 루트의 app shell 계약, SvelteKit route skeleton, `platform-localization` provider adoption prerequisite가 platform truth를 소유하지 않는지 검사한다.
 - `zdp-platform-runtime` 저장소 루트의 health/readiness, `core-api`/`app-console`/`edge-webhook-ingress`/`money-api`/`connectors-platform` smoke target, `platform-security-contracts`/`platform-infra-contracts`/`platform-observability-contracts` one-shot contract check target, deployment template, rollback 계약과 smoke runner skeleton이 배포 전 gate로 유지되는지 검사한다.
 - `zdp-data-platform` 저장소 루트의 analytics ingest, ClickHouse storage, deletion/anonymization 계약, architecture-aware checker skeleton, validator-only runtime skeleton이 GA4 대체 분석 gate로 유지되는지 검사한다.
@@ -132,6 +132,12 @@ fixtures/service-schema/fail/**
 0.39.19부터 `ZDP-CORE-001`은 `zdp-core-platform` auth/session runtime handoff 계약이 `contracted_no_live_handler`, catalog source, 8개 auth/session operation, request/trace/idempotency/audit/session-store/credential-vault handoff, promotion blocker, plaintext refresh token 금지선을 유지하는지 검사한다.
 
 0.39.20부터 `ZDP-CORE-001`은 `zdp-core-platform` identity session store 계약이 `contract_only_no_migration`, identity owner boundary, session/refresh/revocation 필드, refresh token hash-only rotation, reuse detection, TTL, idempotency, audit reference, plaintext token/secret 금지선을 유지하는지 검사한다.
+
+0.39.21부터 `ZDP-CORE-001`은 `zdp-core-platform` auth credential vault handoff 계약이 `contract_only_no_capability_client`, identity owner boundary, `zdp-privacy-credential-vault` vault owner, capability ref/metadata-only handoff, short-lived scope, request/trace/idempotency/audit reference, raw secret 반환 금지, vault access audit 기준을 유지하는지 검사한다.
+
+0.39.22부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit event persistence 계약이 `contract_only_no_append_store`, audit owner boundary, identity source boundary, auth operation/session effect metadata, append-only audit store, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, auth failure event, audit write failure 차단, raw credential/provider payload 금지 기준을 유지하는지 검사한다.
+
+0.39.23부터 `ZDP-CORE-001`은 `zdp-core-platform` auth idempotency storage 계약이 `contract_only_no_storage`, identity owner boundary, scoped idempotency record, request fingerprint replay/conflict, in-progress duplicate suppression, TTL, atomic claim/unique constraint, audit reference, raw payload/secret 저장 금지 기준을 유지하는지 검사한다.
 
 0.39.0부터 실제 저장소 루트 검사는 `.editorconfig`와 `.gitattributes`의 최소 줄바꿈 정책, `RUNBOOK.md`, `SECURITY.md`, `BOUNDARY.md`, `product-spec.md` 조건부 루트 Markdown도 함께 검사한다. 새 진단 ID는 `ZDP-REPO-MARKDOWN-003`, `ZDP-REPO-MARKDOWN-004`, `ZDP-REPO-MARKDOWN-005`, `ZDP-REPO-MARKDOWN-006`이다.
 

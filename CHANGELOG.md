@@ -1,5 +1,20 @@
 # 변경 내역
 
+## 0.39.23
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-idempotency-storage.yaml`을 검사하도록 강화했다.
+- auth/session side effect 성공 전에 scoped idempotency record, request fingerprint replay/conflict, in-progress duplicate suppression, TTL, atomic claim/unique constraint, audit reference, raw payload/secret 저장 금지 기준을 잃으면 실패한다.
+
+## 0.39.22
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-audit-event-persistence.yaml`을 검사하도록 강화했다.
+- auth/session 성공 승격 전에 append-only audit persistence, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, audit write failure 차단, raw credential/provider payload 금지 기준을 잃으면 실패한다.
+
+## 0.39.21
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-credential-vault-handoff.yaml`을 검사하도록 강화했다.
+- credential vault handoff가 capability ref와 metadata만 넘기고, short-lived scope, request/trace/idempotency/audit reference, raw secret 반환 금지, vault access audit 기준을 잃으면 실패한다.
+
 ## 0.39.20
 
 - `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/identity-session-store.yaml`을 검사하도록 강화했다.
