@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.20
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/identity-session-store.yaml`을 검사하도록 강화했다.
+- session id, tenant/subject scope, refresh token family/hash, rotation/reuse detection, revocation, TTL, command idempotency, audit reference, plaintext token/secret 금지 계약이 사라지면 실패한다.
+
 ## 0.39.19
 
 - `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-session-runtime.yaml`을 검사하도록 강화했다.

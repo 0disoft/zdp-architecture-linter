@@ -46,7 +46,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(5);
+      expect(diagnostics).toHaveLength(6);
     });
   });
 
@@ -162,7 +162,7 @@ required_operations:
 required_handoff_controls:
   - request_id_propagation
 promotion_blockers:
-  - no_identity_session_store
+  - no_identity_session_store_implementation
 forbidden_runtime_claims:
   - live_login_handler
 `
@@ -220,6 +220,80 @@ forbidden_runtime_claims:
           path: 'forbidden_runtime_claims',
           message:
             'Core platform contract `contracts/auth-session-runtime.yaml` must include `plaintext_refresh_token_storage` in `forbidden_runtime_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when identity session store gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/identity-session-store.yaml': `
+contract:
+  status: live
+  owner_boundary: product
+required_session_record_fields:
+  - session_id
+state_values:
+  - active
+required_refresh_rotation_fields:
+  - refresh_token_hash
+required_revocation_fields:
+  - revoked_at
+required_controls:
+  - opaque_session_id
+uniqueness:
+  - session_id
+forbidden_storage_values:
+  - refresh_token_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform identity session store contract must stay `contract_only_no_migration` until migrations exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_session_record_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `refresh_token_family_id` in `required_session_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_refresh_rotation_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `previous_refresh_token_hash` in `required_refresh_rotation_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `hashed_refresh_token_only` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'forbidden_storage_values',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `session_secret_plaintext` in `forbidden_storage_values`.'
         });
       }
     );
@@ -377,7 +451,7 @@ required_handoff_controls:
   - oauth_callback_state_verification
   - refresh_token_rotation_without_plaintext_storage
 promotion_blockers:
-  - no_identity_session_store
+  - no_identity_session_store_implementation
   - no_credential_vault_capability_handoff
   - no_auth_audit_event_persistence
   - no_idempotency_storage
@@ -390,6 +464,70 @@ forbidden_runtime_claims:
   - plaintext_refresh_token_storage
   - provider_secret_storage
   - product_authorization_decision
+`,
+    'contracts/identity-session-store.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_migration
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+required_session_record_fields:
+  - session_id
+  - subject_id
+  - tenant_id
+  - session_version
+  - state
+  - issued_at
+  - expires_at
+  - refresh_token_family_id
+  - refresh_token_hash
+  - rotation_counter
+  - created_by_command_id
+  - trace_id
+state_values:
+  - active
+  - refreshed
+  - revoked
+  - expired
+  - compromised
+required_refresh_rotation_fields:
+  - refresh_token_family_id
+  - refresh_token_hash
+  - previous_refresh_token_hash
+  - rotation_counter
+  - rotated_at
+  - rotated_by_command_id
+  - trace_id
+required_revocation_fields:
+  - revoked_at
+  - revoked_by_actor_id
+  - revoke_reason
+  - revocation_command_id
+  - trace_id
+required_controls:
+  - tenant_actor_scope
+  - opaque_session_id
+  - hashed_refresh_token_only
+  - refresh_token_rotation
+  - refresh_reuse_detection
+  - revoke_current_session
+  - revoke_family_on_reuse
+  - ttl_enforced_by_storage
+  - command_idempotency_reference
+  - audit_event_reference
+uniqueness:
+  - session_id
+  - refresh_token_hash
+  - created_by_command_id
+forbidden_storage_values:
+  - refresh_token_plaintext
+  - session_secret_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - password_hash
 `
   };
 }

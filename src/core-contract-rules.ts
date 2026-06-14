@@ -11,8 +11,10 @@ const COMMAND_ENVELOPE_FILE = 'contracts/command-envelope.yaml';
 const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
 const CONSENT_RECORD_FILE = 'contracts/consent-record.yaml';
 const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
+const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
+const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
 
@@ -111,7 +113,7 @@ const REQUIRED_AUTH_SESSION_HANDOFF_CONTROLS = [
 ] as const;
 
 const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
-  'no_identity_session_store',
+  'no_identity_session_store_implementation',
   'no_credential_vault_capability_handoff',
   'no_auth_audit_event_persistence',
   'no_idempotency_storage',
@@ -126,6 +128,77 @@ const REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS = [
   'plaintext_refresh_token_storage',
   'provider_secret_storage',
   'product_authorization_decision'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_FIELDS = [
+  'session_id',
+  'subject_id',
+  'tenant_id',
+  'session_version',
+  'state',
+  'issued_at',
+  'expires_at',
+  'refresh_token_family_id',
+  'refresh_token_hash',
+  'rotation_counter',
+  'created_by_command_id',
+  'trace_id'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_STATES = [
+  'active',
+  'refreshed',
+  'revoked',
+  'expired',
+  'compromised'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_REFRESH_ROTATION_FIELDS = [
+  'refresh_token_family_id',
+  'refresh_token_hash',
+  'previous_refresh_token_hash',
+  'rotation_counter',
+  'rotated_at',
+  'rotated_by_command_id',
+  'trace_id'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_REVOCATION_FIELDS = [
+  'revoked_at',
+  'revoked_by_actor_id',
+  'revoke_reason',
+  'revocation_command_id',
+  'trace_id'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_CONTROLS = [
+  'tenant_actor_scope',
+  'opaque_session_id',
+  'hashed_refresh_token_only',
+  'refresh_token_rotation',
+  'refresh_reuse_detection',
+  'revoke_current_session',
+  'revoke_family_on_reuse',
+  'ttl_enforced_by_storage',
+  'command_idempotency_reference',
+  'audit_event_reference'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_UNIQUENESS = [
+  'session_id',
+  'refresh_token_hash',
+  'created_by_command_id'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_FORBIDDEN_STORAGE_VALUES = [
+  'refresh_token_plaintext',
+  'session_secret_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'password_hash'
 ] as const;
 
 export async function validateRepositoryCoreContract(input: {
@@ -144,13 +217,15 @@ export async function validateRepositoryCoreContract(input: {
     commandEnvelope,
     auditEvent,
     consentRecord,
-    authSessionRuntime
+    authSessionRuntime,
+    identitySessionStore
   ] = await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
       readRequiredYamlContract(input.repositoryRoot, COMMAND_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUDIT_EVENT_FILE),
       readRequiredYamlContract(input.repositoryRoot, CONSENT_RECORD_FILE),
-      readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE)
+      readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
+      readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE)
     ]);
 
   return [
@@ -159,6 +234,7 @@ export async function validateRepositoryCoreContract(input: {
     ...auditEvent.diagnostics,
     ...consentRecord.diagnostics,
     ...authSessionRuntime.diagnostics,
+    ...identitySessionStore.diagnostics,
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
       ? []
@@ -183,7 +259,10 @@ export async function validateRepositoryCoreContract(input: {
       : validateConsentRecordContract(consentRecord.value)),
     ...(authSessionRuntime.value === null
       ? []
-      : validateAuthSessionRuntimeContract(authSessionRuntime.value))
+      : validateAuthSessionRuntimeContract(authSessionRuntime.value)),
+    ...(identitySessionStore.value === null
+      ? []
+      : validateIdentitySessionStoreContract(identitySessionStore.value))
   ];
 }
 
@@ -404,6 +483,84 @@ function validateAuthSessionRuntimeContract(value: unknown): readonly Diagnostic
       path: 'forbidden_runtime_claims',
       field: 'forbidden_runtime_claims',
       requiredEntries: REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateIdentitySessionStoreContract(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== IDENTITY_SESSION_STORE_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        IDENTITY_SESSION_STORE_FILE,
+        'contract.status',
+        `Core platform identity session store contract must stay \`${IDENTITY_SESSION_STORE_STATUS}\` until migrations exist.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        IDENTITY_SESSION_STORE_FILE,
+        'contract.owner_boundary',
+        'Core platform identity session store contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'required_session_record_fields',
+      field: 'required_session_record_fields',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'state_values',
+      field: 'state_values',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_STATES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'required_refresh_rotation_fields',
+      field: 'required_refresh_rotation_fields',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_REFRESH_ROTATION_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'required_revocation_fields',
+      field: 'required_revocation_fields',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_REVOCATION_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'uniqueness',
+      field: 'uniqueness',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'forbidden_storage_values',
+      field: 'forbidden_storage_values',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_FORBIDDEN_STORAGE_VALUES
     })
   );
 
