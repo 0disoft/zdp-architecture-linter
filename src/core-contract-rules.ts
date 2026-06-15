@@ -6,6 +6,7 @@ import type { Diagnostic } from './diagnostics.ts';
 const CORE_REPOSITORY_NAME = 'zdp-core-platform';
 const CORE_CONTRACT_RULE_ID = 'ZDP-CORE-001';
 
+const CORE_CI_WORKFLOW_FILE = '.github/workflows/ci.yml';
 const CORE_BOUNDARIES_FILE = 'contracts/core-boundaries.yaml';
 const COMMAND_ENVELOPE_FILE = 'contracts/command-envelope.yaml';
 const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
@@ -30,6 +31,19 @@ const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
+
+const REQUIRED_CORE_CI_WORKFLOW_SNIPPETS = [
+  'actions/checkout@v6',
+  'dtolnay/rust-toolchain@stable',
+  'components: rustfmt',
+  'cargo fmt --check',
+  'cargo check --locked --all-targets',
+  'cargo test --locked',
+  'permissions:',
+  'contents: read',
+  'pull_request:',
+  'timeout-minutes: 15'
+] as const;
 
 const REQUIRED_BOUNDARIES = [
   'identity',
@@ -434,6 +448,7 @@ export async function validateRepositoryCoreContract(input: {
   }
 
   const [
+    ciWorkflow,
     boundaries,
     commandEnvelope,
     auditEvent,
@@ -445,6 +460,7 @@ export async function validateRepositoryCoreContract(input: {
     authAuditStorageAdapter,
     authIdempotencyStorage
   ] = await Promise.all([
+      readRequiredTextFile(input.repositoryRoot, CORE_CI_WORKFLOW_FILE),
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
       readRequiredYamlContract(input.repositoryRoot, COMMAND_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUDIT_EVENT_FILE),
@@ -458,6 +474,7 @@ export async function validateRepositoryCoreContract(input: {
     ]);
 
   return [
+    ...ciWorkflow.diagnostics,
     ...boundaries.diagnostics,
     ...commandEnvelope.diagnostics,
     ...auditEvent.diagnostics,
@@ -468,6 +485,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authAuditEventPersistence.diagnostics,
     ...authAuditStorageAdapter.diagnostics,
     ...authIdempotencyStorage.diagnostics,
+    ...(ciWorkflow.value === null ? [] : validateCoreCiWorkflow(ciWorkflow.value)),
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
       ? []
@@ -509,6 +527,36 @@ export async function validateRepositoryCoreContract(input: {
       ? []
       : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value))
   ];
+}
+
+async function readRequiredTextFile(
+  repositoryRoot: string,
+  file: string
+): Promise<{
+  readonly value: string | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  try {
+    return {
+      value: await readFile(join(repositoryRoot, file), 'utf8'),
+      diagnostics: []
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return {
+        value: null,
+        diagnostics: [
+          createCoreDiagnostic(
+            file,
+            'repository.root',
+            `Core platform repository must include \`${file}\`.`
+          )
+        ]
+      };
+    }
+
+    throw error;
+  }
 }
 
 async function readRequiredYamlContract(
@@ -558,6 +606,26 @@ async function readRequiredYamlContract(
       ]
     };
   }
+}
+
+function validateCoreCiWorkflow(source: string): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const snippet of REQUIRED_CORE_CI_WORKFLOW_SNIPPETS) {
+    if (source.includes(snippet)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCoreDiagnostic(
+        CORE_CI_WORKFLOW_FILE,
+        'ci.workflow',
+        `Core platform CI workflow must include \`${snippet}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateCoreBoundaries(value: unknown): readonly Diagnostic[] {

@@ -41,12 +41,20 @@ describe('core platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-CORE-001',
         severity: 'error',
+        file: '.github/workflows/ci.yml',
+        path: 'repository.root',
+        message:
+          'Core platform repository must include `.github/workflows/ci.yml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CORE-001',
+        severity: 'error',
         file: 'contracts/core-boundaries.yaml',
         path: 'repository.root',
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(10);
+      expect(diagnostics).toHaveLength(11);
     });
   });
 
@@ -141,6 +149,61 @@ required_fields:
           path: 'withdrawal_record',
           message:
             'Core platform consent contract must declare `withdrawal_record`.'
+        });
+      }
+    );
+  });
+
+  test('fails when core CI workflow loses Rust verification gates', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        '.github/workflows/ci.yml': `
+name: CI
+jobs:
+  rust:
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'Core platform CI workflow must include `actions/checkout@v6`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'Core platform CI workflow must include `cargo fmt --check`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'Core platform CI workflow must include `cargo check --locked --all-targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'Core platform CI workflow must include `cargo test --locked`.'
         });
       }
     );
@@ -636,6 +699,32 @@ function createCoreServiceContract(): unknown {
 
 function createValidCoreFiles(): Record<string, string> {
   return {
+    '.github/workflows/ci.yml': `
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  rust:
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Check
+        run: cargo check --locked --all-targets
+      - name: Test
+        run: cargo test --locked
+`,
     'contracts/core-boundaries.yaml': `
 permission_model:
   roles:
