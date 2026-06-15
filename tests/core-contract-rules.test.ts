@@ -404,7 +404,7 @@ forbidden_payload_values:
           file: 'contracts/auth-audit-event-persistence.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth audit event persistence contract must stay `contract_only_no_append_store` until append-only storage exists.'
+            'Core platform auth audit event persistence contract must stay `append_receipt_gate_no_durable_store` until durable append-only storage exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -801,7 +801,7 @@ forbidden_payload_values:
     'contracts/auth-audit-event-persistence.yaml': `
 contract:
   version: 1
-  status: contract_only_no_append_store
+  status: append_receipt_gate_no_durable_store
   owner_repo: zdp-core-platform
   owner_boundary: audit
   source_boundary: identity
@@ -813,10 +813,13 @@ required_auth_event_fields:
   - subject_ref
   - auth_operation_id
   - auth_session_effect
+  - outcome
   - command_id
   - idempotency_key
   - occurred_at
   - trace_id
+  - request_id
+  - transaction_or_outbox_ref
 required_auth_event_types:
   - core.auth.registration.requested
   - core.auth.session.issued
@@ -835,8 +838,11 @@ required_controls:
   - tenant_actor_scope
   - redacted_summary_only
   - evidence_ref_for_privileged_payload
+  - append_receipt_required_before_auth_success
   - auth_failure_event_recorded
   - audit_write_failure_blocks_auth_success
+conditional_auth_failure_event_fields:
+  - failure_evidence_ref
 forbidden_payload_values:
   - refresh_token_plaintext
   - oauth_refresh_token_plaintext

@@ -22,7 +22,8 @@ const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
-const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS = 'contract_only_no_append_store';
+const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
+  'append_receipt_gate_no_durable_store';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
@@ -268,10 +269,13 @@ const REQUIRED_AUTH_AUDIT_EVENT_FIELDS = [
   'subject_ref',
   'auth_operation_id',
   'auth_session_effect',
+  'outcome',
   'command_id',
   'idempotency_key',
   'occurred_at',
-  'trace_id'
+  'trace_id',
+  'request_id',
+  'transaction_or_outbox_ref'
 ] as const;
 
 const REQUIRED_AUTH_AUDIT_EVENT_TYPES = [
@@ -294,8 +298,13 @@ const REQUIRED_AUTH_AUDIT_EVENT_CONTROLS = [
   'tenant_actor_scope',
   'redacted_summary_only',
   'evidence_ref_for_privileged_payload',
+  'append_receipt_required_before_auth_success',
   'auth_failure_event_recorded',
   'audit_write_failure_blocks_auth_success'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_FAILURE_EVENT_FIELDS = [
+  'failure_evidence_ref'
 ] as const;
 
 const REQUIRED_AUTH_AUDIT_EVENT_FORBIDDEN_VALUES = [
@@ -845,7 +854,7 @@ function validateAuthAuditEventPersistenceContract(
       createCoreDiagnostic(
         AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
         'contract.status',
-        `Core platform auth audit event persistence contract must stay \`${AUTH_AUDIT_EVENT_PERSISTENCE_STATUS}\` until append-only storage exists.`
+        `Core platform auth audit event persistence contract must stay \`${AUTH_AUDIT_EVENT_PERSISTENCE_STATUS}\` until durable append-only storage exists.`
       )
     );
   }
@@ -891,6 +900,13 @@ function validateAuthAuditEventPersistenceContract(
       path: 'required_controls',
       field: 'required_controls',
       requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      path: 'conditional_auth_failure_event_fields',
+      field: 'conditional_auth_failure_event_fields',
+      requiredEntries: REQUIRED_AUTH_AUDIT_FAILURE_EVENT_FIELDS
     }),
     ...validateRequiredStringArrayEntries({
       value,

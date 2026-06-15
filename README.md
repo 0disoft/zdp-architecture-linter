@@ -135,7 +135,9 @@ fixtures/service-schema/fail/**
 
 0.39.21부터 `ZDP-CORE-001`은 `zdp-core-platform` auth credential vault handoff 계약이 `contract_only_no_capability_client`, identity owner boundary, `zdp-privacy-credential-vault` vault owner, capability ref/metadata-only handoff, short-lived scope, request/trace/idempotency/audit reference, raw secret 반환 금지, vault access audit 기준을 유지하는지 검사한다.
 
-0.39.22부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit event persistence 계약이 `contract_only_no_append_store`, audit owner boundary, identity source boundary, auth operation/session effect metadata, append-only audit store, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, auth failure event, audit write failure 차단, raw credential/provider payload 금지 기준을 유지하는지 검사한다.
+0.39.22부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit event persistence 계약이 audit owner boundary, identity source boundary, auth operation/session effect metadata, append-only audit store, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, auth failure event, audit write failure 차단, raw credential/provider payload 금지 기준을 유지하는지 검사한다.
+
+0.39.24부터 `ZDP-CORE-001`은 auth audit event persistence 상태를 `append_receipt_gate_no_durable_store`로 올리고, `outcome`, `request_id`, `transaction_or_outbox_ref` 필드를 필수로 검사한다. 이 상태는 성공 응답 전 append receipt gate가 있다는 뜻이지 durable append-only adapter나 DB migration이 있다는 뜻은 아니다.
 
 0.39.23부터 `ZDP-CORE-001`은 `zdp-core-platform` auth idempotency storage 계약이 `contract_only_no_storage`, identity owner boundary, scoped idempotency record, request fingerprint replay/conflict, in-progress duplicate suppression, TTL, atomic claim/unique constraint, audit reference, raw payload/secret 저장 금지 기준을 유지하는지 검사한다.
 
