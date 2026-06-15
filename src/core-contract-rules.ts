@@ -16,6 +16,8 @@ const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
 const AUTH_AUDIT_EVENT_PERSISTENCE_FILE =
   'contracts/auth-audit-event-persistence.yaml';
+const AUTH_AUDIT_STORAGE_ADAPTER_FILE =
+  'contracts/auth-audit-storage-adapter.yaml';
 const AUTH_IDEMPOTENCY_STORAGE_FILE = 'contracts/auth-idempotency-storage.yaml';
 
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
@@ -24,6 +26,7 @@ const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
 const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
+const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
@@ -320,6 +323,46 @@ const REQUIRED_AUTH_AUDIT_EVENT_FORBIDDEN_VALUES = [
   'raw_error_payload'
 ] as const;
 
+const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FIELDS = [
+  'adapter_id',
+  'adapter_kind',
+  'owner_boundary',
+  'storage_ref',
+  'transaction_boundary_ref',
+  'append_receipt_ref',
+  'replay_or_reconciliation_ref',
+  'migration_or_adapter_review_ref'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_KINDS = [
+  'append_only_table',
+  'transactional_outbox'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_CONTROLS = [
+  'append_only_enforced_by_storage',
+  'unique_event_id_enforced_by_storage',
+  'transaction_or_outbox_atomicity',
+  'audit_write_failure_blocks_auth_success',
+  'redaction_checked_before_write',
+  'raw_payload_rejected_before_write',
+  'replay_or_reconciliation_path',
+  'migration_or_adapter_review_required'
+] as const;
+
+const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES = [
+  'refresh_token_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'passkey_private_key',
+  'password_plaintext',
+  'password_hash',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_error_payload'
+] as const;
+
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS = [
   'idempotency_key',
   'command_id',
@@ -399,6 +442,7 @@ export async function validateRepositoryCoreContract(input: {
     identitySessionStore,
     authCredentialVaultHandoff,
     authAuditEventPersistence,
+    authAuditStorageAdapter,
     authIdempotencyStorage
   ] = await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
@@ -409,6 +453,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_EVENT_PERSISTENCE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_STORAGE_ADAPTER_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE)
     ]);
 
@@ -421,6 +466,7 @@ export async function validateRepositoryCoreContract(input: {
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authAuditEventPersistence.diagnostics,
+    ...authAuditStorageAdapter.diagnostics,
     ...authIdempotencyStorage.diagnostics,
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
@@ -456,6 +502,9 @@ export async function validateRepositoryCoreContract(input: {
     ...(authAuditEventPersistence.value === null
       ? []
       : validateAuthAuditEventPersistenceContract(authAuditEventPersistence.value)),
+    ...(authAuditStorageAdapter.value === null
+      ? []
+      : validateAuthAuditStorageAdapterContract(authAuditStorageAdapter.value)),
     ...(authIdempotencyStorage.value === null
       ? []
       : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value))
@@ -914,6 +963,78 @@ function validateAuthAuditEventPersistenceContract(
       path: 'forbidden_payload_values',
       field: 'forbidden_payload_values',
       requiredEntries: REQUIRED_AUTH_AUDIT_EVENT_FORBIDDEN_VALUES
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthAuditStorageAdapterContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_AUDIT_STORAGE_ADAPTER_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+        'contract.status',
+        `Core platform auth audit storage adapter contract must stay \`${AUTH_AUDIT_STORAGE_ADAPTER_STATUS}\` until a durable adapter exists.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'audit') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+        'contract.owner_boundary',
+        'Core platform auth audit storage adapter contract must keep owner_boundary `audit`.'
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'contract.source_contract') !==
+    AUTH_AUDIT_EVENT_PERSISTENCE_FILE
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+        'contract.source_contract',
+        `Core platform auth audit storage adapter contract must reference \`${AUTH_AUDIT_EVENT_PERSISTENCE_FILE}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+      path: 'required_adapter_fields',
+      field: 'required_adapter_fields',
+      requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+      path: 'required_adapter_kinds',
+      field: 'required_adapter_kinds',
+      requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+      path: 'forbidden_storage_values',
+      field: 'forbidden_storage_values',
+      requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES
     })
   );
 

@@ -46,7 +46,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(9);
+      expect(diagnostics).toHaveLength(10);
     });
   });
 
@@ -437,6 +437,91 @@ forbidden_payload_values:
           path: 'forbidden_payload_values',
           message:
             'Core platform contract `contracts/auth-audit-event-persistence.yaml` must include `raw_provider_payload` in `forbidden_payload_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth audit storage adapter gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-audit-storage-adapter.yaml': `
+contract:
+  status: live
+  owner_boundary: identity
+  source_contract: local
+required_adapter_fields:
+  - adapter_id
+required_adapter_kinds:
+  - append_only_table
+required_controls:
+  - append_only_enforced_by_storage
+forbidden_storage_values:
+  - refresh_token_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth audit storage adapter contract must stay `contract_only_no_adapter` until a durable adapter exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth audit storage adapter contract must keep owner_boundary `audit`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'contract.source_contract',
+          message:
+            'Core platform auth audit storage adapter contract must reference `contracts/auth-audit-event-persistence.yaml`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'required_adapter_fields',
+          message:
+            'Core platform contract `contracts/auth-audit-storage-adapter.yaml` must include `transaction_boundary_ref` in `required_adapter_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'required_adapter_kinds',
+          message:
+            'Core platform contract `contracts/auth-audit-storage-adapter.yaml` must include `transactional_outbox` in `required_adapter_kinds`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-audit-storage-adapter.yaml` must include `unique_event_id_enforced_by_storage` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'forbidden_storage_values',
+          message:
+            'Core platform contract `contracts/auth-audit-storage-adapter.yaml` must include `raw_provider_payload` in `forbidden_storage_values`.'
         });
       }
     );
@@ -844,6 +929,46 @@ required_controls:
 conditional_auth_failure_event_fields:
   - failure_evidence_ref
 forbidden_payload_values:
+  - refresh_token_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - passkey_private_key
+  - password_plaintext
+  - password_hash
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_error_payload
+`,
+    'contracts/auth-audit-storage-adapter.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_adapter
+  owner_repo: zdp-core-platform
+  owner_boundary: audit
+  source_contract: contracts/auth-audit-event-persistence.yaml
+required_adapter_fields:
+  - adapter_id
+  - adapter_kind
+  - owner_boundary
+  - storage_ref
+  - transaction_boundary_ref
+  - append_receipt_ref
+  - replay_or_reconciliation_ref
+  - migration_or_adapter_review_ref
+required_adapter_kinds:
+  - append_only_table
+  - transactional_outbox
+required_controls:
+  - append_only_enforced_by_storage
+  - unique_event_id_enforced_by_storage
+  - transaction_or_outbox_atomicity
+  - audit_write_failure_blocks_auth_success
+  - redaction_checked_before_write
+  - raw_payload_rejected_before_write
+  - replay_or_reconciliation_path
+  - migration_or_adapter_review_required
+forbidden_storage_values:
   - refresh_token_plaintext
   - oauth_refresh_token_plaintext
   - provider_secret
