@@ -32,6 +32,8 @@ const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
+const AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS =
+  'typed_adapter_boundary_no_migration';
 const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
 
@@ -463,7 +465,8 @@ const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS = [
   'first_seen_at',
   'last_seen_at',
   'expires_at',
-  'trace_id'
+  'trace_id',
+  'audit_event_ref'
 ] as const;
 
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_STATES = [
@@ -494,6 +497,29 @@ const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_UNIQUENESS = [
   'command_type',
   'resource_ref',
   'idempotency_key'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_KINDS = [
+  'atomic_unique_claim_table',
+  'transactional_idempotency_record'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_FIELDS = [
+  'adapter_id',
+  'storage_ref',
+  'transaction_boundary_ref',
+  'claim_receipt_ref',
+  'replay_result_ref',
+  'conflict_receipt_ref',
+  'migration_or_adapter_review_ref'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_CONTROLS = [
+  'unique_scope_enforced_by_storage',
+  'atomic_claim_or_conflict',
+  'ttl_enforced_by_storage',
+  'no_raw_payload_storage',
+  'audit_event_reference_required'
 ] as const;
 
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FORBIDDEN_VALUES = [
@@ -1292,6 +1318,19 @@ function validateAuthIdempotencyStorageContract(
     );
   }
 
+  if (
+    readPath(value, 'adapter_contract.status') !==
+    AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_IDEMPOTENCY_STORAGE_FILE,
+        'adapter_contract.status',
+        `Core platform auth idempotency storage adapter boundary must stay \`${AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+      )
+    );
+  }
+
   diagnostics.push(
     ...validateRequiredStringArrayEntries({
       value,
@@ -1320,6 +1359,27 @@ function validateAuthIdempotencyStorageContract(
       path: 'uniqueness',
       field: 'uniqueness',
       requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'adapter_contract.adapter_kinds',
+      field: 'adapter_contract.adapter_kinds',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'adapter_contract.required_adapter_fields',
+      field: 'adapter_contract.required_adapter_fields',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'adapter_contract.required_adapter_controls',
+      field: 'adapter_contract.required_adapter_controls',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_CONTROLS
     }),
     ...validateRequiredStringArrayEntries({
       value,

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.30
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth idempotency storage 계약의 audit event ref와 typed adapter boundary를 검사하도록 강화했다.
+- idempotency adapter boundary가 `typed_adapter_boundary_no_migration`, atomic unique claim table/transactional idempotency record kind, transaction/claim/replay/conflict/review refs, atomic claim/conflict, TTL, raw payload 금지, audit event reference 기준을 잃으면 실패한다.
+
 ## 0.39.29
 
 - `ZDP-APP-001`이 `zdp-web-apps`의 source route tree에서 `/auth`, `/sign-in`, `/oauth/callback` 같은 auth route alias가 promotion 전에 생기면 실패하도록 강화했다.

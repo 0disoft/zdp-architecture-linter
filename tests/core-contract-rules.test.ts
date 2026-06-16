@@ -702,6 +702,14 @@ required_controls:
   - tenant_actor_scope
 uniqueness:
   - idempotency_key
+adapter_contract:
+  status: live
+  adapter_kinds:
+    - atomic_unique_claim_table
+  required_adapter_fields:
+    - adapter_id
+  required_adapter_controls:
+    - unique_scope_enforced_by_storage
 forbidden_storage_values:
   - raw_request_body
 `
@@ -740,6 +748,14 @@ forbidden_storage_values:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'required_record_fields',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `audit_event_ref` in `required_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
           path: 'required_controls',
           message:
             'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `same_request_replay_returns_saved_result` in `required_controls`.'
@@ -751,6 +767,38 @@ forbidden_storage_values:
           path: 'uniqueness',
           message:
             'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `tenant_id` in `uniqueness`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'adapter_contract.status',
+          message:
+            'Core platform auth idempotency storage adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'adapter_contract.adapter_kinds',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `transactional_idempotency_record` in `adapter_contract.adapter_kinds`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'adapter_contract.required_adapter_fields',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `transaction_boundary_ref` in `adapter_contract.required_adapter_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-idempotency-storage.yaml',
+          path: 'adapter_contract.required_adapter_controls',
+          message:
+            'Core platform contract `contracts/auth-idempotency-storage.yaml` must include `atomic_claim_or_conflict` in `adapter_contract.required_adapter_controls`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1248,6 +1296,7 @@ required_record_fields:
   - last_seen_at
   - expires_at
   - trace_id
+  - audit_event_ref
 state_values:
   - in_progress
   - succeeded
@@ -1272,6 +1321,25 @@ uniqueness:
   - command_type
   - resource_ref
   - idempotency_key
+adapter_contract:
+  status: typed_adapter_boundary_no_migration
+  adapter_kinds:
+    - atomic_unique_claim_table
+    - transactional_idempotency_record
+  required_adapter_fields:
+    - adapter_id
+    - storage_ref
+    - transaction_boundary_ref
+    - claim_receipt_ref
+    - replay_result_ref
+    - conflict_receipt_ref
+    - migration_or_adapter_review_ref
+  required_adapter_controls:
+    - unique_scope_enforced_by_storage
+    - atomic_claim_or_conflict
+    - ttl_enforced_by_storage
+    - no_raw_payload_storage
+    - audit_event_reference_required
 forbidden_storage_values:
   - raw_request_body
   - raw_secret

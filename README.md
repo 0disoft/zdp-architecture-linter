@@ -151,6 +151,8 @@ fixtures/service-schema/fail/**
 
 0.39.23부터 `ZDP-CORE-001`은 `zdp-core-platform` auth idempotency storage 계약이 `contract_only_no_storage`, identity owner boundary, scoped idempotency record, request fingerprint replay/conflict, in-progress duplicate suppression, TTL, atomic claim/unique constraint, audit reference, raw payload/secret 저장 금지 기준을 유지하는지 검사한다.
 
+0.39.30부터 `ZDP-CORE-001`은 auth idempotency storage 계약의 `audit_event_ref` record field와 `typed_adapter_boundary_no_migration` adapter boundary도 검사한다. atomic unique claim table 또는 transactional idempotency record adapter kind, transaction/claim/replay/conflict/review reference, atomic claim/conflict, TTL, raw payload 금지, audit event reference 기준이 사라지면 실패한다. 이 상태는 durable storage implementation이나 DB migration 완료를 의미하지 않는다.
+
 0.39.0부터 실제 저장소 루트 검사는 `.editorconfig`와 `.gitattributes`의 최소 줄바꿈 정책, `RUNBOOK.md`, `SECURITY.md`, `BOUNDARY.md`, `product-spec.md` 조건부 루트 Markdown도 함께 검사한다. 새 진단 ID는 `ZDP-REPO-MARKDOWN-003`, `ZDP-REPO-MARKDOWN-004`, `ZDP-REPO-MARKDOWN-005`, `ZDP-REPO-MARKDOWN-006`이다.
 
 0.39.5부터 `ZDP-LOCALIZATION-001`이 `zdp-platform-localization`의 필수 내부 package set, `@zdp/localization-*` package name, `private: true`, `zdp-localization` CLI bin 계약도 검사한다. `check-internal-posture`가 package missing/name/bin drift 진단을 잃으면 실패한다.
