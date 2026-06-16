@@ -47,8 +47,28 @@ const REQUIRED_AUTH_ROUTE_OPERATIONS = [
 const REQUIRED_AUTH_ROUTE_PROMOTION_REQUIREMENTS = [
   'zdp-api-contracts core-api auth/session route catalog adoption',
   'zdp-core-platform live auth/session runtime handoff',
+  'zdp-core-platform auth/session promotion blockers cleared',
   'product reviewer approval for auth UI paths'
 ] as const;
+
+const BLOCKED_AUTH_ROUTE_SEGMENTS = new Set([
+  'auth',
+  'login',
+  'signin',
+  'sign-in',
+  'signup',
+  'sign-up',
+  'register',
+  'recovery',
+  'recover',
+  'forgot-password',
+  'reset-password',
+  'passkey',
+  'oauth',
+  'provider-choice'
+]);
+
+const AUTH_CALLBACK_ROUTE_CONTEXT_SEGMENTS = new Set(['auth', 'oauth', 'provider-choice']);
 
 const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'platform-localization',
@@ -58,6 +78,7 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'production fallback 0',
   'auth route promotion requires core auth/session route catalog adoption',
   'auth route promotion remains blocked until the core auth/session route catalog is adopted',
+  'core auth/session promotion blockers are cleared',
   'Required auth catalog operations are core.auth.registrations.create',
   'limited to the six app-shell navigation and page-title messages',
   'keep the previous app-shell copy or i18n runtime path',
@@ -537,6 +558,16 @@ async function validateSourceBoundaries(
     const source = await readFile(file, 'utf8');
     const relativePath = relative(repositoryRoot, file).replaceAll('\\', '/');
 
+    if (isBlockedAuthRoutePath(relativePath)) {
+      diagnostics.push(
+        createAppShellDiagnostic(
+          relativePath,
+          'source.auth_route_promotion',
+          `App shell auth route \`${relativePath}\` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.`
+        )
+      );
+    }
+
     for (const forbidden of FORBIDDEN_SOURCE_PATTERNS) {
       if (!forbidden.pattern.test(source)) {
         continue;
@@ -553,6 +584,23 @@ async function validateSourceBoundaries(
   }
 
   return diagnostics;
+}
+
+function isBlockedAuthRoutePath(path: string): boolean {
+  if (!path.startsWith('src/routes/')) {
+    return false;
+  }
+
+  const segments = path
+    .split('/')
+    .map((segment) => segment.toLowerCase());
+
+  if (segments.some((segment) => BLOCKED_AUTH_ROUTE_SEGMENTS.has(segment))) {
+    return true;
+  }
+
+  return segments.includes('callback') &&
+    segments.some((segment) => AUTH_CALLBACK_ROUTE_CONTEXT_SEGMENTS.has(segment));
 }
 
 async function listSourceFiles(root: string): Promise<readonly string[]> {

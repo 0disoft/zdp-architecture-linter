@@ -1,5 +1,21 @@
 # 변경 내역
 
+## 0.39.29
+
+- `ZDP-APP-001`이 `zdp-web-apps`의 source route tree에서 `/auth`, `/sign-in`, `/oauth/callback` 같은 auth route alias가 promotion 전에 생기면 실패하도록 강화했다.
+- repo-local `check-app-shell`과 중앙 architecture validation이 같은 auth route 차단 경계를 보도록 맞췄다.
+
+## 0.39.28
+
+- `ZDP-APP-001`이 `zdp-web-apps`의 auth route promotion 계약에서 core auth/session promotion blocker 해소 조건을 요구하도록 강화했다.
+- route catalog adoption과 live runtime handoff가 있어도 core promotion blocker가 남아 있으면 login/signup/recovery/passkey/provider-choice route는 계속 차단 상태여야 한다.
+
+## 0.39.27
+
+- `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-passkey-challenge-store.yaml`을 검사하도록 강화했다.
+- passkey challenge storage가 hash-only, single-use, TTL, request/trace/idempotency/audit reference, consume/expire metadata, raw WebAuthn payload 저장 금지 기준을 잃으면 실패한다.
+- `contracts/auth-session-runtime.yaml`의 `no_passkey_challenge_store_implementation` promotion blocker도 유지해야 한다.
+
 ## 0.39.23
 
 - `ZDP-CORE-001`이 `zdp-core-platform`의 `contracts/auth-idempotency-storage.yaml`을 검사하도록 강화했다.

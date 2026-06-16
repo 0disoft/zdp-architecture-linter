@@ -15,6 +15,8 @@ const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
+const AUTH_PASSKEY_CHALLENGE_STORE_FILE =
+  'contracts/auth-passkey-challenge-store.yaml';
 const AUTH_AUDIT_EVENT_PERSISTENCE_FILE =
   'contracts/auth-audit-event-persistence.yaml';
 const AUTH_AUDIT_STORAGE_ADAPTER_FILE =
@@ -25,6 +27,7 @@ const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
+const AUTH_PASSKEY_CHALLENGE_STORE_STATUS = 'contract_only_no_storage';
 const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
@@ -142,6 +145,7 @@ const REQUIRED_AUTH_SESSION_HANDOFF_CONTROLS = [
 const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
   'no_identity_session_store_implementation',
   'no_credential_vault_capability_handoff_implementation',
+  'no_passkey_challenge_store_implementation',
   'no_auth_audit_event_persistence_implementation',
   'no_idempotency_storage_implementation',
   'no_product_reviewer_approval'
@@ -273,6 +277,74 @@ const REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES = [
   'passkey_private_key',
   'password_plaintext',
   'password_hash',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_FIELDS = [
+  'challenge_id',
+  'ceremony_type',
+  'actor_id',
+  'tenant_id',
+  'challenge_hash',
+  'relying_party_id',
+  'state',
+  'issued_at',
+  'expires_at',
+  'created_by_command_id',
+  'idempotency_key',
+  'trace_id',
+  'audit_event_ref'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_RECOMMENDED_FIELDS = [
+  'request_id',
+  'consumed_at',
+  'consumed_by_command_id',
+  'expired_at'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_STATES = [
+  'active',
+  'consumed',
+  'expired',
+  'revoked'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_CEREMONY_TYPES = [
+  'registration',
+  'authentication',
+  'recovery'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_CONTROLS = [
+  'tenant_actor_scope',
+  'challenge_hash_only',
+  'single_use_challenge',
+  'consume_requires_active_state',
+  'ttl_enforced_by_storage',
+  'command_idempotency_reference',
+  'request_id_propagation',
+  'trace_id_propagation',
+  'audit_event_reference',
+  'replay_rejected_after_consumption'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_UNIQUENESS = [
+  'challenge_id',
+  'challenge_hash',
+  'created_by_command_id'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_FORBIDDEN_VALUES = [
+  'passkey_challenge_plaintext',
+  'client_data_json',
+  'attestation_object',
+  'authenticator_data',
+  'signature',
+  'user_handle_raw',
+  'provider_secret',
   'authorization_header',
   'cookie_header',
   'raw_provider_payload'
@@ -456,6 +528,7 @@ export async function validateRepositoryCoreContract(input: {
     authSessionRuntime,
     identitySessionStore,
     authCredentialVaultHandoff,
+    authPasskeyChallengeStore,
     authAuditEventPersistence,
     authAuditStorageAdapter,
     authIdempotencyStorage
@@ -468,6 +541,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_EVENT_PERSISTENCE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_STORAGE_ADAPTER_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE)
@@ -482,6 +556,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authSessionRuntime.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
+    ...authPasskeyChallengeStore.diagnostics,
     ...authAuditEventPersistence.diagnostics,
     ...authAuditStorageAdapter.diagnostics,
     ...authIdempotencyStorage.diagnostics,
@@ -517,6 +592,9 @@ export async function validateRepositoryCoreContract(input: {
     ...(authCredentialVaultHandoff.value === null
       ? []
       : validateAuthCredentialVaultHandoffContract(authCredentialVaultHandoff.value)),
+    ...(authPasskeyChallengeStore.value === null
+      ? []
+      : validateAuthPasskeyChallengeStoreContract(authPasskeyChallengeStore.value)),
     ...(authAuditEventPersistence.value === null
       ? []
       : validateAuthAuditEventPersistenceContract(authAuditEventPersistence.value)),
@@ -955,6 +1033,86 @@ function validateAuthCredentialVaultHandoffContract(
       path: 'forbidden_payload_values',
       field: 'forbidden_payload_values',
       requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthPasskeyChallengeStoreContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_PASSKEY_CHALLENGE_STORE_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+        'contract.status',
+        `Core platform auth passkey challenge store contract must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_STATUS}\` until durable storage exists.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+        'contract.owner_boundary',
+        'Core platform auth passkey challenge store contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'required_challenge_fields',
+      field: 'required_challenge_fields',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'recommended_challenge_fields',
+      field: 'recommended_challenge_fields',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_RECOMMENDED_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'state_values',
+      field: 'state_values',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_STATES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'ceremony_types',
+      field: 'ceremony_types',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_CEREMONY_TYPES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'uniqueness',
+      field: 'uniqueness',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'forbidden_storage_values',
+      field: 'forbidden_storage_values',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_FORBIDDEN_VALUES
     })
   );
 

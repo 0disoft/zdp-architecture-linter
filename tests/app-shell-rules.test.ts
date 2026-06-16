@@ -233,6 +233,14 @@ forbidden:
           ruleId: 'ZDP-APP-001',
           severity: 'error',
           file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.requires',
+          message:
+            'App shell contract `contracts/app-shell.yaml` must include `zdp-core-platform auth/session promotion blockers cleared` in `requires`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
           path: 'auth_route_promotion.allowed_routes',
           message:
             'App shell auth route promotion must keep `allowed_routes` empty before live runtime handoff and product reviewer approval; found `/login`.'
@@ -363,6 +371,7 @@ auth_route_promotion:
   requires:
     - zdp-api-contracts core-api auth/session route catalog adoption
     - zdp-core-platform live auth/session runtime handoff
+    - zdp-core-platform auth/session promotion blockers cleared
     - product reviewer approval for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
@@ -455,6 +464,62 @@ export const finalAuthorization = true;
       }
     );
   });
+
+  test('fails when auth route alias files appear before promotion', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidAppShellFiles(),
+        'src/routes/oauth/callback/+page.svelte': `
+<script lang="ts">
+  import { AuthShell } from 'zdp-auth-ui';
+</script>
+
+<AuthShell locale="ko" mode="login" providers={[]} title="로그인" />
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'src/routes/oauth/callback/+page.svelte',
+          path: 'source.auth_route_promotion',
+          message:
+            'App shell auth route `src/routes/oauth/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.'
+        });
+      }
+    );
+  });
+
+  test('allows non-auth callback route files before auth route promotion', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidAppShellFiles(),
+        'src/routes/payments/callback/+page.svelte': `
+<h1>Payment callback</h1>
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).not.toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'src/routes/payments/callback/+page.svelte',
+          path: 'source.auth_route_promotion',
+          message:
+            'App shell auth route `src/routes/payments/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.'
+        });
+      }
+    );
+  });
 });
 
 async function withRepositoryRoot(
@@ -497,14 +562,14 @@ function createWebAppsServiceContract(): unknown {
       migration_policy:
         'zdp-platform-localization adoption is limited to the six app-shell navigation and page-title messages until product UI slices are reviewed',
       change_approval:
-        'auth route promotion requires core auth/session route catalog adoption, live runtime handoff, credential ownership review, and manual approval for auth UI paths',
+        'auth route promotion requires core auth/session route catalog adoption, live runtime handoff, credential ownership review, cleared core auth/session promotion blockers, and manual approval for auth UI paths',
       canary_policy:
         'app-shell localization dogfood only; keep the previous app-shell copy or i18n runtime path available before expanding to product UI copy',
       feature_flag_required: false
     },
     notes: [
       'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.',
-      'auth route promotion remains blocked until the core auth/session route catalog is adopted, live runtime handoff exists, and auth UI paths have product reviewer approval.',
+      'auth route promotion remains blocked until the core auth/session route catalog is adopted, live runtime handoff exists, core auth/session promotion blockers are cleared, and auth UI paths have product reviewer approval.',
       'Required auth catalog operations are core.auth.registrations.create, core.auth.sessions.create, core.auth.sessions.refresh, core.auth.sessions.revoke_current, core.auth.recovery_requests.create, core.auth.passkey_challenges.create, core.auth.passkey_assertions.verify, and core.auth.oauth_callbacks.accept.',
       'The first zdp-platform-localization app canary is intentionally limited to the six app-shell navigation and page-title messages.',
       'Disabling the affected app slice and keeping the previous app-shell copy or i18n runtime path is the rollback boundary for the localization canary, so this shell does not require a runtime feature flag.'
@@ -595,6 +660,7 @@ auth_route_promotion:
   requires:
     - zdp-api-contracts core-api auth/session route catalog adoption
     - zdp-core-platform live auth/session runtime handoff
+    - zdp-core-platform auth/session promotion blockers cleared
     - product reviewer approval for auth UI paths
 localization_canary:
   provider: zdp-platform-localization

@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(11);
+      expect(diagnostics).toHaveLength(12);
     });
   });
 
@@ -283,6 +283,14 @@ forbidden_runtime_claims:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/auth-session-runtime.yaml',
+          path: 'promotion_blockers',
+          message:
+            'Core platform contract `contracts/auth-session-runtime.yaml` must include `no_passkey_challenge_store_implementation` in `promotion_blockers`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-session-runtime.yaml',
           path: 'forbidden_runtime_claims',
           message:
             'Core platform contract `contracts/auth-session-runtime.yaml` must include `plaintext_refresh_token_storage` in `forbidden_runtime_claims`.'
@@ -431,6 +439,94 @@ forbidden_payload_values:
           path: 'forbidden_payload_values',
           message:
             'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `provider_secret` in `forbidden_payload_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth passkey challenge store gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-passkey-challenge-store.yaml': `
+contract:
+  status: live
+  owner_boundary: product
+required_challenge_fields:
+  - challenge_id
+state_values:
+  - active
+ceremony_types:
+  - registration
+required_controls:
+  - tenant_actor_scope
+uniqueness:
+  - challenge_id
+forbidden_storage_values:
+  - passkey_challenge_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth passkey challenge store contract must stay `contract_only_no_storage` until durable storage exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth passkey challenge store contract must keep owner_boundary `identity`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'required_challenge_fields',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `challenge_hash` in `required_challenge_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'recommended_challenge_fields',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `expired_at` in `recommended_challenge_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `challenge_hash_only` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'uniqueness',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `challenge_hash` in `uniqueness`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'forbidden_storage_values',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `client_data_json` in `forbidden_storage_values`.'
         });
       }
     );
@@ -848,6 +944,7 @@ required_handoff_controls:
 promotion_blockers:
   - no_identity_session_store_implementation
   - no_credential_vault_capability_handoff_implementation
+  - no_passkey_challenge_store_implementation
   - no_auth_audit_event_persistence_implementation
   - no_idempotency_storage_implementation
   - no_product_reviewer_approval
@@ -923,6 +1020,67 @@ forbidden_storage_values:
   - cookie_header
   - raw_provider_payload
   - password_hash
+`,
+    'contracts/auth-passkey-challenge-store.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_storage
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+required_challenge_fields:
+  - challenge_id
+  - ceremony_type
+  - actor_id
+  - tenant_id
+  - challenge_hash
+  - relying_party_id
+  - state
+  - issued_at
+  - expires_at
+  - created_by_command_id
+  - idempotency_key
+  - trace_id
+  - audit_event_ref
+recommended_challenge_fields:
+  - request_id
+  - consumed_at
+  - consumed_by_command_id
+  - expired_at
+state_values:
+  - active
+  - consumed
+  - expired
+  - revoked
+ceremony_types:
+  - registration
+  - authentication
+  - recovery
+required_controls:
+  - tenant_actor_scope
+  - challenge_hash_only
+  - single_use_challenge
+  - consume_requires_active_state
+  - ttl_enforced_by_storage
+  - command_idempotency_reference
+  - request_id_propagation
+  - trace_id_propagation
+  - audit_event_reference
+  - replay_rejected_after_consumption
+uniqueness:
+  - challenge_id
+  - challenge_hash
+  - created_by_command_id
+forbidden_storage_values:
+  - passkey_challenge_plaintext
+  - client_data_json
+  - attestation_object
+  - authenticator_data
+  - signature
+  - user_handle_raw
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
 `,
     'contracts/auth-credential-vault-handoff.yaml': `
 contract:
