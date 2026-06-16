@@ -12,6 +12,7 @@ const COMMAND_ENVELOPE_FILE = 'contracts/command-envelope.yaml';
 const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
 const CONSENT_RECORD_FILE = 'contracts/consent-record.yaml';
 const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
+const AUTH_RUNTIME_READINESS_FILE = 'contracts/auth-runtime-readiness.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
@@ -26,6 +27,8 @@ const AUTH_AUDIT_STORAGE_ADAPTER_FILE =
 const AUTH_IDEMPOTENCY_STORAGE_FILE = 'contracts/auth-idempotency-storage.yaml';
 
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
+const AUTH_RUNTIME_READINESS_STATUS =
+  'readiness_summary_no_runtime_promotion';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
@@ -40,6 +43,8 @@ const AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS =
 const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
+const AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS =
+  'typed_adapter_boundary_no_migration';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
@@ -172,6 +177,138 @@ const REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS = [
   'plaintext_refresh_token_storage',
   'provider_secret_storage',
   'product_authorization_decision'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
+  {
+    gateId: 'request_id_propagation',
+    contractStatus: 'required_by_auth_session_runtime',
+    typedBoundaryStatus: 'no_typed_boundary_needed',
+    durableImplementationStatus: 'propagation_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_request_id_propagation_implementation',
+    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
+  },
+  {
+    gateId: 'trace_id_propagation',
+    contractStatus: 'required_by_auth_session_runtime',
+    typedBoundaryStatus: 'no_typed_boundary_needed',
+    durableImplementationStatus: 'propagation_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_trace_id_propagation_implementation',
+    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
+  },
+  {
+    gateId: 'session_store_contract',
+    contractStatus: IDENTITY_SESSION_STORE_STATUS,
+    typedBoundaryStatus: IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_identity_session_store_implementation',
+    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE, IDENTITY_SESSION_STORE_FILE]
+  },
+  {
+    gateId: 'credential_vault_handoff',
+    contractStatus: AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS,
+    typedBoundaryStatus: AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS,
+    durableImplementationStatus: 'live_capability_client_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker:
+      'no_credential_vault_capability_handoff_implementation',
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_CREDENTIAL_VAULT_HANDOFF_FILE
+    ]
+  },
+  {
+    gateId: 'passkey_challenge_store_contract',
+    contractStatus: AUTH_PASSKEY_CHALLENGE_STORE_STATUS,
+    typedBoundaryStatus: AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_passkey_challenge_store_implementation',
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_PASSKEY_CHALLENGE_STORE_FILE
+    ]
+  },
+  {
+    gateId: 'oauth_callback_state_verification',
+    contractStatus: AUTH_OAUTH_CALLBACK_STATE_STATUS,
+    typedBoundaryStatus: AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_oauth_callback_state_storage_implementation',
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_OAUTH_CALLBACK_STATE_FILE
+    ]
+  },
+  {
+    gateId: 'audit_event_emission',
+    contractStatus: AUTH_AUDIT_EVENT_PERSISTENCE_STATUS,
+    typedBoundaryStatus: 'typed_port_no_durable_store',
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_auth_audit_event_persistence_implementation',
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_AUDIT_EVENT_PERSISTENCE_FILE
+    ]
+  },
+  {
+    gateId: 'auth_audit_storage_adapter',
+    contractStatus: AUTH_AUDIT_STORAGE_ADAPTER_STATUS,
+    typedBoundaryStatus: AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_auth_audit_storage_adapter_implementation',
+    evidenceContracts: [
+      AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      AUTH_AUDIT_STORAGE_ADAPTER_FILE
+    ]
+  },
+  {
+    gateId: 'idempotency_key_scope',
+    contractStatus: AUTH_IDEMPOTENCY_STORAGE_STATUS,
+    typedBoundaryStatus: AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_idempotency_storage_implementation',
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_IDEMPOTENCY_STORAGE_FILE
+    ]
+  },
+  {
+    gateId: 'refresh_token_rotation_without_plaintext_storage',
+    contractStatus: IDENTITY_SESSION_STORE_STATUS,
+    typedBoundaryStatus: IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
+    durableImplementationStatus: 'durable_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_refresh_token_rotation_storage_implementation',
+    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE, IDENTITY_SESSION_STORE_FILE]
+  },
+  {
+    gateId: 'product_reviewer_approval',
+    contractStatus: 'required_by_auth_session_runtime',
+    typedBoundaryStatus: 'no_typed_boundary_needed',
+    durableImplementationStatus: 'review_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_product_reviewer_approval',
+    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
+  }
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_READINESS_BLOCKERS =
+  REQUIRED_AUTH_RUNTIME_READINESS_GATES.map((gate) => gate.promotionBlocker);
+
+const REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS = [
+  'production_ready',
+  'live_auth_handler_ready',
+  'durable_storage_ready',
+  'oauth_provider_exchange_ready',
+  'product_route_unblocked'
 ] as const;
 
 const REQUIRED_IDENTITY_SESSION_STORE_FIELDS = [
@@ -755,6 +892,7 @@ export async function validateRepositoryCoreContract(input: {
     auditEvent,
     consentRecord,
     authSessionRuntime,
+    authRuntimeReadiness,
     identitySessionStore,
     authCredentialVaultHandoff,
     authPasskeyChallengeStore,
@@ -769,6 +907,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUDIT_EVENT_FILE),
       readRequiredYamlContract(input.repositoryRoot, CONSENT_RECORD_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_READINESS_FILE),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
@@ -785,6 +924,7 @@ export async function validateRepositoryCoreContract(input: {
     ...auditEvent.diagnostics,
     ...consentRecord.diagnostics,
     ...authSessionRuntime.diagnostics,
+    ...authRuntimeReadiness.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authPasskeyChallengeStore.diagnostics,
@@ -818,6 +958,9 @@ export async function validateRepositoryCoreContract(input: {
     ...(authSessionRuntime.value === null
       ? []
       : validateAuthSessionRuntimeContract(authSessionRuntime.value)),
+    ...(authRuntimeReadiness.value === null
+      ? []
+      : validateAuthRuntimeReadinessContract(authRuntimeReadiness.value)),
     ...(identitySessionStore.value === null
       ? []
       : validateIdentitySessionStoreContract(identitySessionStore.value)),
@@ -1109,6 +1252,95 @@ function validateAuthSessionRuntimeContract(value: unknown): readonly Diagnostic
       path: 'forbidden_runtime_claims',
       field: 'forbidden_runtime_claims',
       requiredEntries: REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthRuntimeReadinessContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_RUNTIME_READINESS_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'contract.status',
+        `Core platform auth runtime readiness summary must stay \`${AUTH_RUNTIME_READINESS_STATUS}\` until durable implementation and review proof exist.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'contract.owner_boundary',
+        'Core platform auth runtime readiness summary must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'contract.runtime_status',
+        `Core platform auth runtime readiness summary must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
+      )
+    );
+  }
+
+  if (readPath(value, 'promotion_ready') !== false) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'promotion_ready',
+        'Core platform auth runtime readiness summary must keep `promotion_ready` false until all promotion blockers are removed by durable proof.'
+      )
+    );
+  }
+
+  if (readPath(value, 'production_route_ready') !== false) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'production_route_ready',
+        'Core platform auth runtime readiness summary must keep `production_route_ready` false until product route promotion is reviewed.'
+      )
+    );
+  }
+
+  const gateStates = readPath(value, 'required_gate_states');
+
+  if (!Array.isArray(gateStates)) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_READINESS_FILE,
+        'required_gate_states',
+        'Core platform auth runtime readiness summary must declare `required_gate_states`.'
+      )
+    );
+  } else {
+    diagnostics.push(...validateAuthRuntimeReadinessGateStates(gateStates));
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_READINESS_FILE,
+      path: 'blocking_summary',
+      field: 'blocking_summary',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_READINESS_BLOCKERS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_READINESS_FILE,
+      path: 'forbidden_readiness_claims',
+      field: 'forbidden_readiness_claims',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS
     })
   );
 
@@ -1915,6 +2147,91 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateAuthRuntimeReadinessGateStates(
+  gateStates: readonly unknown[]
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const requiredGate of REQUIRED_AUTH_RUNTIME_READINESS_GATES) {
+    const gate = gateStates.find(
+      (entry) =>
+        isRecord(entry) && readStringField(entry, 'gate_id') === requiredGate.gateId
+    );
+
+    if (!isRecord(gate)) {
+      diagnostics.push(
+        createCoreDiagnostic(
+          AUTH_RUNTIME_READINESS_FILE,
+          'required_gate_states',
+          `Core platform auth runtime readiness summary must include gate \`${requiredGate.gateId}\`.`
+        )
+      );
+      continue;
+    }
+
+    diagnostics.push(
+      ...validateReadinessGateField({
+        gate,
+        gateId: requiredGate.gateId,
+        field: 'contract_status',
+        expectedValue: requiredGate.contractStatus
+      }),
+      ...validateReadinessGateField({
+        gate,
+        gateId: requiredGate.gateId,
+        field: 'typed_boundary_status',
+        expectedValue: requiredGate.typedBoundaryStatus
+      }),
+      ...validateReadinessGateField({
+        gate,
+        gateId: requiredGate.gateId,
+        field: 'durable_implementation_status',
+        expectedValue: requiredGate.durableImplementationStatus
+      }),
+      ...validateReadinessGateField({
+        gate,
+        gateId: requiredGate.gateId,
+        field: 'review_status',
+        expectedValue: requiredGate.reviewStatus
+      }),
+      ...validateReadinessGateField({
+        gate,
+        gateId: requiredGate.gateId,
+        field: 'promotion_blocker',
+        expectedValue: requiredGate.promotionBlocker
+      }),
+      ...validateRequiredStringArrayEntries({
+        value: gate,
+        file: AUTH_RUNTIME_READINESS_FILE,
+        path: `required_gate_states.${requiredGate.gateId}.evidence_contracts`,
+        field: 'evidence_contracts',
+        requiredEntries: requiredGate.evidenceContracts
+      })
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateReadinessGateField(input: {
+  readonly gate: Record<string, unknown>;
+  readonly gateId: string;
+  readonly field: string;
+  readonly expectedValue: string;
+}): readonly Diagnostic[] {
+  if (readStringField(input.gate, input.field) === input.expectedValue) {
+    return [];
+  }
+
+  return [
+    createCoreDiagnostic(
+      AUTH_RUNTIME_READINESS_FILE,
+      `required_gate_states.${input.gateId}.${input.field}`,
+      `Core platform auth runtime readiness gate \`${input.gateId}\` must keep \`${input.field}\` as \`${input.expectedValue}\`.`
+    )
+  ];
 }
 
 function hasRequiredBoundaryField(

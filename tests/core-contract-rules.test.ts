@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(13);
+      expect(diagnostics).toHaveLength(14);
     });
   });
 
@@ -294,6 +294,92 @@ forbidden_runtime_claims:
           path: 'forbidden_runtime_claims',
           message:
             'Core platform contract `contracts/auth-session-runtime.yaml` must include `plaintext_refresh_token_storage` in `forbidden_runtime_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth runtime readiness summary claims promotion readiness', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-runtime-readiness.yaml': `
+contract:
+  version: 1
+  status: production_ready
+  owner_repo: zdp-core-platform
+  owner_boundary: product
+  runtime_status: live
+promotion_ready: true
+production_route_ready: true
+required_gate_states:
+  - gate_id: session_store_contract
+    contract_status: live
+    typed_boundary_status: live
+    durable_implementation_status: ready
+    review_status: approved
+    promotion_blocker: none
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+blocking_summary:
+  - no_identity_session_store_implementation
+forbidden_readiness_claims:
+  - production_ready
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth runtime readiness summary must stay `readiness_summary_no_runtime_promotion` until durable implementation and review proof exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'promotion_ready',
+          message:
+            'Core platform auth runtime readiness summary must keep `promotion_ready` false until all promotion blockers are removed by durable proof.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'production_route_ready',
+          message:
+            'Core platform auth runtime readiness summary must keep `production_route_ready` false until product route promotion is reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'required_gate_states',
+          message:
+            'Core platform auth runtime readiness summary must include gate `oauth_callback_state_verification`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'required_gate_states.session_store_contract.durable_implementation_status',
+          message:
+            'Core platform auth runtime readiness gate `session_store_contract` must keep `durable_implementation_status` as `durable_implementation_missing`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'forbidden_readiness_claims',
+          message:
+            'Core platform contract `contracts/auth-runtime-readiness.yaml` must include `live_auth_handler_ready` in `forbidden_readiness_claims`.'
         });
       }
     );
@@ -1234,6 +1320,131 @@ forbidden_runtime_claims:
   - plaintext_refresh_token_storage
   - provider_secret_storage
   - product_authorization_decision
+`,
+    'contracts/auth-runtime-readiness.yaml': `
+contract:
+  version: 1
+  status: readiness_summary_no_runtime_promotion
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+promotion_ready: false
+production_route_ready: false
+required_gate_states:
+  - gate_id: request_id_propagation
+    contract_status: required_by_auth_session_runtime
+    typed_boundary_status: no_typed_boundary_needed
+    durable_implementation_status: propagation_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_request_id_propagation_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+  - gate_id: trace_id_propagation
+    contract_status: required_by_auth_session_runtime
+    typed_boundary_status: no_typed_boundary_needed
+    durable_implementation_status: propagation_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_trace_id_propagation_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+  - gate_id: session_store_contract
+    contract_status: contract_only_no_migration
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_identity_session_store_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/identity-session-store.yaml
+  - gate_id: credential_vault_handoff
+    contract_status: contract_only_no_capability_client
+    typed_boundary_status: typed_capability_client_boundary_no_vault_client
+    durable_implementation_status: live_capability_client_missing
+    review_status: review_missing
+    promotion_blocker: no_credential_vault_capability_handoff_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-credential-vault-handoff.yaml
+  - gate_id: passkey_challenge_store_contract
+    contract_status: contract_only_no_storage
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_passkey_challenge_store_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-passkey-challenge-store.yaml
+  - gate_id: oauth_callback_state_verification
+    contract_status: contract_only_no_storage
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_oauth_callback_state_storage_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-oauth-callback-state.yaml
+  - gate_id: audit_event_emission
+    contract_status: append_receipt_gate_no_durable_store
+    typed_boundary_status: typed_port_no_durable_store
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_auth_audit_event_persistence_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-audit-event-persistence.yaml
+  - gate_id: auth_audit_storage_adapter
+    contract_status: contract_only_no_adapter
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_auth_audit_storage_adapter_implementation
+    evidence_contracts:
+      - contracts/auth-audit-event-persistence.yaml
+      - contracts/auth-audit-storage-adapter.yaml
+  - gate_id: idempotency_key_scope
+    contract_status: contract_only_no_storage
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_idempotency_storage_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-idempotency-storage.yaml
+  - gate_id: refresh_token_rotation_without_plaintext_storage
+    contract_status: contract_only_no_migration
+    typed_boundary_status: typed_adapter_boundary_no_migration
+    durable_implementation_status: durable_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_refresh_token_rotation_storage_implementation
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/identity-session-store.yaml
+  - gate_id: product_reviewer_approval
+    contract_status: required_by_auth_session_runtime
+    typed_boundary_status: no_typed_boundary_needed
+    durable_implementation_status: review_missing
+    review_status: review_missing
+    promotion_blocker: no_product_reviewer_approval
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+blocking_summary:
+  - no_request_id_propagation_implementation
+  - no_trace_id_propagation_implementation
+  - no_identity_session_store_implementation
+  - no_credential_vault_capability_handoff_implementation
+  - no_passkey_challenge_store_implementation
+  - no_oauth_callback_state_storage_implementation
+  - no_auth_audit_event_persistence_implementation
+  - no_auth_audit_storage_adapter_implementation
+  - no_idempotency_storage_implementation
+  - no_refresh_token_rotation_storage_implementation
+  - no_product_reviewer_approval
+forbidden_readiness_claims:
+  - production_ready
+  - live_auth_handler_ready
+  - durable_storage_ready
+  - oauth_provider_exchange_ready
+  - product_route_unblocked
 `,
     'contracts/identity-session-store.yaml': `
 contract:

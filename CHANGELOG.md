@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.35
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth runtime readiness summary 계약을 검사하도록 강화했다.
+- readiness summary가 `promotion_ready: false`, `production_route_ready: false`, durable implementation missing blocker, product reviewer approval blocker를 잃으면 실패한다.
+- typed boundary를 production-ready, live handler, durable storage, OAuth provider exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.34
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth OAuth callback state verification 계약을 검사하도록 강화했다.
