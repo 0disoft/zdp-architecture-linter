@@ -13,6 +13,8 @@ const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
 const CONSENT_RECORD_FILE = 'contracts/consent-record.yaml';
 const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
 const AUTH_RUNTIME_READINESS_FILE = 'contracts/auth-runtime-readiness.yaml';
+const AUTH_RUNTIME_ADMISSION_CONTEXT_FILE =
+  'contracts/auth-runtime-admission-context.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
@@ -29,6 +31,9 @@ const AUTH_IDEMPOTENCY_STORAGE_FILE = 'contracts/auth-idempotency-storage.yaml';
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
 const AUTH_RUNTIME_READINESS_STATUS =
   'readiness_summary_no_runtime_promotion';
+const AUTH_RUNTIME_ADMISSION_CONTEXT_STATUS = 'contract_only_no_live_handler';
+const AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS =
+  'typed_admission_boundary_no_live_handler';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
@@ -182,21 +187,27 @@ const REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS = [
 const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
   {
     gateId: 'request_id_propagation',
-    contractStatus: 'required_by_auth_session_runtime',
-    typedBoundaryStatus: 'no_typed_boundary_needed',
+    contractStatus: 'required_by_auth_runtime_admission_context',
+    typedBoundaryStatus: AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
     durableImplementationStatus: 'propagation_implementation_missing',
     reviewStatus: 'review_missing',
     promotionBlocker: 'no_request_id_propagation_implementation',
-    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE
+    ]
   },
   {
     gateId: 'trace_id_propagation',
-    contractStatus: 'required_by_auth_session_runtime',
-    typedBoundaryStatus: 'no_typed_boundary_needed',
+    contractStatus: 'required_by_auth_runtime_admission_context',
+    typedBoundaryStatus: AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
     durableImplementationStatus: 'propagation_implementation_missing',
     reviewStatus: 'review_missing',
     promotionBlocker: 'no_trace_id_propagation_implementation',
-    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE
+    ]
   },
   {
     gateId: 'session_store_contract',
@@ -277,6 +288,7 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     promotionBlocker: 'no_idempotency_storage_implementation',
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
+      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
       AUTH_IDEMPOTENCY_STORAGE_FILE
     ]
   },
@@ -308,6 +320,68 @@ const REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS = [
   'live_auth_handler_ready',
   'durable_storage_ready',
   'oauth_provider_exchange_ready',
+  'product_route_unblocked'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FIELDS = [
+  'operation_id',
+  'actor_id',
+  'tenant_id',
+  'request_id',
+  'trace_id',
+  'idempotency_key',
+  'command_id',
+  'requested_at',
+  'session_effect',
+  'audit_event_ref',
+  'resource_ref'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_OPTIONAL_FIELDS = [
+  'correlation_id',
+  'causation_id',
+  'source'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_CONTROLS = [
+  'command_envelope_composition',
+  'operation_id_matches_command_type',
+  'operation_session_effect_match',
+  'request_id_required',
+  'trace_id_required',
+  'idempotency_key_scope',
+  'tenant_actor_scope',
+  'resource_scope_required',
+  'audit_event_reference',
+  'correlation_causation_propagation',
+  'raw_credential_payload_rejected',
+  'raw_provider_payload_rejected',
+  'no_live_handler'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FORBIDDEN_VALUES = [
+  'raw_request_body',
+  'raw_secret',
+  'refresh_token_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_provider_error',
+  'password_plaintext',
+  'password_hash',
+  'authorization_code',
+  'oauth_access_token',
+  'passkey_private_key',
+  'client_data_json',
+  'attestation_object'
+] as const;
+
+const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FORBIDDEN_CLAIMS = [
+  'live_auth_handler_ready',
+  'durable_storage_ready',
+  'provider_token_exchange_ready',
   'product_route_unblocked'
 ] as const;
 
@@ -893,6 +967,7 @@ export async function validateRepositoryCoreContract(input: {
     consentRecord,
     authSessionRuntime,
     authRuntimeReadiness,
+    authRuntimeAdmissionContext,
     identitySessionStore,
     authCredentialVaultHandoff,
     authPasskeyChallengeStore,
@@ -908,6 +983,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, CONSENT_RECORD_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_READINESS_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_ADMISSION_CONTEXT_FILE),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
@@ -925,6 +1001,7 @@ export async function validateRepositoryCoreContract(input: {
     ...consentRecord.diagnostics,
     ...authSessionRuntime.diagnostics,
     ...authRuntimeReadiness.diagnostics,
+    ...authRuntimeAdmissionContext.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authPasskeyChallengeStore.diagnostics,
@@ -961,6 +1038,11 @@ export async function validateRepositoryCoreContract(input: {
     ...(authRuntimeReadiness.value === null
       ? []
       : validateAuthRuntimeReadinessContract(authRuntimeReadiness.value)),
+    ...(authRuntimeAdmissionContext.value === null
+      ? []
+      : validateAuthRuntimeAdmissionContextContract(
+          authRuntimeAdmissionContext.value
+        )),
     ...(identitySessionStore.value === null
       ? []
       : validateIdentitySessionStoreContract(identitySessionStore.value)),
@@ -1341,6 +1423,113 @@ function validateAuthRuntimeReadinessContract(
       path: 'forbidden_readiness_claims',
       field: 'forbidden_readiness_claims',
       requiredEntries: REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthRuntimeAdmissionContextContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (
+    readPath(value, 'contract.status') !==
+    AUTH_RUNTIME_ADMISSION_CONTEXT_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'contract.status',
+        `Core platform auth runtime admission context contract must stay \`${AUTH_RUNTIME_ADMISSION_CONTEXT_STATUS}\` until live handlers are reviewed.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'contract.owner_boundary',
+        'Core platform auth runtime admission context contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'contract.runtime_status',
+        `Core platform auth runtime admission context contract must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'contract.source_contract') !== AUTH_SESSION_RUNTIME_FILE
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'contract.source_contract',
+        `Core platform auth runtime admission context contract must reference \`${AUTH_SESSION_RUNTIME_FILE}\`.`
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'contract.typed_boundary_status') !==
+    AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'contract.typed_boundary_status',
+        `Core platform auth runtime admission context boundary must stay \`${AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS}\` until live handlers exist.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+      path: 'required_context_fields',
+      field: 'required_context_fields',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+      path: 'optional_context_fields',
+      field: 'optional_context_fields',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_OPTIONAL_FIELDS
+    }),
+    ...validateAuthRuntimeAdmissionOperations(
+      readPath(value, 'supported_operations')
+    ),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+      path: 'forbidden_context_values',
+      field: 'forbidden_context_values',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+      path: 'forbidden_runtime_claims',
+      field: 'forbidden_runtime_claims',
+      requiredEntries: REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FORBIDDEN_CLAIMS
     })
   );
 
@@ -2114,6 +2303,63 @@ function validateAuthSessionRuntimeOperations(
           AUTH_SESSION_RUNTIME_FILE,
           `required_operations.${requiredOperation.operationId}.handoff_owner`,
           `Core platform auth/session operation \`${requiredOperation.operationId}\` must keep handoff_owner \`identity\`.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function validateAuthRuntimeAdmissionOperations(
+  operations: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (!Array.isArray(operations)) {
+    return [
+      createCoreDiagnostic(
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        'supported_operations',
+        'Core platform auth runtime admission context contract must declare `supported_operations`.'
+      )
+    ];
+  }
+
+  const operationById = new Map<string, Record<string, unknown>>();
+
+  for (const operation of operations) {
+    if (!isRecord(operation)) {
+      continue;
+    }
+
+    const operationId = readStringField(operation, 'operation_id');
+
+    if (operationId !== null) {
+      operationById.set(operationId, operation);
+    }
+  }
+
+  for (const requiredOperation of REQUIRED_AUTH_SESSION_RUNTIME_OPERATIONS) {
+    const operation = operationById.get(requiredOperation.operationId);
+
+    if (operation === undefined) {
+      diagnostics.push(
+        createCoreDiagnostic(
+          AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+          'supported_operations',
+          `Core platform auth runtime admission context contract must include operation \`${requiredOperation.operationId}\`.`
+        )
+      );
+      continue;
+    }
+
+    if (readStringField(operation, 'session_effect') !== requiredOperation.sessionEffect) {
+      diagnostics.push(
+        createCoreDiagnostic(
+          AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+          `supported_operations.${requiredOperation.operationId}.session_effect`,
+          `Core platform auth runtime admission operation \`${requiredOperation.operationId}\` must declare session_effect \`${requiredOperation.sessionEffect}\`.`
         )
       );
     }

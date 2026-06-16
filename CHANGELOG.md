@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.36
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth runtime admission context 계약을 검사하도록 강화했다.
+- admission context가 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, request/trace/idempotency/resource/audit ref 필수 gate를 잃으면 실패한다.
+- admission boundary를 live handler, durable storage, provider token exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.35
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth runtime readiness summary 계약을 검사하도록 강화했다.

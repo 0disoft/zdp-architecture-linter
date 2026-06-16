@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(14);
+      expect(diagnostics).toHaveLength(15);
     });
   });
 
@@ -380,6 +380,82 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-runtime-readiness.yaml` must include `live_auth_handler_ready` in `forbidden_readiness_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth runtime admission context claims live handler readiness', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-runtime-admission-context.yaml': `
+contract:
+  version: 1
+  status: live
+  owner_repo: zdp-core-platform
+  owner_boundary: product
+  runtime_status: live
+  source_contract: local
+  typed_boundary_status: live_handler_ready
+required_context_fields:
+  - operation_id
+supported_operations:
+  - operation_id: core.auth.sessions.create
+    session_effect: none
+required_controls:
+  - command_envelope_composition
+forbidden_context_values:
+  - raw_secret
+forbidden_runtime_claims:
+  - durable_storage_ready
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-admission-context.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth runtime admission context contract must stay `contract_only_no_live_handler` until live handlers are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-admission-context.yaml',
+          path: 'contract.typed_boundary_status',
+          message:
+            'Core platform auth runtime admission context boundary must stay `typed_admission_boundary_no_live_handler` until live handlers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-admission-context.yaml',
+          path: 'required_context_fields',
+          message:
+            'Core platform contract `contracts/auth-runtime-admission-context.yaml` must include `request_id` in `required_context_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-admission-context.yaml',
+          path: 'supported_operations.core.auth.sessions.create.session_effect',
+          message:
+            'Core platform auth runtime admission operation `core.auth.sessions.create` must declare session_effect `issue`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-admission-context.yaml',
+          path: 'forbidden_runtime_claims',
+          message:
+            'Core platform contract `contracts/auth-runtime-admission-context.yaml` must include `product_route_unblocked` in `forbidden_runtime_claims`.'
         });
       }
     );
@@ -1332,21 +1408,23 @@ promotion_ready: false
 production_route_ready: false
 required_gate_states:
   - gate_id: request_id_propagation
-    contract_status: required_by_auth_session_runtime
-    typed_boundary_status: no_typed_boundary_needed
+    contract_status: required_by_auth_runtime_admission_context
+    typed_boundary_status: typed_admission_boundary_no_live_handler
     durable_implementation_status: propagation_implementation_missing
     review_status: review_missing
     promotion_blocker: no_request_id_propagation_implementation
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
+      - contracts/auth-runtime-admission-context.yaml
   - gate_id: trace_id_propagation
-    contract_status: required_by_auth_session_runtime
-    typed_boundary_status: no_typed_boundary_needed
+    contract_status: required_by_auth_runtime_admission_context
+    typed_boundary_status: typed_admission_boundary_no_live_handler
     durable_implementation_status: propagation_implementation_missing
     review_status: review_missing
     promotion_blocker: no_trace_id_propagation_implementation
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
+      - contracts/auth-runtime-admission-context.yaml
   - gate_id: session_store_contract
     contract_status: contract_only_no_migration
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1409,6 +1487,7 @@ required_gate_states:
     promotion_blocker: no_idempotency_storage_implementation
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
+      - contracts/auth-runtime-admission-context.yaml
       - contracts/auth-idempotency-storage.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
     contract_status: contract_only_no_migration
@@ -1444,6 +1523,85 @@ forbidden_readiness_claims:
   - live_auth_handler_ready
   - durable_storage_ready
   - oauth_provider_exchange_ready
+  - product_route_unblocked
+`,
+    'contracts/auth-runtime-admission-context.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_live_handler
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contract: contracts/auth-session-runtime.yaml
+  typed_boundary_status: typed_admission_boundary_no_live_handler
+required_context_fields:
+  - operation_id
+  - actor_id
+  - tenant_id
+  - request_id
+  - trace_id
+  - idempotency_key
+  - command_id
+  - requested_at
+  - session_effect
+  - audit_event_ref
+  - resource_ref
+optional_context_fields:
+  - correlation_id
+  - causation_id
+  - source
+supported_operations:
+  - operation_id: core.auth.registrations.create
+    session_effect: none
+  - operation_id: core.auth.sessions.create
+    session_effect: issue
+  - operation_id: core.auth.sessions.refresh
+    session_effect: refresh
+  - operation_id: core.auth.sessions.revoke_current
+    session_effect: revoke
+  - operation_id: core.auth.recovery_requests.create
+    session_effect: none
+  - operation_id: core.auth.passkey_challenges.create
+    session_effect: none
+  - operation_id: core.auth.passkey_assertions.verify
+    session_effect: issue
+  - operation_id: core.auth.oauth_callbacks.accept
+    session_effect: issue
+required_controls:
+  - command_envelope_composition
+  - operation_id_matches_command_type
+  - operation_session_effect_match
+  - request_id_required
+  - trace_id_required
+  - idempotency_key_scope
+  - tenant_actor_scope
+  - resource_scope_required
+  - audit_event_reference
+  - correlation_causation_propagation
+  - raw_credential_payload_rejected
+  - raw_provider_payload_rejected
+  - no_live_handler
+forbidden_context_values:
+  - raw_request_body
+  - raw_secret
+  - refresh_token_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_provider_error
+  - password_plaintext
+  - password_hash
+  - authorization_code
+  - oauth_access_token
+  - passkey_private_key
+  - client_data_json
+  - attestation_object
+forbidden_runtime_claims:
+  - live_auth_handler_ready
+  - durable_storage_ready
+  - provider_token_exchange_ready
   - product_route_unblocked
 `,
     'contracts/identity-session-store.yaml': `
