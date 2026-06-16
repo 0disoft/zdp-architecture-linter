@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.33
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth passkey challenge store 계약의 typed adapter boundary를 검사하도록 강화했다.
+- passkey challenge adapter boundary가 `typed_adapter_boundary_no_migration`, challenge id/hash uniqueness, challenge version, atomic single-use consume, active-state consume, TTL, audit event reference, raw WebAuthn payload 금지 기준을 잃으면 실패한다.
+
 ## 0.39.32
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth credential vault handoff 계약의 typed capability client boundary를 검사하도록 강화했다.

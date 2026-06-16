@@ -30,6 +30,8 @@ const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
 const AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS =
   'typed_capability_client_boundary_no_vault_client';
 const AUTH_PASSKEY_CHALLENGE_STORE_STATUS = 'contract_only_no_storage';
+const AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS =
+  'typed_adapter_boundary_no_migration';
 const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
@@ -406,6 +408,32 @@ const REQUIRED_AUTH_PASSKEY_CHALLENGE_UNIQUENESS = [
   'challenge_id',
   'challenge_hash',
   'created_by_command_id'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_KINDS = [
+  'passkey_challenge_hash_store',
+  'passkey_challenge_state_table'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_FIELDS = [
+  'adapter_id',
+  'storage_ref',
+  'transaction_boundary_ref',
+  'issue_receipt_ref',
+  'consume_receipt_ref',
+  'expire_receipt_ref',
+  'migration_or_adapter_review_ref'
+] as const;
+
+const REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_CONTROLS = [
+  'unique_challenge_id_enforced_by_storage',
+  'unique_challenge_hash_enforced_by_storage',
+  'challenge_version_enforced_by_storage',
+  'atomic_single_use_consume',
+  'active_state_required_for_consume',
+  'ttl_enforced_by_storage',
+  'audit_event_reference_required',
+  'no_raw_webauthn_payload_storage'
 ] as const;
 
 const REQUIRED_AUTH_PASSKEY_CHALLENGE_FORBIDDEN_VALUES = [
@@ -1011,6 +1039,19 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
     );
   }
 
+  if (
+    readPath(value, 'adapter_contract.status') !==
+    AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+        'adapter_contract.status',
+        `Core platform auth passkey challenge store adapter boundary must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+      )
+    );
+  }
+
   diagnostics.push(
     ...validateRequiredStringArrayEntries({
       value,
@@ -1227,6 +1268,19 @@ function validateAuthPasskeyChallengeStoreContract(
     );
   }
 
+  if (
+    readPath(value, 'adapter_contract.status') !==
+    AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+        'adapter_contract.status',
+        `Core platform auth passkey challenge store adapter boundary must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+      )
+    );
+  }
+
   diagnostics.push(
     ...validateRequiredStringArrayEntries({
       value,
@@ -1269,6 +1323,27 @@ function validateAuthPasskeyChallengeStoreContract(
       path: 'uniqueness',
       field: 'uniqueness',
       requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'adapter_contract.adapter_kinds',
+      field: 'adapter_contract.adapter_kinds',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'adapter_contract.required_adapter_fields',
+      field: 'adapter_contract.required_adapter_fields',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      path: 'adapter_contract.required_adapter_controls',
+      field: 'adapter_contract.required_adapter_controls',
+      requiredEntries: REQUIRED_AUTH_PASSKEY_CHALLENGE_ADAPTER_CONTROLS
     }),
     ...validateRequiredStringArrayEntries({
       value,

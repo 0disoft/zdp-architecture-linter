@@ -534,6 +534,14 @@ required_controls:
   - tenant_actor_scope
 uniqueness:
   - challenge_id
+adapter_contract:
+  status: migration_ready
+  adapter_kinds:
+    - passkey_challenge_hash_store
+  required_adapter_fields:
+    - adapter_id
+  required_adapter_controls:
+    - ttl_enforced_by_storage
 forbidden_storage_values:
   - passkey_challenge_plaintext
 `
@@ -596,9 +604,33 @@ forbidden_storage_values:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'adapter_contract.status',
+          message:
+            'Core platform auth passkey challenge store adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
           path: 'forbidden_storage_values',
           message:
             'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `client_data_json` in `forbidden_storage_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'adapter_contract.required_adapter_fields',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `consume_receipt_ref` in `adapter_contract.required_adapter_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-passkey-challenge-store.yaml',
+          path: 'adapter_contract.required_adapter_controls',
+          message:
+            'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `atomic_single_use_consume` in `adapter_contract.required_adapter_controls`.'
         });
       }
     );
@@ -1213,6 +1245,28 @@ uniqueness:
   - challenge_id
   - challenge_hash
   - created_by_command_id
+adapter_contract:
+  status: typed_adapter_boundary_no_migration
+  adapter_kinds:
+    - passkey_challenge_hash_store
+    - passkey_challenge_state_table
+  required_adapter_fields:
+    - adapter_id
+    - storage_ref
+    - transaction_boundary_ref
+    - issue_receipt_ref
+    - consume_receipt_ref
+    - expire_receipt_ref
+    - migration_or_adapter_review_ref
+  required_adapter_controls:
+    - unique_challenge_id_enforced_by_storage
+    - unique_challenge_hash_enforced_by_storage
+    - challenge_version_enforced_by_storage
+    - atomic_single_use_consume
+    - active_state_required_for_consume
+    - ttl_enforced_by_storage
+    - audit_event_reference_required
+    - no_raw_webauthn_payload_storage
 forbidden_storage_values:
   - passkey_challenge_plaintext
   - client_data_json
