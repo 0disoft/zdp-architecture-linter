@@ -32,6 +32,8 @@ const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
+const IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS =
+  'typed_adapter_boundary_no_migration';
 const AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
 const AUTH_SESSION_CATALOG_SOURCE =
@@ -221,6 +223,33 @@ const REQUIRED_IDENTITY_SESSION_STORE_UNIQUENESS = [
   'session_id',
   'refresh_token_hash',
   'created_by_command_id'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_KINDS = [
+  'transactional_session_store',
+  'session_state_table'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_FIELDS = [
+  'adapter_id',
+  'storage_ref',
+  'transaction_boundary_ref',
+  'issue_receipt_ref',
+  'refresh_receipt_ref',
+  'revoke_receipt_ref',
+  'reuse_detection_ref',
+  'migration_or_adapter_review_ref'
+] as const;
+
+const REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_CONTROLS = [
+  'unique_session_id_enforced_by_storage',
+  'unique_refresh_token_hash_enforced_by_storage',
+  'atomic_refresh_rotation',
+  'reuse_detection_blocks_family',
+  'revocation_state_enforced_by_storage',
+  'ttl_enforced_by_storage',
+  'audit_event_reference_required',
+  'no_plaintext_refresh_token_storage'
 ] as const;
 
 const REQUIRED_IDENTITY_SESSION_FORBIDDEN_STORAGE_VALUES = [
@@ -929,6 +958,19 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
     );
   }
 
+  if (
+    readPath(value, 'adapter_contract.status') !==
+    IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        IDENTITY_SESSION_STORE_FILE,
+        'adapter_contract.status',
+        `Core platform identity session store adapter boundary must stay \`${IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+      )
+    );
+  }
+
   diagnostics.push(
     ...validateRequiredStringArrayEntries({
       value,
@@ -971,6 +1013,27 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
       path: 'uniqueness',
       field: 'uniqueness',
       requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_UNIQUENESS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'adapter_contract.adapter_kinds',
+      field: 'adapter_contract.adapter_kinds',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'adapter_contract.required_adapter_fields',
+      field: 'adapter_contract.required_adapter_fields',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: IDENTITY_SESSION_STORE_FILE,
+      path: 'adapter_contract.required_adapter_controls',
+      field: 'adapter_contract.required_adapter_controls',
+      requiredEntries: REQUIRED_IDENTITY_SESSION_STORE_ADAPTER_CONTROLS
     }),
     ...validateRequiredStringArrayEntries({
       value,

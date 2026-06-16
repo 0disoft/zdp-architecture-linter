@@ -319,6 +319,14 @@ required_controls:
   - opaque_session_id
 uniqueness:
   - session_id
+adapter_contract:
+  status: live
+  adapter_kinds:
+    - transactional_session_store
+  required_adapter_fields:
+    - adapter_id
+  required_adapter_controls:
+    - unique_session_id_enforced_by_storage
 forbidden_storage_values:
   - refresh_token_plaintext
 `
@@ -360,6 +368,38 @@ forbidden_storage_values:
           path: 'required_controls',
           message:
             'Core platform contract `contracts/identity-session-store.yaml` must include `hashed_refresh_token_only` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'adapter_contract.status',
+          message:
+            'Core platform identity session store adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'adapter_contract.adapter_kinds',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `session_state_table` in `adapter_contract.adapter_kinds`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'adapter_contract.required_adapter_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `transaction_boundary_ref` in `adapter_contract.required_adapter_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'adapter_contract.required_adapter_controls',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `atomic_refresh_rotation` in `adapter_contract.required_adapter_controls`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1059,6 +1099,29 @@ uniqueness:
   - session_id
   - refresh_token_hash
   - created_by_command_id
+adapter_contract:
+  status: typed_adapter_boundary_no_migration
+  adapter_kinds:
+    - transactional_session_store
+    - session_state_table
+  required_adapter_fields:
+    - adapter_id
+    - storage_ref
+    - transaction_boundary_ref
+    - issue_receipt_ref
+    - refresh_receipt_ref
+    - revoke_receipt_ref
+    - reuse_detection_ref
+    - migration_or_adapter_review_ref
+  required_adapter_controls:
+    - unique_session_id_enforced_by_storage
+    - unique_refresh_token_hash_enforced_by_storage
+    - atomic_refresh_rotation
+    - reuse_detection_blocks_family
+    - revocation_state_enforced_by_storage
+    - ttl_enforced_by_storage
+    - audit_event_reference_required
+    - no_plaintext_refresh_token_storage
 forbidden_storage_values:
   - refresh_token_plaintext
   - session_secret_plaintext

@@ -133,6 +133,8 @@ fixtures/service-schema/fail/**
 
 0.39.20부터 `ZDP-CORE-001`은 `zdp-core-platform` identity session store 계약이 `contract_only_no_migration`, identity owner boundary, session/refresh/revocation 필드, refresh token hash-only rotation, reuse detection, TTL, idempotency, audit reference, plaintext token/secret 금지선을 유지하는지 검사한다.
 
+0.39.31부터 `ZDP-CORE-001`은 identity session store 계약의 `typed_adapter_boundary_no_migration` adapter boundary도 검사한다. transactional session store 또는 session state table adapter kind, transaction/issue/refresh/revoke/reuse/review reference, session id와 refresh token hash uniqueness, atomic refresh rotation, reuse-family block, revocation state, TTL, audit event reference, plaintext refresh token 저장 금지 기준이 사라지면 실패한다. 이 상태는 durable session storage implementation이나 DB migration 완료를 의미하지 않는다.
+
 0.39.21부터 `ZDP-CORE-001`은 `zdp-core-platform` auth credential vault handoff 계약이 `contract_only_no_capability_client`, identity owner boundary, `zdp-privacy-credential-vault` vault owner, capability ref/metadata-only handoff, short-lived scope, request/trace/idempotency/audit reference, raw secret 반환 금지, vault access audit 기준을 유지하는지 검사한다.
 
 0.39.27부터 `ZDP-CORE-001`은 `zdp-core-platform` auth passkey challenge store 계약이 `contract_only_no_storage`, identity owner boundary, challenge hash-only storage, registration/authentication/recovery ceremony type, active/consumed/expired/revoked state, single-use consumption, TTL, request/trace/idempotency/audit reference, consume/expire metadata, raw WebAuthn payload 저장 금지 기준을 유지하는지 검사한다. `contracts/auth-session-runtime.yaml`도 `no_passkey_challenge_store_implementation` blocker를 유지해야 한다.
