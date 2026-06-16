@@ -430,6 +430,14 @@ required_scopes:
   - store_credential
 required_handoff_controls:
   - request_id_propagation
+capability_client_contract:
+  status: live_vault_client
+  client_kinds:
+    - vault_capability_client
+  required_client_fields:
+    - client_id
+  required_client_controls:
+    - capability_ref_only
 forbidden_payload_values:
   - refresh_token_plaintext
 `
@@ -460,6 +468,14 @@ forbidden_payload_values:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'capability_client_contract.status',
+          message:
+            'Core platform auth credential vault capability client boundary must stay `typed_capability_client_boundary_no_vault_client` until a reviewed live vault client exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
           path: 'required_capability_fields',
           message:
             'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `capability_ref` in `required_capability_fields`.'
@@ -471,6 +487,22 @@ forbidden_payload_values:
           path: 'required_handoff_controls',
           message:
             'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `no_raw_secret_return` in `required_handoff_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'capability_client_contract.required_client_fields',
+          message:
+            'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `vault_access_audit_ref` in `capability_client_contract.required_client_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'capability_client_contract.required_client_controls',
+          message:
+            'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `raw_secret_material_rejected` in `capability_client_contract.required_client_controls`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1230,6 +1262,40 @@ required_handoff_controls:
   - audit_event_reference
   - no_raw_secret_return
   - vault_access_audit_required
+capability_client_contract:
+  status: typed_capability_client_boundary_no_vault_client
+  client_kinds:
+    - vault_capability_client
+    - credential_metadata_client
+  required_client_fields:
+    - client_id
+    - vault_owner_ref
+    - capability_ref
+    - capability_subject_id
+    - tenant_id
+    - credential_kind
+    - capability_scope
+    - issued_at
+    - expires_at
+    - created_by_command_id
+    - idempotency_key
+    - trace_id
+    - request_id
+    - audit_event_ref
+    - vault_access_audit_ref
+    - review_or_client_implementation_ref
+  required_client_controls:
+    - capability_ref_only
+    - metadata_only_response
+    - short_lived_capability
+    - tenant_actor_scope
+    - request_id_propagation
+    - trace_id_propagation
+    - command_idempotency_reference
+    - audit_event_reference_required
+    - vault_access_audit_required
+    - raw_secret_material_rejected
+    - no_provider_payload_storage
 forbidden_payload_values:
   - refresh_token_plaintext
   - oauth_refresh_token_plaintext

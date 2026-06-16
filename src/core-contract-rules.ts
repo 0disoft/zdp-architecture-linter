@@ -27,6 +27,8 @@ const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
+const AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS =
+  'typed_capability_client_boundary_no_vault_client';
 const AUTH_PASSKEY_CHALLENGE_STORE_STATUS = 'contract_only_no_storage';
 const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
   'append_receipt_gate_no_durable_store';
@@ -299,6 +301,44 @@ const REQUIRED_AUTH_CREDENTIAL_VAULT_CONTROLS = [
   'audit_event_reference',
   'no_raw_secret_return',
   'vault_access_audit_required'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_KINDS = [
+  'vault_capability_client',
+  'credential_metadata_client'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_FIELDS = [
+  'client_id',
+  'vault_owner_ref',
+  'capability_ref',
+  'capability_subject_id',
+  'tenant_id',
+  'credential_kind',
+  'capability_scope',
+  'issued_at',
+  'expires_at',
+  'created_by_command_id',
+  'idempotency_key',
+  'trace_id',
+  'request_id',
+  'audit_event_ref',
+  'vault_access_audit_ref',
+  'review_or_client_implementation_ref'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_CONTROLS = [
+  'capability_ref_only',
+  'metadata_only_response',
+  'short_lived_capability',
+  'tenant_actor_scope',
+  'request_id_propagation',
+  'trace_id_propagation',
+  'command_idempotency_reference',
+  'audit_event_reference_required',
+  'vault_access_audit_required',
+  'raw_secret_material_rejected',
+  'no_provider_payload_storage'
 ] as const;
 
 const REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES = [
@@ -1087,6 +1127,19 @@ function validateAuthCredentialVaultHandoffContract(
     );
   }
 
+  if (
+    readPath(value, 'capability_client_contract.status') !==
+    AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+        'capability_client_contract.status',
+        `Core platform auth credential vault capability client boundary must stay \`${AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS}\` until a reviewed live vault client exists.`
+      )
+    );
+  }
+
   diagnostics.push(
     ...validateRequiredStringArrayEntries({
       value,
@@ -1115,6 +1168,27 @@ function validateAuthCredentialVaultHandoffContract(
       path: 'required_handoff_controls',
       field: 'required_handoff_controls',
       requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'capability_client_contract.client_kinds',
+      field: 'capability_client_contract.client_kinds',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_KINDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'capability_client_contract.required_client_fields',
+      field: 'capability_client_contract.required_client_fields',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+      path: 'capability_client_contract.required_client_controls',
+      field: 'capability_client_contract.required_client_controls',
+      requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_CONTROLS
     }),
     ...validateRequiredStringArrayEntries({
       value,

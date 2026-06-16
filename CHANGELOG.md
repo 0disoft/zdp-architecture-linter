@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.32
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth credential vault handoff 계약의 typed capability client boundary를 검사하도록 강화했다.
+- capability client boundary가 live vault client로 승격되지 않은 상태, capability ref/metadata-only 응답, request/trace/idempotency/audit/vault-access-audit ref, raw secret/provider payload 금지 기준을 잃으면 실패한다.
+
 ## 0.39.31
 
 - `ZDP-CORE-001`이 `zdp-core-platform` identity session store 계약의 `typed_adapter_boundary_no_migration` adapter boundary를 검사하도록 강화했다.
