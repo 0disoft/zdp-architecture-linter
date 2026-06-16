@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(12);
+      expect(diagnostics).toHaveLength(13);
     });
   });
 
@@ -631,6 +631,132 @@ forbidden_storage_values:
           path: 'adapter_contract.required_adapter_controls',
           message:
             'Core platform contract `contracts/auth-passkey-challenge-store.yaml` must include `atomic_single_use_consume` in `adapter_contract.required_adapter_controls`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth OAuth callback state gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-oauth-callback-state.yaml': `
+contract:
+  status: live
+  owner_boundary: product
+required_state_fields:
+  - state_id
+state_values:
+  - active
+required_controls:
+  - tenant_actor_scope
+uniqueness:
+  - state_id
+adapter_contract:
+  status: migration_ready
+  adapter_kinds:
+    - oauth_callback_state_hash_store
+  required_adapter_fields:
+    - adapter_id
+  required_adapter_controls:
+    - ttl_enforced_by_storage
+forbidden_storage_values:
+  - oauth_callback_state_plaintext
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth OAuth callback state contract must stay `contract_only_no_storage` until durable storage exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth OAuth callback state contract must keep owner_boundary `identity`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'required_state_fields',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `callback_state_hash` in `required_state_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'recommended_state_fields',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `revoked_by_command_id` in `recommended_state_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `callback_state_hash_only` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `raw_provider_payload_rejected` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'uniqueness',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `callback_state_hash` in `uniqueness`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'adapter_contract.status',
+          message:
+            'Core platform auth OAuth callback state adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'adapter_contract.required_adapter_fields',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `revoke_receipt_ref` in `adapter_contract.required_adapter_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'adapter_contract.required_adapter_controls',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `atomic_single_use_consume` in `adapter_contract.required_adapter_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-oauth-callback-state.yaml',
+          path: 'forbidden_storage_values',
+          message:
+            'Core platform contract `contracts/auth-oauth-callback-state.yaml` must include `authorization_code` in `forbidden_storage_values`.'
         });
       }
     );
@@ -1278,6 +1404,98 @@ forbidden_storage_values:
   - authorization_header
   - cookie_header
   - raw_provider_payload
+`,
+    'contracts/auth-oauth-callback-state.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_storage
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+required_state_fields:
+  - state_id
+  - provider_id
+  - actor_id
+  - tenant_id
+  - callback_state_hash
+  - nonce_hash
+  - pkce_verifier_ref
+  - redirect_uri_ref
+  - state
+  - issued_at
+  - expires_at
+  - created_by_command_id
+  - idempotency_key
+  - trace_id
+  - audit_event_ref
+recommended_state_fields:
+  - request_id
+  - consumed_at
+  - consumed_by_command_id
+  - expired_at
+  - revoked_at
+  - revoked_by_command_id
+state_values:
+  - active
+  - consumed
+  - expired
+  - revoked
+required_controls:
+  - tenant_actor_scope
+  - callback_state_hash_only
+  - nonce_hash_only
+  - pkce_verifier_ref_only
+  - redirect_uri_ref_only
+  - single_use_callback_state
+  - consume_requires_active_state
+  - provider_id_scope
+  - ttl_enforced_by_storage
+  - command_idempotency_reference
+  - request_id_propagation
+  - trace_id_propagation
+  - audit_event_reference
+  - replay_rejected_after_consumption
+  - raw_provider_payload_rejected
+uniqueness:
+  - state_id
+  - callback_state_hash
+  - created_by_command_id
+adapter_contract:
+  status: typed_adapter_boundary_no_migration
+  adapter_kinds:
+    - oauth_callback_state_hash_store
+    - oauth_callback_state_table
+  required_adapter_fields:
+    - adapter_id
+    - storage_ref
+    - transaction_boundary_ref
+    - issue_receipt_ref
+    - consume_receipt_ref
+    - expire_receipt_ref
+    - revoke_receipt_ref
+    - migration_or_adapter_review_ref
+  required_adapter_controls:
+    - unique_state_id_enforced_by_storage
+    - unique_callback_state_hash_enforced_by_storage
+    - state_version_enforced_by_storage
+    - atomic_single_use_consume
+    - active_state_required_for_consume
+    - ttl_enforced_by_storage
+    - audit_event_reference_required
+    - no_raw_oauth_payload_storage
+forbidden_storage_values:
+  - oauth_callback_state_plaintext
+  - callback_state_plaintext
+  - oauth_state_plaintext
+  - nonce_plaintext
+  - pkce_verifier_plaintext
+  - authorization_code
+  - oauth_access_token
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_provider_error
 `,
     'contracts/auth-credential-vault-handoff.yaml': `
 contract:

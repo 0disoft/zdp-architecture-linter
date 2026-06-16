@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.34
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth OAuth callback state verification 계약을 검사하도록 강화했다.
+- OAuth callback state 계약이 hash-only callback state/nonce, PKCE/redirect reference, provider scope, single-use consume, TTL, audit event reference, raw OAuth provider payload 금지 기준을 잃으면 실패한다.
+- OAuth callback state adapter boundary가 `typed_adapter_boundary_no_migration`, state id/hash uniqueness, state version, atomic single-use consume, active-state consume, TTL, audit event reference, raw OAuth payload 금지 기준을 잃으면 실패한다.
+
 ## 0.39.33
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth passkey challenge store 계약의 typed adapter boundary를 검사하도록 강화했다.
