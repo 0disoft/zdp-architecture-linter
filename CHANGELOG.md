@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.37
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth runtime command propagation 계약을 검사하도록 강화했다.
+- command propagation이 admitted request/trace/idempotency/resource/audit metadata를 session, passkey, OAuth, audit, idempotency target으로 보존하는지 검사한다.
+- propagation boundary를 live handler, durable request propagation, durable storage, provider token exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.36
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth runtime admission context 계약을 검사하도록 강화했다.

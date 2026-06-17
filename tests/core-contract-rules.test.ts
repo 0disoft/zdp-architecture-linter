@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(15);
+      expect(diagnostics).toHaveLength(16);
     });
   });
 
@@ -456,6 +456,81 @@ forbidden_runtime_claims:
           path: 'forbidden_runtime_claims',
           message:
             'Core platform contract `contracts/auth-runtime-admission-context.yaml` must include `product_route_unblocked` in `forbidden_runtime_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth runtime command propagation claims durable propagation readiness', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-runtime-command-propagation.yaml': `
+contract:
+  version: 1
+  status: live
+  owner_repo: zdp-core-platform
+  owner_boundary: product
+  runtime_status: live
+  source_contract: local
+  typed_boundary_status: durable_request_propagation_ready
+required_propagated_fields:
+  - operation_id
+supported_targets:
+  - session_store
+required_controls:
+  - request_id_preserved
+forbidden_propagation_values:
+  - raw_secret
+forbidden_runtime_claims:
+  - durable_storage_ready
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-command-propagation.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth runtime command propagation contract must stay `contract_only_no_live_handler` until live handlers are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-command-propagation.yaml',
+          path: 'contract.typed_boundary_status',
+          message:
+            'Core platform auth runtime command propagation boundary must stay `typed_propagation_boundary_no_live_handler` until live handlers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-command-propagation.yaml',
+          path: 'required_propagated_fields',
+          message:
+            'Core platform contract `contracts/auth-runtime-command-propagation.yaml` must include `request_id` in `required_propagated_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-command-propagation.yaml',
+          path: 'supported_targets',
+          message:
+            'Core platform contract `contracts/auth-runtime-command-propagation.yaml` must include `idempotency_record` in `supported_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-command-propagation.yaml',
+          path: 'forbidden_runtime_claims',
+          message:
+            'Core platform contract `contracts/auth-runtime-command-propagation.yaml` must include `product_route_unblocked` in `forbidden_runtime_claims`.'
         });
       }
     );
@@ -1416,6 +1491,7 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
+      - contracts/auth-runtime-command-propagation.yaml
   - gate_id: trace_id_propagation
     contract_status: required_by_auth_runtime_admission_context
     typed_boundary_status: typed_admission_boundary_no_live_handler
@@ -1425,6 +1501,7 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
+      - contracts/auth-runtime-command-propagation.yaml
   - gate_id: session_store_contract
     contract_status: contract_only_no_migration
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1488,6 +1565,7 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
+      - contracts/auth-runtime-command-propagation.yaml
       - contracts/auth-idempotency-storage.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
     contract_status: contract_only_no_migration
@@ -1600,6 +1678,69 @@ forbidden_context_values:
   - attestation_object
 forbidden_runtime_claims:
   - live_auth_handler_ready
+  - durable_storage_ready
+  - provider_token_exchange_ready
+  - product_route_unblocked
+`,
+    'contracts/auth-runtime-command-propagation.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_live_handler
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contract: contracts/auth-runtime-admission-context.yaml
+  typed_boundary_status: typed_propagation_boundary_no_live_handler
+required_propagated_fields:
+  - operation_id
+  - session_effect
+  - actor_id
+  - tenant_id
+  - request_id
+  - trace_id
+  - idempotency_key
+  - command_id
+  - audit_event_ref
+  - resource_ref
+supported_targets:
+  - session_store
+  - passkey_challenge_store
+  - oauth_callback_state_store
+  - auth_audit_event
+  - idempotency_record
+required_controls:
+  - admission_context_source
+  - target_scope_declared
+  - request_id_preserved
+  - trace_id_preserved
+  - idempotency_key_preserved
+  - command_id_preserved
+  - audit_event_ref_preserved
+  - tenant_actor_scope_preserved
+  - resource_ref_preserved
+  - raw_credential_payload_rejected
+  - raw_provider_payload_rejected
+  - no_live_handler
+forbidden_propagation_values:
+  - raw_request_body
+  - raw_secret
+  - refresh_token_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_provider_error
+  - password_plaintext
+  - password_hash
+  - authorization_code
+  - oauth_access_token
+  - passkey_private_key
+  - client_data_json
+  - attestation_object
+forbidden_runtime_claims:
+  - live_auth_handler_ready
+  - durable_request_propagation_ready
   - durable_storage_ready
   - provider_token_exchange_ready
   - product_route_unblocked
