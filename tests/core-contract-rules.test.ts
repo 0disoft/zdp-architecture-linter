@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(17);
+      expect(diagnostics).toHaveLength(18);
     });
   });
 
@@ -615,6 +615,122 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-durable-storage-admission.yaml` must include `product_route_unblocked` in `forbidden_readiness_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth durable storage migration readiness claims applied migration', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-durable-storage-migration-readiness.yaml': `
+contract:
+  version: 1
+  status: db_migration_ready
+  owner_repo: zdp-core-platform
+  owner_boundary: product
+  runtime_status: live
+  source_contracts:
+    - contracts/auth-durable-storage-admission.yaml
+  typed_boundary_status: durable_adapter_ready
+required_readiness_fields:
+  - target
+supported_targets:
+  - identity_session_store
+required_controls:
+  - durable_storage_admission_source
+forbidden_migration_values:
+  - raw_secret
+forbidden_readiness_claims:
+  - production_ready
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth durable storage migration readiness contract must stay `contract_only_no_migration` until DB migrations are applied by a reviewed migration slice.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth durable storage migration readiness contract must keep owner_boundary `identity`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'contract.runtime_status',
+          message:
+            'Core platform auth durable storage migration readiness contract must keep runtime_status `contracted_no_live_handler`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'contract.source_contracts',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `contracts/auth-runtime-readiness.yaml` in `contract.source_contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'contract.typed_boundary_status',
+          message:
+            'Core platform auth durable storage migration readiness boundary must stay `typed_migration_readiness_no_migration` until DB migrations and durable adapters exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'required_readiness_fields',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `migration_id` in `required_readiness_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'supported_targets',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `refresh_token_rotation_storage` in `supported_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `destructive_migration_rejected` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'forbidden_migration_values',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `drop_table` in `forbidden_migration_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'forbidden_readiness_claims',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `durable_adapter_ready` in `forbidden_readiness_claims`.'
         });
       }
     );
@@ -1596,6 +1712,7 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/identity-session-store.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: credential_vault_handoff
     contract_status: contract_only_no_capability_client
     typed_boundary_status: typed_capability_client_boundary_no_vault_client
@@ -1615,6 +1732,7 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-passkey-challenge-store.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: oauth_callback_state_verification
     contract_status: contract_only_no_storage
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1625,6 +1743,7 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-oauth-callback-state.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: audit_event_emission
     contract_status: append_receipt_gate_no_durable_store
     typed_boundary_status: typed_port_no_durable_store
@@ -1635,6 +1754,7 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-audit-event-persistence.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: auth_audit_storage_adapter
     contract_status: contract_only_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1645,6 +1765,7 @@ required_gate_states:
       - contracts/auth-audit-event-persistence.yaml
       - contracts/auth-audit-storage-adapter.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: idempotency_key_scope
     contract_status: contract_only_no_storage
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1657,6 +1778,7 @@ required_gate_states:
       - contracts/auth-runtime-command-propagation.yaml
       - contracts/auth-idempotency-storage.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
     contract_status: contract_only_no_migration
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1667,6 +1789,16 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/identity-session-store.yaml
       - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
+  - gate_id: auth_durable_storage_migration_readiness
+    contract_status: contract_only_no_migration
+    typed_boundary_status: typed_migration_readiness_no_migration
+    durable_implementation_status: migration_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_auth_durable_storage_migration_implementation
+    evidence_contracts:
+      - contracts/auth-durable-storage-admission.yaml
+      - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: product_reviewer_approval
     contract_status: required_by_auth_session_runtime
     typed_boundary_status: no_typed_boundary_needed
@@ -1679,6 +1811,7 @@ blocking_summary:
   - no_request_id_propagation_implementation
   - no_trace_id_propagation_implementation
   - no_identity_session_store_implementation
+  - no_auth_durable_storage_migration_implementation
   - no_credential_vault_capability_handoff_implementation
   - no_passkey_challenge_store_implementation
   - no_oauth_callback_state_storage_implementation
@@ -1908,6 +2041,97 @@ forbidden_readiness_claims:
   - production_ready
   - durable_storage_ready
   - db_migration_ready
+  - live_auth_handler_ready
+  - oauth_provider_exchange_ready
+  - product_route_unblocked
+`,
+    'contracts/auth-durable-storage-migration-readiness.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_migration
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contracts:
+    - contracts/auth-durable-storage-admission.yaml
+    - contracts/auth-runtime-readiness.yaml
+  typed_boundary_status: typed_migration_readiness_no_migration
+required_readiness_fields:
+  - target
+  - owner_boundary
+  - storage_ref
+  - schema_ref
+  - migration_id
+  - migration_plan_ref
+  - schema_owner_ref
+  - rollback_plan_ref
+  - transaction_boundary_ref
+  - review_ref
+  - admission_plan_ref
+  - operation_id
+  - actor_id
+  - tenant_id
+  - request_id
+  - trace_id
+  - idempotency_key
+  - command_id
+  - audit_event_ref
+  - resource_ref
+supported_targets:
+  - identity_session_store
+  - passkey_challenge_store
+  - oauth_callback_state_store
+  - auth_audit_event_store
+  - auth_audit_storage_adapter
+  - idempotency_store
+  - refresh_token_rotation_storage
+required_controls:
+  - durable_storage_admission_source
+  - migration_id_required
+  - schema_owner_ref_required
+  - migration_plan_ref_required
+  - review_ref_required
+  - transaction_boundary_ref_required
+  - rollback_plan_ref_required
+  - seed_or_backfill_declared
+  - destructive_migration_rejected
+  - rollback_forward_or_revert_path_required
+  - request_trace_idempotency_audit_metadata_required
+  - tenant_actor_scope_required
+  - raw_secret_storage_rejected
+  - raw_provider_payload_rejected
+  - no_db_migration
+  - no_durable_adapter
+  - no_live_handler
+forbidden_migration_values:
+  - raw_request_body
+  - raw_secret
+  - refresh_token_plaintext
+  - session_secret_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_provider_error
+  - password_plaintext
+  - password_hash
+  - authorization_code
+  - oauth_access_token
+  - passkey_private_key
+  - client_data_json
+  - attestation_object
+  - destructive_migration
+  - drop_table
+  - truncate_table
+  - migration_applied
+  - production_schema_applied
+forbidden_readiness_claims:
+  - production_ready
+  - durable_storage_ready
+  - db_migration_ready
+  - db_migration_applied
+  - durable_adapter_ready
   - live_auth_handler_ready
   - oauth_provider_exchange_ready
   - product_route_unblocked

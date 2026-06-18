@@ -19,6 +19,8 @@ const AUTH_RUNTIME_COMMAND_PROPAGATION_FILE =
   'contracts/auth-runtime-command-propagation.yaml';
 const AUTH_DURABLE_STORAGE_ADMISSION_FILE =
   'contracts/auth-durable-storage-admission.yaml';
+const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE =
+  'contracts/auth-durable-storage-migration-readiness.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
@@ -44,6 +46,10 @@ const AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS =
 const AUTH_DURABLE_STORAGE_ADMISSION_STATUS = 'contract_only_no_migration';
 const AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS =
   'typed_durable_storage_admission_no_migration';
+const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS =
+  'contract_only_no_migration';
+const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS =
+  'typed_migration_readiness_no_migration';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
@@ -231,7 +237,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
       IDENTITY_SESSION_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -257,7 +264,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_PASSKEY_CHALLENGE_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -270,7 +278,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_OAUTH_CALLBACK_STATE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -283,7 +292,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -296,7 +306,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
       AUTH_AUDIT_STORAGE_ADAPTER_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -311,7 +322,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
       AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
       AUTH_IDEMPOTENCY_STORAGE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -324,7 +336,20 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
       IDENTITY_SESSION_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+    ]
+  },
+  {
+    gateId: 'auth_durable_storage_migration_readiness',
+    contractStatus: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS,
+    typedBoundaryStatus: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS,
+    durableImplementationStatus: 'migration_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker: 'no_auth_durable_storage_migration_implementation',
+    evidenceContracts: [
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
     ]
   },
   {
@@ -543,6 +568,85 @@ const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_CLAIMS = [
   'production_ready',
   'durable_storage_ready',
   'db_migration_ready',
+  'live_auth_handler_ready',
+  'oauth_provider_exchange_ready',
+  'product_route_unblocked'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FIELDS = [
+  'target',
+  'owner_boundary',
+  'storage_ref',
+  'schema_ref',
+  'migration_id',
+  'migration_plan_ref',
+  'schema_owner_ref',
+  'rollback_plan_ref',
+  'transaction_boundary_ref',
+  'review_ref',
+  'admission_plan_ref',
+  'operation_id',
+  'actor_id',
+  'tenant_id',
+  'request_id',
+  'trace_id',
+  'idempotency_key',
+  'command_id',
+  'audit_event_ref',
+  'resource_ref'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_CONTROLS = [
+  'durable_storage_admission_source',
+  'migration_id_required',
+  'schema_owner_ref_required',
+  'migration_plan_ref_required',
+  'review_ref_required',
+  'transaction_boundary_ref_required',
+  'rollback_plan_ref_required',
+  'seed_or_backfill_declared',
+  'destructive_migration_rejected',
+  'rollback_forward_or_revert_path_required',
+  'request_trace_idempotency_audit_metadata_required',
+  'tenant_actor_scope_required',
+  'raw_secret_storage_rejected',
+  'raw_provider_payload_rejected',
+  'no_db_migration',
+  'no_durable_adapter',
+  'no_live_handler'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_VALUES = [
+  'raw_request_body',
+  'raw_secret',
+  'refresh_token_plaintext',
+  'session_secret_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_provider_error',
+  'password_plaintext',
+  'password_hash',
+  'authorization_code',
+  'oauth_access_token',
+  'passkey_private_key',
+  'client_data_json',
+  'attestation_object',
+  'destructive_migration',
+  'drop_table',
+  'truncate_table',
+  'migration_applied',
+  'production_schema_applied'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS = [
+  'production_ready',
+  'durable_storage_ready',
+  'db_migration_ready',
+  'db_migration_applied',
+  'durable_adapter_ready',
   'live_auth_handler_ready',
   'oauth_provider_exchange_ready',
   'product_route_unblocked'
@@ -1133,6 +1237,7 @@ export async function validateRepositoryCoreContract(input: {
     authRuntimeAdmissionContext,
     authRuntimeCommandPropagation,
     authDurableStorageAdmission,
+    authDurableStorageMigrationReadiness,
     identitySessionStore,
     authCredentialVaultHandoff,
     authPasskeyChallengeStore,
@@ -1151,6 +1256,10 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_ADMISSION_CONTEXT_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_COMMAND_PROPAGATION_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_DURABLE_STORAGE_ADMISSION_FILE),
+      readRequiredYamlContract(
+        input.repositoryRoot,
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      ),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
@@ -1171,6 +1280,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authRuntimeAdmissionContext.diagnostics,
     ...authRuntimeCommandPropagation.diagnostics,
     ...authDurableStorageAdmission.diagnostics,
+    ...authDurableStorageMigrationReadiness.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authPasskeyChallengeStore.diagnostics,
@@ -1221,6 +1331,11 @@ export async function validateRepositoryCoreContract(input: {
       ? []
       : validateAuthDurableStorageAdmissionContract(
           authDurableStorageAdmission.value
+        )),
+    ...(authDurableStorageMigrationReadiness.value === null
+      ? []
+      : validateAuthDurableStorageMigrationReadinessContract(
+          authDurableStorageMigrationReadiness.value
         )),
     ...(identitySessionStore.value === null
       ? []
@@ -1916,6 +2031,113 @@ function validateAuthDurableStorageAdmissionContract(
       path: 'forbidden_readiness_claims',
       field: 'forbidden_readiness_claims',
       requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthDurableStorageMigrationReadinessContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (
+    readPath(value, 'contract.status') !==
+    AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        'contract.status',
+        `Core platform auth durable storage migration readiness contract must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS}\` until DB migrations are applied by a reviewed migration slice.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        'contract.owner_boundary',
+        'Core platform auth durable storage migration readiness contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        'contract.runtime_status',
+        `Core platform auth durable storage migration readiness contract must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'contract.source_contracts',
+      field: 'contract.source_contracts',
+      requiredEntries: [
+        AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+        AUTH_RUNTIME_READINESS_FILE
+      ]
+    })
+  );
+
+  if (
+    readPath(value, 'contract.typed_boundary_status') !==
+    AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        'contract.typed_boundary_status',
+        `Core platform auth durable storage migration readiness boundary must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS}\` until DB migrations and durable adapters exist.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'required_readiness_fields',
+      field: 'required_readiness_fields',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'supported_targets',
+      field: 'supported_targets',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'forbidden_migration_values',
+      field: 'forbidden_migration_values',
+      requiredEntries:
+        REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      path: 'forbidden_readiness_claims',
+      field: 'forbidden_readiness_claims',
+      requiredEntries:
+        REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS
     })
   );
 

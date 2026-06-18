@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.40
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage migration readiness 계약을 검사하도록 강화했다.
+- migration readiness가 storage/schema/migration/schema-owner/review/transaction/rollback ref, admission source, auth storage target, seed/backfill과 rollback control을 잃으면 실패한다.
+- migration readiness boundary를 DB migration applied, durable adapter ready, live handler, provider token exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.39
 
 - `ZDP-CHATGPT-APP-001`을 추가해 `zdp-ai-chatgpt-gateway`, `chatgpt-mcp-gateway`, OpenAI provider의 ChatGPT Apps SDK/MCP 경계를 검사한다.
