@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.38
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage admission 계약을 검사하도록 강화했다.
+- durable storage admission이 migration/review/transaction/rollback ref, request/trace/idempotency/resource/audit metadata, auth storage target을 잃으면 실패한다.
+- storage admission boundary를 DB migration, durable adapter, live handler, provider token exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.37
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth runtime command propagation 계약을 검사하도록 강화했다.

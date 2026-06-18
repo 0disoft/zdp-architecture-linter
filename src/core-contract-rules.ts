@@ -17,6 +17,8 @@ const AUTH_RUNTIME_ADMISSION_CONTEXT_FILE =
   'contracts/auth-runtime-admission-context.yaml';
 const AUTH_RUNTIME_COMMAND_PROPAGATION_FILE =
   'contracts/auth-runtime-command-propagation.yaml';
+const AUTH_DURABLE_STORAGE_ADMISSION_FILE =
+  'contracts/auth-durable-storage-admission.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
@@ -39,6 +41,9 @@ const AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS =
 const AUTH_RUNTIME_COMMAND_PROPAGATION_STATUS = 'contract_only_no_live_handler';
 const AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS =
   'typed_propagation_boundary_no_live_handler';
+const AUTH_DURABLE_STORAGE_ADMISSION_STATUS = 'contract_only_no_migration';
+const AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS =
+  'typed_durable_storage_admission_no_migration';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
@@ -223,7 +228,11 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     durableImplementationStatus: 'durable_implementation_missing',
     reviewStatus: 'review_missing',
     promotionBlocker: 'no_identity_session_store_implementation',
-    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE, IDENTITY_SESSION_STORE_FILE]
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      IDENTITY_SESSION_STORE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+    ]
   },
   {
     gateId: 'credential_vault_handoff',
@@ -247,7 +256,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     promotionBlocker: 'no_passkey_challenge_store_implementation',
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
-      AUTH_PASSKEY_CHALLENGE_STORE_FILE
+      AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
     ]
   },
   {
@@ -259,7 +269,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     promotionBlocker: 'no_oauth_callback_state_storage_implementation',
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
-      AUTH_OAUTH_CALLBACK_STATE_FILE
+      AUTH_OAUTH_CALLBACK_STATE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
     ]
   },
   {
@@ -271,7 +282,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     promotionBlocker: 'no_auth_audit_event_persistence_implementation',
     evidenceContracts: [
       AUTH_SESSION_RUNTIME_FILE,
-      AUTH_AUDIT_EVENT_PERSISTENCE_FILE
+      AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
     ]
   },
   {
@@ -283,7 +295,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     promotionBlocker: 'no_auth_audit_storage_adapter_implementation',
     evidenceContracts: [
       AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-      AUTH_AUDIT_STORAGE_ADAPTER_FILE
+      AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
     ]
   },
   {
@@ -297,7 +310,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
       AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
-      AUTH_IDEMPOTENCY_STORAGE_FILE
+      AUTH_IDEMPOTENCY_STORAGE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
     ]
   },
   {
@@ -307,7 +321,11 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     durableImplementationStatus: 'durable_implementation_missing',
     reviewStatus: 'review_missing',
     promotionBlocker: 'no_refresh_token_rotation_storage_implementation',
-    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE, IDENTITY_SESSION_STORE_FILE]
+    evidenceContracts: [
+      AUTH_SESSION_RUNTIME_FILE,
+      IDENTITY_SESSION_STORE_FILE,
+      AUTH_DURABLE_STORAGE_ADMISSION_FILE
+    ]
   },
   {
     gateId: 'product_reviewer_approval',
@@ -453,6 +471,80 @@ const REQUIRED_AUTH_RUNTIME_COMMAND_PROPAGATION_FORBIDDEN_CLAIMS = [
   'durable_request_propagation_ready',
   'durable_storage_ready',
   'provider_token_exchange_ready',
+  'product_route_unblocked'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FIELDS = [
+  'target',
+  'owner_boundary',
+  'storage_ref',
+  'schema_ref',
+  'migration_plan_ref',
+  'adapter_review_ref',
+  'transaction_boundary_ref',
+  'rollback_plan_ref',
+  'operation_id',
+  'actor_id',
+  'tenant_id',
+  'request_id',
+  'trace_id',
+  'idempotency_key',
+  'command_id',
+  'audit_event_ref',
+  'resource_ref'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_TARGETS = [
+  'identity_session_store',
+  'passkey_challenge_store',
+  'oauth_callback_state_store',
+  'auth_audit_event_store',
+  'auth_audit_storage_adapter',
+  'idempotency_store',
+  'refresh_token_rotation_storage'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_CONTROLS = [
+  'migration_plan_ref_required',
+  'migration_plan_review_required',
+  'adapter_review_ref_required',
+  'transaction_boundary_ref_required',
+  'rollback_plan_ref_required',
+  'schema_ref_required',
+  'request_trace_idempotency_audit_metadata_required',
+  'tenant_actor_scope_required',
+  'raw_secret_storage_rejected',
+  'raw_provider_payload_rejected',
+  'no_db_migration',
+  'no_live_handler'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_VALUES = [
+  'raw_request_body',
+  'raw_secret',
+  'refresh_token_plaintext',
+  'session_secret_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_provider_error',
+  'password_plaintext',
+  'password_hash',
+  'authorization_code',
+  'oauth_access_token',
+  'passkey_private_key',
+  'client_data_json',
+  'attestation_object'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_CLAIMS = [
+  'production_ready',
+  'durable_storage_ready',
+  'db_migration_ready',
+  'live_auth_handler_ready',
+  'oauth_provider_exchange_ready',
   'product_route_unblocked'
 ] as const;
 
@@ -1040,6 +1132,7 @@ export async function validateRepositoryCoreContract(input: {
     authRuntimeReadiness,
     authRuntimeAdmissionContext,
     authRuntimeCommandPropagation,
+    authDurableStorageAdmission,
     identitySessionStore,
     authCredentialVaultHandoff,
     authPasskeyChallengeStore,
@@ -1057,6 +1150,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_READINESS_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_ADMISSION_CONTEXT_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_COMMAND_PROPAGATION_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_DURABLE_STORAGE_ADMISSION_FILE),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
@@ -1076,6 +1170,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authRuntimeReadiness.diagnostics,
     ...authRuntimeAdmissionContext.diagnostics,
     ...authRuntimeCommandPropagation.diagnostics,
+    ...authDurableStorageAdmission.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authPasskeyChallengeStore.diagnostics,
@@ -1121,6 +1216,11 @@ export async function validateRepositoryCoreContract(input: {
       ? []
       : validateAuthRuntimeCommandPropagationContract(
           authRuntimeCommandPropagation.value
+        )),
+    ...(authDurableStorageAdmission.value === null
+      ? []
+      : validateAuthDurableStorageAdmissionContract(
+          authDurableStorageAdmission.value
         )),
     ...(identitySessionStore.value === null
       ? []
@@ -1714,6 +1814,108 @@ function validateAuthRuntimeCommandPropagationContract(
       path: 'forbidden_runtime_claims',
       field: 'forbidden_runtime_claims',
       requiredEntries: REQUIRED_AUTH_RUNTIME_COMMAND_PROPAGATION_FORBIDDEN_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthDurableStorageAdmissionContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== AUTH_DURABLE_STORAGE_ADMISSION_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+        'contract.status',
+        `Core platform auth durable storage admission contract must stay \`${AUTH_DURABLE_STORAGE_ADMISSION_STATUS}\` until migrations exist.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+        'contract.owner_boundary',
+        'Core platform auth durable storage admission contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+        'contract.runtime_status',
+        `Core platform auth durable storage admission contract must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'contract.source_contracts',
+      field: 'contract.source_contracts',
+      requiredEntries: [
+        AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+        AUTH_RUNTIME_COMMAND_PROPAGATION_FILE
+      ]
+    })
+  );
+
+  if (
+    readPath(value, 'contract.typed_boundary_status') !==
+    AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+        'contract.typed_boundary_status',
+        `Core platform auth durable storage admission boundary must stay \`${AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS}\` until migration-backed adapters exist.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'required_admission_fields',
+      field: 'required_admission_fields',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'supported_targets',
+      field: 'supported_targets',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'forbidden_admission_values',
+      field: 'forbidden_admission_values',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+      path: 'forbidden_readiness_claims',
+      field: 'forbidden_readiness_claims',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_FORBIDDEN_CLAIMS
     })
   );
 
