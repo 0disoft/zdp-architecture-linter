@@ -6,6 +6,7 @@ import {
   validateAiSensitiveDataContracts,
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
+import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
 import {
   buildPublicApiContractPolicy,
   validatePublicApiContracts
@@ -481,6 +482,11 @@ export async function validateArchitecture(
         catalogs.services,
         externalProviderIndex
       ),
+      ...validateChatgptAppsSdkGatewayContract({
+        repositories: catalogs.repositories,
+        services: catalogs.services,
+        externalProviders: catalogs.externalProviders
+      }),
       ...validateServiceProviderContracts(
         catalogs.services,
         providerContractPolicy

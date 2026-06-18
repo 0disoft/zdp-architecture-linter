@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.39
+
+- `ZDP-CHATGPT-APP-001`을 추가해 `zdp-ai-chatgpt-gateway`, `chatgpt-mcp-gateway`, OpenAI provider의 ChatGPT Apps SDK/MCP 경계를 검사한다.
+- ChatGPT 앱 게이트웨이가 새 저장소로 너무 빨리 승격되거나, 직접 datastore 접근·안전 dependency 누락·OpenAI host 역할 누락이 생기면 실패한다.
+- structuredContent/content/_meta/widget state secret 금지, privacy broker·credential vault·audit·idempotency 선행 조건, 구현 전 OpenAI 공식 문서 재확인 문구가 사라지는 drift도 실패한다.
+
 ## 0.39.38
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage admission 계약을 검사하도록 강화했다.
