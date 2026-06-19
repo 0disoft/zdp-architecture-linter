@@ -54,7 +54,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(18);
+      expect(diagnostics).toHaveLength(19);
     });
   });
 
@@ -731,6 +731,122 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `durable_adapter_ready` in `forbidden_readiness_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when auth durable storage transaction outbox claims dispatcher readiness', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-durable-storage-transaction-outbox.yaml': `
+contract:
+  version: 1
+  status: transaction_manager_ready
+  owner_repo: zdp-core-platform
+  owner_boundary: product
+  runtime_status: live
+  source_contracts:
+    - contracts/auth-durable-storage-migration-readiness.yaml
+  typed_boundary_status: durable_adapter_ready
+required_boundary_fields:
+  - target
+supported_targets:
+  - identity_session_store
+required_controls:
+  - migration_readiness_source
+forbidden_boundary_values:
+  - raw_secret
+forbidden_readiness_claims:
+  - production_ready
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform auth durable storage transaction/outbox contract must stay `contract_only_no_transaction_manager` until a DB transaction manager and outbox dispatcher are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'contract.owner_boundary',
+          message:
+            'Core platform auth durable storage transaction/outbox contract must keep owner_boundary `identity`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'contract.runtime_status',
+          message:
+            'Core platform auth durable storage transaction/outbox contract must keep runtime_status `contracted_no_live_handler`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'contract.source_contracts',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `contracts/auth-runtime-readiness.yaml` in `contract.source_contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'contract.typed_boundary_status',
+          message:
+            'Core platform auth durable storage transaction/outbox boundary must stay `typed_transaction_outbox_boundary_no_adapter` until transaction managers, outbox dispatchers, and durable adapters exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'required_boundary_fields',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `transaction_boundary_ref` in `required_boundary_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'supported_targets',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `refresh_token_rotation_storage` in `supported_targets`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'required_controls',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `external_effect_after_commit_only` in `required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'forbidden_boundary_values',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `outbox_dispatched` in `forbidden_boundary_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'forbidden_readiness_claims',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `outbox_dispatcher_ready` in `forbidden_readiness_claims`.'
         });
       }
     );
@@ -1713,6 +1829,7 @@ required_gate_states:
       - contracts/identity-session-store.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: credential_vault_handoff
     contract_status: contract_only_no_capability_client
     typed_boundary_status: typed_capability_client_boundary_no_vault_client
@@ -1733,6 +1850,7 @@ required_gate_states:
       - contracts/auth-passkey-challenge-store.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: oauth_callback_state_verification
     contract_status: contract_only_no_storage
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1744,6 +1862,7 @@ required_gate_states:
       - contracts/auth-oauth-callback-state.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: audit_event_emission
     contract_status: append_receipt_gate_no_durable_store
     typed_boundary_status: typed_port_no_durable_store
@@ -1755,6 +1874,7 @@ required_gate_states:
       - contracts/auth-audit-event-persistence.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: auth_audit_storage_adapter
     contract_status: contract_only_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1766,6 +1886,7 @@ required_gate_states:
       - contracts/auth-audit-storage-adapter.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: idempotency_key_scope
     contract_status: contract_only_no_storage
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1779,6 +1900,7 @@ required_gate_states:
       - contracts/auth-idempotency-storage.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
     contract_status: contract_only_no_migration
     typed_boundary_status: typed_adapter_boundary_no_migration
@@ -1790,6 +1912,7 @@ required_gate_states:
       - contracts/identity-session-store.yaml
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: auth_durable_storage_migration_readiness
     contract_status: contract_only_no_migration
     typed_boundary_status: typed_migration_readiness_no_migration
@@ -1799,6 +1922,15 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
+  - gate_id: auth_durable_storage_transaction_outbox_boundary
+    contract_status: contract_only_no_transaction_manager
+    typed_boundary_status: typed_transaction_outbox_boundary_no_adapter
+    durable_implementation_status: transaction_outbox_implementation_missing
+    review_status: review_missing
+    promotion_blocker: no_auth_durable_storage_transaction_outbox_implementation
+    evidence_contracts:
+      - contracts/auth-durable-storage-migration-readiness.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: product_reviewer_approval
     contract_status: required_by_auth_session_runtime
     typed_boundary_status: no_typed_boundary_needed
@@ -1812,6 +1944,7 @@ blocking_summary:
   - no_trace_id_propagation_implementation
   - no_identity_session_store_implementation
   - no_auth_durable_storage_migration_implementation
+  - no_auth_durable_storage_transaction_outbox_implementation
   - no_credential_vault_capability_handoff_implementation
   - no_passkey_challenge_store_implementation
   - no_oauth_callback_state_storage_implementation
@@ -1824,6 +1957,8 @@ forbidden_readiness_claims:
   - production_ready
   - live_auth_handler_ready
   - durable_storage_ready
+  - transaction_manager_ready
+  - outbox_dispatcher_ready
   - oauth_provider_exchange_ready
   - product_route_unblocked
 `,
@@ -2131,6 +2266,101 @@ forbidden_readiness_claims:
   - durable_storage_ready
   - db_migration_ready
   - db_migration_applied
+  - durable_adapter_ready
+  - live_auth_handler_ready
+  - oauth_provider_exchange_ready
+  - product_route_unblocked
+`,
+    'contracts/auth-durable-storage-transaction-outbox.yaml': `
+contract:
+  version: 1
+  status: contract_only_no_transaction_manager
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contracts:
+    - contracts/auth-durable-storage-migration-readiness.yaml
+    - contracts/auth-runtime-readiness.yaml
+  typed_boundary_status: typed_transaction_outbox_boundary_no_adapter
+required_boundary_fields:
+  - target
+  - owner_boundary
+  - transaction_boundary_ref
+  - outbox_record_ref
+  - commit_receipt_ref
+  - rollback_receipt_ref
+  - replay_ref
+  - review_ref
+  - migration_readiness_plan_ref
+  - storage_ref
+  - schema_ref
+  - migration_id
+  - operation_id
+  - actor_id
+  - tenant_id
+  - request_id
+  - trace_id
+  - idempotency_key
+  - command_id
+  - audit_event_ref
+  - resource_ref
+supported_targets:
+  - identity_session_store
+  - passkey_challenge_store
+  - oauth_callback_state_store
+  - auth_audit_event_store
+  - auth_audit_storage_adapter
+  - idempotency_store
+  - refresh_token_rotation_storage
+required_controls:
+  - migration_readiness_source
+  - transaction_boundary_ref_required
+  - outbox_record_ref_required
+  - atomic_state_and_outbox_required
+  - commit_receipt_ref_required
+  - rollback_receipt_ref_required
+  - replay_ref_required
+  - audit_event_ref_required
+  - idempotency_metadata_required
+  - request_trace_metadata_required
+  - tenant_actor_scope_required
+  - external_effect_after_commit_only
+  - raw_secret_storage_rejected
+  - raw_provider_payload_rejected
+  - no_db_transaction_manager
+  - no_outbox_dispatcher
+  - no_durable_adapter
+  - no_live_handler
+forbidden_boundary_values:
+  - raw_request_body
+  - raw_secret
+  - refresh_token_plaintext
+  - session_secret_plaintext
+  - oauth_refresh_token_plaintext
+  - provider_secret
+  - authorization_header
+  - cookie_header
+  - raw_provider_payload
+  - raw_provider_error
+  - password_plaintext
+  - password_hash
+  - authorization_code
+  - oauth_access_token
+  - passkey_private_key
+  - client_data_json
+  - attestation_object
+  - provider_call_inside_transaction
+  - external_effect_inside_transaction
+  - transaction_committed
+  - outbox_dispatched
+  - durable_write_applied
+forbidden_readiness_claims:
+  - production_ready
+  - durable_storage_ready
+  - db_migration_ready
+  - db_migration_applied
+  - transaction_manager_ready
+  - outbox_dispatcher_ready
   - durable_adapter_ready
   - live_auth_handler_ready
   - oauth_provider_exchange_ready

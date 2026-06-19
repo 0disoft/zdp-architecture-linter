@@ -21,6 +21,8 @@ const AUTH_DURABLE_STORAGE_ADMISSION_FILE =
   'contracts/auth-durable-storage-admission.yaml';
 const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE =
   'contracts/auth-durable-storage-migration-readiness.yaml';
+const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE =
+  'contracts/auth-durable-storage-transaction-outbox.yaml';
 const IDENTITY_SESSION_STORE_FILE = 'contracts/identity-session-store.yaml';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
@@ -50,6 +52,10 @@ const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS =
   'contract_only_no_migration';
 const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS =
   'typed_migration_readiness_no_migration';
+const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS =
+  'contract_only_no_transaction_manager';
+const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS =
+  'typed_transaction_outbox_boundary_no_adapter';
 const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
@@ -238,7 +244,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       IDENTITY_SESSION_STORE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -265,7 +272,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_PASSKEY_CHALLENGE_STORE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -279,7 +287,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_OAUTH_CALLBACK_STATE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -293,7 +302,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -307,7 +317,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
       AUTH_AUDIT_STORAGE_ADAPTER_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -323,7 +334,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
       AUTH_IDEMPOTENCY_STORAGE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -337,7 +349,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
       AUTH_SESSION_RUNTIME_FILE,
       IDENTITY_SESSION_STORE_FILE,
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -350,6 +363,19 @@ const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
     evidenceContracts: [
       AUTH_DURABLE_STORAGE_ADMISSION_FILE,
       AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
+    ]
+  },
+  {
+    gateId: 'auth_durable_storage_transaction_outbox_boundary',
+    contractStatus: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS,
+    typedBoundaryStatus: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS,
+    durableImplementationStatus: 'transaction_outbox_implementation_missing',
+    reviewStatus: 'review_missing',
+    promotionBlocker:
+      'no_auth_durable_storage_transaction_outbox_implementation',
+    evidenceContracts: [
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
     ]
   },
   {
@@ -370,6 +396,8 @@ const REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS = [
   'production_ready',
   'live_auth_handler_ready',
   'durable_storage_ready',
+  'transaction_manager_ready',
+  'outbox_dispatcher_ready',
   'oauth_provider_exchange_ready',
   'product_route_unblocked'
 ] as const;
@@ -646,6 +674,89 @@ const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS = [
   'durable_storage_ready',
   'db_migration_ready',
   'db_migration_applied',
+  'durable_adapter_ready',
+  'live_auth_handler_ready',
+  'oauth_provider_exchange_ready',
+  'product_route_unblocked'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FIELDS = [
+  'target',
+  'owner_boundary',
+  'transaction_boundary_ref',
+  'outbox_record_ref',
+  'commit_receipt_ref',
+  'rollback_receipt_ref',
+  'replay_ref',
+  'review_ref',
+  'migration_readiness_plan_ref',
+  'storage_ref',
+  'schema_ref',
+  'migration_id',
+  'operation_id',
+  'actor_id',
+  'tenant_id',
+  'request_id',
+  'trace_id',
+  'idempotency_key',
+  'command_id',
+  'audit_event_ref',
+  'resource_ref'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_CONTROLS = [
+  'migration_readiness_source',
+  'transaction_boundary_ref_required',
+  'outbox_record_ref_required',
+  'atomic_state_and_outbox_required',
+  'commit_receipt_ref_required',
+  'rollback_receipt_ref_required',
+  'replay_ref_required',
+  'audit_event_ref_required',
+  'idempotency_metadata_required',
+  'request_trace_metadata_required',
+  'tenant_actor_scope_required',
+  'external_effect_after_commit_only',
+  'raw_secret_storage_rejected',
+  'raw_provider_payload_rejected',
+  'no_db_transaction_manager',
+  'no_outbox_dispatcher',
+  'no_durable_adapter',
+  'no_live_handler'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_VALUES = [
+  'raw_request_body',
+  'raw_secret',
+  'refresh_token_plaintext',
+  'session_secret_plaintext',
+  'oauth_refresh_token_plaintext',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'raw_provider_payload',
+  'raw_provider_error',
+  'password_plaintext',
+  'password_hash',
+  'authorization_code',
+  'oauth_access_token',
+  'passkey_private_key',
+  'client_data_json',
+  'attestation_object',
+  'provider_call_inside_transaction',
+  'external_effect_inside_transaction',
+  'transaction_committed',
+  'outbox_dispatched',
+  'durable_write_applied'
+] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_CLAIMS = [
+  'production_ready',
+  'durable_storage_ready',
+  'db_migration_ready',
+  'db_migration_applied',
+  'transaction_manager_ready',
+  'outbox_dispatcher_ready',
   'durable_adapter_ready',
   'live_auth_handler_ready',
   'oauth_provider_exchange_ready',
@@ -1238,6 +1349,7 @@ export async function validateRepositoryCoreContract(input: {
     authRuntimeCommandPropagation,
     authDurableStorageAdmission,
     authDurableStorageMigrationReadiness,
+    authDurableStorageTransactionOutbox,
     identitySessionStore,
     authCredentialVaultHandoff,
     authPasskeyChallengeStore,
@@ -1260,6 +1372,10 @@ export async function validateRepositoryCoreContract(input: {
         input.repositoryRoot,
         AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
       ),
+      readRequiredYamlContract(
+        input.repositoryRoot,
+        AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
+      ),
       readRequiredYamlContract(input.repositoryRoot, IDENTITY_SESSION_STORE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_CREDENTIAL_VAULT_HANDOFF_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_PASSKEY_CHALLENGE_STORE_FILE),
@@ -1281,6 +1397,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authRuntimeCommandPropagation.diagnostics,
     ...authDurableStorageAdmission.diagnostics,
     ...authDurableStorageMigrationReadiness.diagnostics,
+    ...authDurableStorageTransactionOutbox.diagnostics,
     ...identitySessionStore.diagnostics,
     ...authCredentialVaultHandoff.diagnostics,
     ...authPasskeyChallengeStore.diagnostics,
@@ -1336,6 +1453,11 @@ export async function validateRepositoryCoreContract(input: {
       ? []
       : validateAuthDurableStorageMigrationReadinessContract(
           authDurableStorageMigrationReadiness.value
+        )),
+    ...(authDurableStorageTransactionOutbox.value === null
+      ? []
+      : validateAuthDurableStorageTransactionOutboxContract(
+          authDurableStorageTransactionOutbox.value
         )),
     ...(identitySessionStore.value === null
       ? []
@@ -2138,6 +2260,113 @@ function validateAuthDurableStorageMigrationReadinessContract(
       field: 'forbidden_readiness_claims',
       requiredEntries:
         REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
+function validateAuthDurableStorageTransactionOutboxContract(
+  value: unknown
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (
+    readPath(value, 'contract.status') !==
+    AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+        'contract.status',
+        `Core platform auth durable storage transaction/outbox contract must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS}\` until a DB transaction manager and outbox dispatcher are reviewed.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+        'contract.owner_boundary',
+        'Core platform auth durable storage transaction/outbox contract must keep owner_boundary `identity`.'
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+        'contract.runtime_status',
+        `Core platform auth durable storage transaction/outbox contract must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'contract.source_contracts',
+      field: 'contract.source_contracts',
+      requiredEntries: [
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        AUTH_RUNTIME_READINESS_FILE
+      ]
+    })
+  );
+
+  if (
+    readPath(value, 'contract.typed_boundary_status') !==
+    AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+        'contract.typed_boundary_status',
+        `Core platform auth durable storage transaction/outbox boundary must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS}\` until transaction managers, outbox dispatchers, and durable adapters exist.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'required_boundary_fields',
+      field: 'required_boundary_fields',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'supported_targets',
+      field: 'supported_targets',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_ADMISSION_TARGETS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'required_controls',
+      field: 'required_controls',
+      requiredEntries: REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'forbidden_boundary_values',
+      field: 'forbidden_boundary_values',
+      requiredEntries:
+        REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+      path: 'forbidden_readiness_claims',
+      field: 'forbidden_readiness_claims',
+      requiredEntries:
+        REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_CLAIMS
     })
   );
 

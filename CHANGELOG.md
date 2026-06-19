@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.41
+
+- `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage transaction/outbox 계약을 검사하도록 강화했다.
+- transaction/outbox boundary가 transaction/outbox/commit/rollback/replay/review ref, migration readiness source, atomic state+outbox control, external-effect-after-commit control을 잃으면 실패한다.
+- transaction/outbox boundary를 DB transaction manager, outbox dispatcher, durable adapter, live handler, provider token exchange, product route unblock 증거로 오해하는 claim도 실패한다.
+
 ## 0.39.40
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage migration readiness 계약을 검사하도록 강화했다.
