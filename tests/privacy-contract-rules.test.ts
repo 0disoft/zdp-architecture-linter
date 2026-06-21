@@ -347,6 +347,14 @@ test('placeholder', () => {});
           ruleId: 'ZDP-PRIVACY-001',
           severity: 'error',
           file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Privacy broker package `check` script must include `cargo test`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'package.json',
           path: 'scripts.test',
           message: 'Privacy broker package must declare `test` script.'
         });
@@ -372,7 +380,190 @@ test('placeholder', () => {});
           file: 'tests/privacy-contracts.test.ts',
           path: 'source',
           message:
-            'Privacy broker checker source must include `fails when growth or analytics can receive subject-level raw streams`.'
+            'Privacy broker checker source must include test case `validates the committed privacy broker contracts`.'
+        });
+      }
+    );
+  });
+
+  test('fails when privacy broker contract string lists include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'contracts/privacy-access-policy.yaml': `
+contract:
+  version: 1
+  status: draft
+decision_owner: zdp-privacy-access-broker
+default_decision: deny
+request_context_required:
+  - actor_id
+  - tenant_id
+  - {}
+  - subject_id
+  - purpose
+  - resource_kind
+  - resource_scope
+  - consent_reference
+  - permission_reference
+  - audit_context
+required_checks:
+  - authenticated_actor
+  - tenant_boundary
+  - object_level_permission
+  - explicit_purpose
+  - active_consent
+  - data_minimization
+  - source_system_allowed
+  - audit_event_prepared
+forbidden_decisions:
+  - final_authorization_for_product_feature
+  - entitlement_decision
+  - billing_or_ledger_decision
+  - access_based_only_on_client_role
+forbidden_outputs:
+  - raw_oauth_token
+  - provider_refresh_token
+  - authorization_header
+  - cookie
+  - unrestricted_source_payload
+  - full_mailbox_export
+  - full_message_history_export
+  - full_file_corpus_export
+fail_closed_when_missing:
+  - actor_id
+  - tenant_id
+  - subject_id
+  - purpose
+  - resource_scope
+  - consent_reference
+  - permission_reference
+  - audit_context
+audit_events_required:
+  - privacy.access.allowed
+  - privacy.access.denied
+  - privacy.capability.issued
+  - privacy.masking.applied
+  - privacy.break_glass.used
+break_glass:
+  requires:
+    - human_approval
+    - reason
+    - time_limit
+    - target_scope
+    - audit_event
+  forbidden:
+    - silent_superuser_access
+    - permanent_exception
+    - raw_secret_return
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/privacy-access-policy.yaml',
+          path: 'request_context_required',
+          message:
+            'Privacy broker contract `contracts/privacy-access-policy.yaml` must declare `request_context_required` as a string list.'
+        });
+      }
+    );
+  });
+
+  test('fails when privacy broker source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'src/privacy-contracts/validator.ts': `
+const fakeProof = [
+  'MAX_CAPABILITY_TTL_SECONDS',
+  'PRIV_POLICY_DEFAULT_NOT_DENY',
+  'PRIV_CAPABILITY_TTL_TOO_HIGH',
+  'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+  'PRIV_CAPABILITY_STATELESS_CONSENT_TOKEN_DEFAULT_ALLOWED',
+  'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
+  'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED',
+  'PRIV_RUST_ALLOWED_OUTPUT_SHAPE_DRIFT',
+  'PRIV_RUST_SECRET_OR_PII_LOGGING_PATTERN',
+  'PRIV_RUST_SOURCE_PROXY_ROUTE_REQUIRES_MASKING_REVIEW',
+  'RUST_MARKER_EXPECTATIONS',
+  'export function validatePrivacyContracts',
+  'function validateAccessPolicy',
+  'function validateCapabilityGrants',
+  'function validateDataMinimization',
+  'function validateAccessCapability',
+  'function validateRustBoundaryMarkers',
+  'function validateRustPrivacyPatterns'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'src/privacy-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Privacy broker checker source must include code fragment `export function validatePrivacyContracts`.'
+        });
+      }
+    );
+  });
+
+  test('fails when privacy broker test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'tests/privacy-contracts.test.ts': `
+import { expect, it } from 'bun:test';
+import { validatePrivacyContracts } from '../src/privacy-contracts/validator';
+
+function loadCommittedContracts() {}
+
+const fakeProof = [
+  'validates the committed privacy broker contracts',
+  'fails when access policy does not default deny',
+  'fails when capability ttl is longer than five minutes',
+  'fails when capability can skip policy recheck',
+  'fails when stateless consent tokens are allowed by default',
+  'fails when data minimization can retain raw source data',
+  'fails when growth or analytics can receive subject-level raw streams',
+  'fails when Rust boundary markers drift from YAML contracts',
+  'fails when Rust source logs PII or adds raw source proxy routes'
+];
+
+it('privacy broker placeholder', () => {
+  expect(fakeProof).toContain('validates the committed privacy broker contracts');
+  expect(validatePrivacyContracts).toBeDefined();
+  expect(loadCommittedContracts).toBeDefined();
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'tests/privacy-contracts.test.ts',
+          path: 'source',
+          message:
+            'Privacy broker checker source must include test case `validates the committed privacy broker contracts`.'
         });
       }
     );
@@ -502,7 +693,7 @@ function createValidPrivacyFiles(): Record<string, string> {
     'package.json': `
 {
   "scripts": {
-    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check": "tsc --noEmit && bun test && bun run contracts:check && cargo fmt --check && cargo check && cargo test",
     "test": "bun test",
     "contracts:check": "bun scripts/check-privacy-contracts.ts"
   }
@@ -542,27 +733,60 @@ export interface PrivacyContracts {}
 `,
     'src/privacy-contracts/validator.ts': `
 const MAX_CAPABILITY_TTL_SECONDS = 300;
+const RUST_MARKER_EXPECTATIONS = [];
 const codes = [
   'PRIV_POLICY_DEFAULT_NOT_DENY',
   'PRIV_CAPABILITY_TTL_TOO_HIGH',
   'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+  'PRIV_CAPABILITY_STATELESS_CONSENT_TOKEN_DEFAULT_ALLOWED',
   'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
-  'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED'
+  'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED',
+  'PRIV_RUST_ALLOWED_OUTPUT_SHAPE_DRIFT',
+  'PRIV_RUST_SECRET_OR_PII_LOGGING_PATTERN',
+  'PRIV_RUST_SOURCE_PROXY_ROUTE_REQUIRES_MASKING_REVIEW'
 ];
+
+export function validatePrivacyContracts() {
+  validateAccessPolicy();
+  validateCapabilityGrants();
+  validateDataMinimization();
+  validateAccessCapability();
+  validateRustBoundaryMarkers();
+  validateRustPrivacyPatterns();
+  return { MAX_CAPABILITY_TTL_SECONDS, RUST_MARKER_EXPECTATIONS, codes };
+}
+
+function validateAccessPolicy() {}
+function validateCapabilityGrants() {}
+function validateDataMinimization() {}
+function validateAccessCapability() {}
+function validateRustBoundaryMarkers() {}
+function validateRustPrivacyPatterns() {}
 `,
     'tests/privacy-contracts.test.ts': `
-const cases = [
-  'fails when access policy does not default deny',
-  'fails when capability ttl is longer than five minutes',
-  'fails when capability can skip policy recheck',
-  'fails when data minimization can retain raw source data',
-  'fails when growth or analytics can receive subject-level raw streams'
-];
+import { expect, it } from 'bun:test';
+import { validatePrivacyContracts } from '../src/privacy-contracts/validator';
+
+function loadCommittedContracts() {}
+
+it('validates the committed privacy broker contracts', () => {
+  expect(validatePrivacyContracts()).toBeDefined();
+  expect(loadCommittedContracts()).toBeDefined();
+});
+
+it('fails when access policy does not default deny', () => {});
+it('fails when capability ttl is longer than five minutes', () => {});
+it('fails when capability can skip policy recheck', () => {});
+it('fails when stateless consent tokens are allowed by default', () => {});
+it('fails when data minimization can retain raw source data', () => {});
+it('fails when growth or analytics can receive subject-level raw streams', () => {});
+it('fails when Rust boundary markers drift from YAML contracts', () => {});
+it('fails when Rust source logs PII or adds raw source proxy routes', () => {});
 `,
     'Cargo.toml': `
 [package]
 name = "zdp-privacy-access-broker"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 publish = false
 

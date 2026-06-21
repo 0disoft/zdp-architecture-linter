@@ -220,6 +220,15 @@ targets:
           message:
             'Runtime smoke contract must declare a `contract_checks` array.'
         });
+        expect(
+          diagnostics.filter(
+            (diagnostic) =>
+              diagnostic.file === 'contracts/smoke-targets.yaml' &&
+              diagnostic.path === 'contract_checks' &&
+              diagnostic.message ===
+                'Runtime smoke contract must declare a `contract_checks` array.'
+          )
+        ).toHaveLength(1);
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
@@ -235,6 +244,124 @@ targets:
           path: 'targets.core-api.readyz.expect_json.checks',
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `contracts` in `readyz.expect_json.checks`.'
+        });
+      }
+    );
+  });
+
+  test('fails when runtime smoke targets drop required-before gates', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
+      - condition: traceparent is not propagated when present
+        enforced_by: smoke_runner
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.required_before',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `hello-edge` in `required_before`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.required_before',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `production-runtime-template` in `required_before`.'
+        });
+      }
+    );
+  });
+
+  test('fails when runtime required-before gates include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    required_before:
+      - hello-edge
+      - production-runtime-template
+      - condition: manual approval hidden in required_before
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
+      - condition: traceparent is not propagated when present
+        enforced_by: smoke_runner
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.required_before',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must declare `required_before` as a string list.'
         });
       }
     );
@@ -265,7 +392,8 @@ targets:
         ready: false
         checks: []
     blocked_production_when:
-      - x-request-id is not propagated
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
 `
         })
       },
@@ -311,6 +439,229 @@ targets:
     );
   });
 
+  test('fails when blocked production conditions mix structured and malformed items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    required_before:
+      - hello-edge
+      - production-runtime-template
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
+      - traceparent is not propagated when present
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must declare every `blocked_production_when` item as a `{ condition, enforced_by }` object.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `traceparent is not propagated when present` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when blocked production conditions use legacy string lists', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - x-request-id is not propagated
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must declare `blocked_production_when` as a non-empty list of `{ condition, enforced_by }` objects.'
+        });
+      }
+    );
+  });
+
+  test('fails when blocked production enforcement owners are unknown', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    required_before:
+      - hello-edge
+      - production-runtime-template
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - condition: x-request-id is not propagated
+        enforced_by: ci_pipeline
+      - condition: traceparent is not propagated when present
+        enforced_by: smoke_runner
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must use a known `enforced_by` value for `x-request-id is not propagated` in `blocked_production_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when blocked production enforcement owners drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml({
+          edgeWebhookIngress: `
+  - id: edge-webhook-ingress
+    repo: zdp-edge-workers
+    service_id: edge-webhook-ingress
+    process: edge-worker
+    required_before:
+      - hello-edge
+      - production-runtime-template
+    healthz:
+      method: GET
+      path: /healthz
+      timeout_seconds: 2
+      expect_json:
+        ok: true
+        service: edge-webhook-ingress
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+      expect_json:
+        ready: true
+        checks:
+          - contracts
+    blocked_production_when:
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
+      - condition: traceparent is not propagated when present
+        enforced_by: operator_review
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
+`
+        })
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.edge-webhook-ingress.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must assign `traceparent is not propagated when present` in `blocked_production_when` to enforcement owner `smoke_runner`.'
+        });
+      }
+    );
+  });
+
   test('fails when the money api smoke target drifts', async () => {
     await withRepositoryRoot(
       {
@@ -336,7 +687,8 @@ targets:
         ready: false
         checks: []
     blocked_production_when:
-      - readyz checks omit contracts
+      - condition: readyz checks omit contracts
+        enforced_by: smoke_runner
 `
         })
       },
@@ -406,7 +758,8 @@ targets:
         ready: false
         checks: []
     blocked_production_when:
-      - readyz checks omit contracts
+      - condition: readyz checks omit contracts
+        enforced_by: smoke_runner
 `
         })
       },
@@ -469,7 +822,8 @@ contract_checks:
     expected_evidence:
       - security contracts parse without diagnostics
     blocked_production_when:
-      - security baseline contracts are missing or unparseable
+      - condition: security baseline contracts are missing or unparseable
+        enforced_by: owning_contract_checker
 `
         })
       },
@@ -538,9 +892,12 @@ contract_checks:
       - checker does not connect to scanners or providers
       - checker does not require exploit payloads, private incident details, or secret values
     blocked_production_when:
-      - security baseline contracts are missing or unparseable
-      - contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
-      - security promotion relies on dashboard-only scanner evidence
+      - condition: security baseline contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
+        enforced_by: owning_contract_checker
+      - condition: security promotion relies on dashboard-only scanner evidence
+        enforced_by: operator_review
   - id: platform-infra-contracts
     repo: zdp-platform-infra
     service_id: platform-infra
@@ -551,7 +908,8 @@ contract_checks:
     expected_evidence:
       - infra contracts parse without diagnostics
     blocked_production_when:
-      - infra contracts are missing or unparseable
+      - condition: infra contracts are missing or unparseable
+        enforced_by: owning_contract_checker
 `
         })
       },
@@ -628,9 +986,12 @@ contract_checks:
       - checker does not connect to scanners or providers
       - checker does not require exploit payloads, private incident details, or secret values
     blocked_production_when:
-      - security baseline contracts are missing or unparseable
-      - contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
-      - security promotion relies on dashboard-only scanner evidence
+      - condition: security baseline contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
+        enforced_by: owning_contract_checker
+      - condition: security promotion relies on dashboard-only scanner evidence
+        enforced_by: operator_review
   - id: platform-infra-contracts
     repo: zdp-platform-infra
     service_id: platform-infra
@@ -647,9 +1008,12 @@ contract_checks:
       - provider-neutral dry-run plan has no provider calls
       - checker does not require account ids, server ips, dns challenge secrets, or provider tokens
     blocked_production_when:
-      - infra contracts are missing or unparseable
-      - contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
-      - infra promotion relies on dashboard-only provider evidence
+      - condition: infra contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
+        enforced_by: owning_contract_checker
+      - condition: infra promotion relies on dashboard-only provider evidence
+        enforced_by: operator_review
   - id: platform-observability-contracts
     repo: zdp-platform-observability
     service_id: platform-observability
@@ -660,7 +1024,8 @@ contract_checks:
     expected_evidence:
       - observability contracts parse without diagnostics
     blocked_production_when:
-      - observability contracts are missing or unparseable
+      - condition: observability contracts are missing or unparseable
+        enforced_by: owning_contract_checker
 `
         })
       },
@@ -810,6 +1175,14 @@ test('smoke runner placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Runtime package `check` script must run `tsc --noEmit` and `bun test`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
           file: 'src/smoke-runner/runner.ts',
           path: 'source',
           message:
@@ -821,7 +1194,150 @@ test('smoke runner placeholder', () => {});
           file: 'tests/smoke-runner.test.ts',
           path: 'source',
           message:
-            'Runtime smoke runner source must include `fails closed when run mode has no base URL`.'
+            'Runtime smoke runner source must include test case `fails closed when run mode has no base URL`.'
+        });
+      }
+    );
+  });
+
+  test('fails when smoke runner source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'src/smoke-runner/contract.ts': `
+const fakeProof = [
+  'contracts/smoke-targets.yaml',
+  'targets',
+  'blocked_production_when',
+  'enforced_by',
+  'export function parseSmokeTargetsContract',
+  'function parseTarget',
+  'function parseContractCheck',
+  'function requiredBlockedProductionConditionList',
+  'function parseBlockedProductionCondition',
+  'function isRuntimeContractEnforcement',
+  'Bun.YAML.parse'
+];
+export { fakeProof };
+`,
+        'src/smoke-runner/runner.ts': `
+const fakeProof = [
+  'base_url_not_provided',
+  'x-request-id_not_propagated',
+  'traceparent_not_propagated',
+  'blockedProductionWhen',
+  'export function createSmokePlan',
+  'export async function runSmokeTargets',
+  'async function checkEndpoint',
+  'export function parseBaseUrlPairs',
+  'function validateJsonExpectation',
+  'AbortSignal.timeout',
+  'input.fetcher'
+];
+export { fakeProof };
+`,
+        'tests/smoke-runner.test.ts': `
+const fakeProof = [
+  'fails closed when run mode has no base URL',
+  'base_url_not_provided',
+  'platform-security-contracts',
+  'platform-infra-contracts',
+  'platform-observability-contracts',
+  'is plan-only',
+  'malformed_json_response',
+  'money-api',
+  'connectors-platform',
+  'rejects blocked production conditions without enforcement owners',
+  'test(',
+  'expect(',
+  'parseSmokeTargetsContract',
+  'createSmokePlan',
+  'runSmokeTargets'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'src/smoke-runner/contract.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include code fragment `export function parseSmokeTargetsContract`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'src/smoke-runner/runner.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include code fragment `export function createSmokePlan`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'tests/smoke-runner.test.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include test case `fails closed when run mode has no base URL`.'
+        });
+      }
+    );
+  });
+
+  test('fails when smoke runner test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'tests/smoke-runner.test.ts': `
+import { expect, test } from 'bun:test';
+import { parseSmokeTargetsContract } from '../src/smoke-runner/contract';
+import { createSmokePlan, runSmokeTargets } from '../src/smoke-runner/runner';
+const fakeProof = [
+  'fails closed when run mode has no base URL',
+  'base_url_not_provided',
+  'platform-security-contracts',
+  'platform-infra-contracts',
+  'platform-observability-contracts',
+  'is plan-only',
+  'malformed_json_response',
+  'money-api',
+  'connectors-platform',
+  'rejects blocked production conditions without enforcement owners'
+];
+test('smoke runner placeholder', () => {
+  expect(fakeProof).toContain('fails closed when run mode has no base URL');
+  expect([parseSmokeTargetsContract, createSmokePlan, runSmokeTargets]).toHaveLength(3);
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'tests/smoke-runner.test.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include test case `fails closed when run mode has no base URL`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'tests/smoke-runner.test.ts',
+          path: 'source',
+          message:
+            'Runtime smoke runner source must include test case `rejects blocked production conditions without enforcement owners`.'
         });
       }
     );
@@ -924,7 +1440,7 @@ rollback:
     'package.json': `
 {
   "scripts": {
-    "check": "bun test",
+    "check": "tsc --noEmit && bun test",
     "test": "bun test",
     "smoke:plan": "bun scripts/smoke-runner.ts plan",
     "smoke:run": "bun scripts/smoke-runner.ts run"
@@ -936,20 +1452,61 @@ import { runSmokeRunnerCli } from '../src/smoke-runner/cli';
 await runSmokeRunnerCli([]);
 `,
     'src/smoke-runner/contract.ts': `
+const smokeTargetsFile = 'contracts/smoke-targets.yaml';
 export function parseSmokeTargetsContract(source: string): unknown {
-  if (!source.includes('targets')) {
+  Bun.YAML.parse(source);
+  parseTarget({});
+  parseContractCheck({});
+  requiredBlockedProductionConditionList({}, 'blocked_production_when', smokeTargetsFile);
+  if (!source.includes('targets') || !source.includes('blocked_production_when') || !source.includes('enforced_by')) {
     throw new Error('contracts/smoke-targets.yaml must declare targets');
   }
   return {};
+}
+function parseTarget(value: unknown): unknown {
+  return value;
+}
+function parseContractCheck(value: unknown): unknown {
+  return value;
+}
+function requiredBlockedProductionConditionList(value: unknown, key: string, context: string): unknown {
+  return [value, key, context].filter(Boolean);
+}
+function parseBlockedProductionCondition(value: unknown): unknown {
+  return isRuntimeContractEnforcement('smoke_runner') ? value : null;
+}
+function isRuntimeContractEnforcement(value: string): boolean {
+  return value === 'smoke_runner';
 }
 `,
     'src/smoke-runner/runner.ts': `
 export const failClosedReason = 'base_url_not_provided';
 export const missingRequestHeader = 'x-request-id_not_propagated';
 export const missingTraceHeader = 'traceparent_not_propagated';
+export const planMetadata = 'blockedProductionWhen';
+export function createSmokePlan(): unknown {
+  return { blockedProductionWhen: planMetadata };
+}
+export async function runSmokeTargets(input: { readonly fetcher?: typeof fetch } = {}): Promise<unknown> {
+  await checkEndpoint({ fetcher: input.fetcher ?? fetch });
+  return createSmokePlan();
+}
+async function checkEndpoint(input: { readonly fetcher: typeof fetch }): Promise<unknown> {
+  AbortSignal.timeout(1000);
+  input.fetcher;
+  return validateJsonExpectation({});
+}
+export function parseBaseUrlPairs(): ReadonlyMap<string, string> {
+  return new Map();
+}
+function validateJsonExpectation(value: unknown): unknown {
+  return value;
+}
 `,
     'tests/smoke-runner.test.ts': `
-import { test } from 'bun:test';
+import { expect, test } from 'bun:test';
+import { parseSmokeTargetsContract } from '../src/smoke-runner/contract';
+import { createSmokePlan, runSmokeTargets } from '../src/smoke-runner/runner';
 test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
   const securityTarget = 'platform-security-contracts';
@@ -959,6 +1516,7 @@ test('fails closed when run mode has no base URL', () => {
   const malformed = 'malformed_json_response';
   const moneyTarget = 'money-api';
   const connectorsTarget = 'connectors-platform';
+  const structuredBlockerTest = 'rejects blocked production conditions without enforcement owners';
   return [
     reason,
     securityTarget,
@@ -967,8 +1525,13 @@ test('fails closed when run mode has no base URL', () => {
     planOnly,
     malformed,
     moneyTarget,
-    connectorsTarget
-  ];
+    connectorsTarget,
+    structuredBlockerTest
+  ]).toContain(reason);
+  expect([parseSmokeTargetsContract, createSmokePlan, runSmokeTargets]).toHaveLength(3);
+});
+test('rejects blocked production conditions without enforcement owners', () => {
+  expect(parseSmokeTargetsContract).toBeDefined();
 });
 `
   };
@@ -989,6 +1552,9 @@ function createSmokeTargetsYaml(
     repo: zdp-edge-workers
     service_id: edge-webhook-ingress
     process: edge-worker
+    required_before:
+      - hello-edge
+      - production-runtime-template
     healthz:
       method: GET
       path: /healthz
@@ -1005,9 +1571,12 @@ function createSmokeTargetsYaml(
         checks:
           - contracts
     blocked_production_when:
-      - x-request-id is not propagated
-      - traceparent is not propagated when present
-      - edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+      - condition: x-request-id is not propagated
+        enforced_by: smoke_runner
+      - condition: traceparent is not propagated when present
+        enforced_by: smoke_runner
+      - condition: edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions
+        enforced_by: architecture_linter
 `;
   const moneyApi =
     overrides.moneyApi ??
@@ -1016,6 +1585,9 @@ function createSmokeTargetsYaml(
     repo: zdp-money-platform
     service_id: money-api
     process: web
+    required_before:
+      - money-ledger-migration
+      - production-runtime-template
     healthz:
       method: GET
       path: /healthz
@@ -1032,10 +1604,14 @@ function createSmokeTargetsYaml(
         checks:
           - contracts
     blocked_production_when:
-      - healthz service id does not match money-api
-      - readyz checks omit contracts
-      - smoke check requires a real payment, refund, credit mutation, customer account, or provider credential
-      - money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists
+      - condition: healthz service id does not match money-api
+        enforced_by: smoke_runner
+      - condition: readyz checks omit contracts
+        enforced_by: smoke_runner
+      - condition: smoke check requires a real payment, refund, credit mutation, customer account, or provider credential
+        enforced_by: operator_review
+      - condition: money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists
+        enforced_by: architecture_linter
 `;
   const connectorsPlatform =
     overrides.connectorsPlatform ??
@@ -1044,6 +1620,9 @@ function createSmokeTargetsYaml(
     repo: zdp-connectors-platform
     service_id: connectors-platform
     process: web
+    required_before:
+      - provider-onboarding
+      - production-runtime-template
     healthz:
       method: GET
       path: /healthz
@@ -1060,10 +1639,14 @@ function createSmokeTargetsYaml(
         checks:
           - contracts
     blocked_production_when:
-      - healthz service id does not match connectors-platform
-      - readyz checks omit contracts
-      - smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync
-      - connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented
+      - condition: healthz service id does not match connectors-platform
+        enforced_by: smoke_runner
+      - condition: readyz checks omit contracts
+        enforced_by: smoke_runner
+      - condition: smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync
+        enforced_by: operator_review
+      - condition: connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented
+        enforced_by: architecture_linter
 `;
   const contractChecks =
     overrides.contractChecks ??
@@ -1074,6 +1657,9 @@ contract_checks:
     service_id: platform-security
     process: one-shot-checker
     command: bun run contracts:check
+    required_before:
+      - critical-platform-promotion
+      - production-runtime-template
     required_files:
       - contracts/security-baseline.yaml
       - contracts/threat-model-template.yaml
@@ -1085,14 +1671,20 @@ contract_checks:
       - checker does not connect to scanners or providers
       - checker does not require exploit payloads, private incident details, or secret values
     blocked_production_when:
-      - security baseline contracts are missing or unparseable
-      - contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
-      - security promotion relies on dashboard-only scanner evidence
+      - condition: security baseline contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value
+        enforced_by: owning_contract_checker
+      - condition: security promotion relies on dashboard-only scanner evidence
+        enforced_by: operator_review
   - id: platform-infra-contracts
     repo: zdp-platform-infra
     service_id: platform-infra
     process: one-shot-checker
     command: bun run contracts:check
+    required_before:
+      - provider-account-connection
+      - production-runtime-template
     required_files:
       - contracts/resource-inventory.yaml
       - contracts/environment.schema.yaml
@@ -1104,14 +1696,20 @@ contract_checks:
       - provider-neutral dry-run plan has no provider calls
       - checker does not require account ids, server ips, dns challenge secrets, or provider tokens
     blocked_production_when:
-      - infra contracts are missing or unparseable
-      - contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
-      - infra promotion relies on dashboard-only provider evidence
+      - condition: infra contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state
+        enforced_by: owning_contract_checker
+      - condition: infra promotion relies on dashboard-only provider evidence
+        enforced_by: operator_review
   - id: platform-observability-contracts
     repo: zdp-platform-observability
     service_id: platform-observability
     process: one-shot-checker
     command: bun run contracts:check
+    required_before:
+      - observability-provider-connection
+      - production-runtime-template
     required_files:
       - contracts/telemetry-conventions.yaml
       - contracts/dashboard-inventory.yaml
@@ -1122,9 +1720,12 @@ contract_checks:
       - checker does not connect to telemetry providers
       - checker does not require provider tokens, dashboard urls, raw logs, or trace samples
     blocked_production_when:
-      - observability contracts are missing or unparseable
-      - contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload
-      - observability promotion relies on dashboard-only provider evidence
+      - condition: observability contracts are missing or unparseable
+        enforced_by: owning_contract_checker
+      - condition: contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload
+        enforced_by: owning_contract_checker
+      - condition: observability promotion relies on dashboard-only provider evidence
+        enforced_by: operator_review
 `;
 
   return `
@@ -1132,6 +1733,9 @@ targets:
   - id: core-api
     repo: zdp-core-platform
     service_id: core-api
+    required_before:
+      - hello-origin
+      - production-runtime-template
     healthz:
       method: GET
       path: /healthz
@@ -1148,10 +1752,14 @@ targets:
         checks:
           - contracts
     blocked_production_when:
-      - readyz checks omit contracts
+      - condition: readyz checks omit contracts
+        enforced_by: smoke_runner
   - id: app-console
     repo: zdp-web-apps
     service_id: app-console
+    required_before:
+      - first-console-preview
+      - production-runtime-template
     healthz:
       method: GET
       path: /healthz
@@ -1177,9 +1785,12 @@ targets:
     required_env:
       - ZDP_CORE_API_BASE_URL
     blocked_production_when:
-      - ZDP_CORE_API_BASE_URL is missing
-      - readyz does not report core-api as an upstream
-      - app shell attempts direct core, money, privacy, or credential datastore access
+      - condition: ZDP_CORE_API_BASE_URL is missing
+        enforced_by: smoke_runner
+      - condition: readyz does not report core-api as an upstream
+        enforced_by: smoke_runner
+      - condition: app shell attempts direct core, money, privacy, or credential datastore access
+        enforced_by: architecture_linter
 ${edgeWebhookIngress}
 ${moneyApi}
 ${connectorsPlatform}

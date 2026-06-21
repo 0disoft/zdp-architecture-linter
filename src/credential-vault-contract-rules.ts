@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const CREDENTIAL_VAULT_REPOSITORY_NAME = 'zdp-privacy-credential-vault';
 const CREDENTIAL_VAULT_RULE_ID = 'ZDP-CREDENTIAL-001';
@@ -42,6 +46,14 @@ const REQUIRED_CREDENTIAL_CHECKER_FILES = [
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_CHECK_SCRIPT_FRAGMENTS = [
+  'tsc --noEmit',
+  'bun test',
+  'bun run contracts:check',
+  'cargo fmt --check',
+  'cargo check',
+  'cargo test'
+] as const;
 
 const REQUIRED_CREDENTIAL_RUNTIME_FILES = [
   CARGO_FILE,
@@ -794,6 +806,25 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+  if (typeof checkScript !== 'string') {
+    return diagnostics;
+  }
+
+  for (const fragment of REQUIRED_CHECK_SCRIPT_FRAGMENTS) {
+    if (checkScript.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        PACKAGE_FILE,
+        'scripts.check',
+        `Credential vault package \`check\` script must include \`${fragment}\`.`
+      )
+    );
+  }
+
   return diagnostics;
 }
 
@@ -855,20 +886,55 @@ async function validateCheckerSurface(
             'CRED_CAPABILITY_TTL_TOO_HIGH',
             'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
             'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
-            'CRED_RESTORE_SECRET_VALUES_ALLOWED'
+            'CRED_RESTORE_SECRET_VALUES_ALLOWED',
+            'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED',
+            'CRED_RUST_CREDENTIAL_CLASS_DRIFT',
+            'CRED_RUST_SECRET_LOGGING_PATTERN',
+            'RUST_MARKER_EXPECTATIONS',
+            'RUST_WEAK_CRYPTO_PATTERNS'
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceCodeIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'export function validateCredentialVaultContracts',
+            'function validateCredentialBoundary',
+            'function validateCapabilityIssuance',
+            'function validateAccessAudit',
+            'function validateStorageBoundary',
+            'function validateRustBoundaryMarkers',
+            'function validateRustSecurityPatterns'
           ]
         })),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
+      : validateSourceCodeIncludes({
           file: CHECKER_TEST_FILE,
           source: testSource.source,
           requiredFragments: [
+            'validateCredentialVaultContracts',
+            'loadCommittedContracts',
+            'expect('
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceTestNames({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredNames: [
+            'validates the committed credential vault contracts',
             'fails when a credential class allows plaintext export',
             'fails when capability ttl is longer than five minutes',
             'fails when connector repositories can persist capabilities',
+            'fails when stateless credential capabilities are allowed by default',
             'fails when audit records can include encrypted credential payloads',
-            'fails when restore evidence can include secret values'
+            'fails when restore evidence can include secret values',
+            'fails when Rust boundary markers drift from YAML contracts',
+            'fails when Rust source introduces weak crypto or secret logging patterns'
           ]
         }))
   ];
@@ -1082,6 +1148,56 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const codeOnlySource = stripCommentsAndStringLiterals(input.source);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (codeOnlySource.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        'source',
+        `Credential vault checker source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = extractTestCallNames(input.source);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const name of input.requiredNames) {
+    if (testNames.includes(name)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        'source',
+        `Credential vault checker source must include test case \`${name}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredLinterRule(value: unknown): readonly Diagnostic[] {
   const requiredRules = readStringArrayPath(
     value,
@@ -1109,7 +1225,14 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -1126,6 +1249,31 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (candidate.every((item) => typeof item === 'string' && item.trim().length > 0)) {
+    return [];
+  }
+
+  return [
+    createCredentialDiagnostic(
+      input.file,
+      input.path,
+      `Credential vault contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
+    )
+  ];
 }
 
 function validateExactValue(input: {

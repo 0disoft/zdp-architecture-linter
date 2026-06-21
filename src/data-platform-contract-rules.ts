@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const DATA_PLATFORM_REPOSITORY_NAME = 'zdp-data-platform';
 const DATA_PLATFORM_CONTRACT_RULE_ID = 'ZDP-DATA-PLATFORM-001';
@@ -33,6 +37,12 @@ const REQUIRED_DATA_PLATFORM_CHECKER_FILES = [
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_CHECK_SCRIPT_FRAGMENTS = [
+  'tsc --noEmit',
+  'bun test',
+  'bun run contracts:check',
+  'bun run contracts:check -- --architecture'
+] as const;
 
 const REQUIRED_INGEST_ENVELOPE_FIELDS = [
   'event_id',
@@ -488,6 +498,24 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+
+  if (typeof checkScript === 'string') {
+    for (const requiredFragment of REQUIRED_CHECK_SCRIPT_FRAGMENTS) {
+      if (checkScript.includes(requiredFragment)) {
+        continue;
+      }
+
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          PACKAGE_FILE,
+          'scripts.check',
+          `Data platform package \`check\` script must include \`${requiredFragment}\`.`
+        )
+      );
+    }
+  }
+
   return diagnostics;
 }
 
@@ -554,72 +582,105 @@ async function validateCheckerSurface(
         })),
     ...(validatorSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_VALIDATOR_FILE,
-          source: validatorSource.source,
-          requiredFragments: [
-            ANALYTICS_INGEST_FILE,
-            CLICKHOUSE_STORAGE_FILE,
-            DELETION_ANONYMIZATION_FILE,
-            'service.yaml',
-            'validateAnalyticsQueueEnvelope',
-            'analytics.event.ingest',
-            'FORBIDDEN_ENVELOPE_FIELDS',
-            'payload_ref',
-            'validateArchitectureEventCompatibility',
-            'catalogs/events.yaml',
-            'schemas/events/',
-            '$id',
-            'properties.schema_version.const',
-            'initial_events'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              ANALYTICS_INGEST_FILE,
+              CLICKHOUSE_STORAGE_FILE,
+              DELETION_ANONYMIZATION_FILE,
+              'service.yaml',
+              'analytics.event.ingest',
+              'FORBIDDEN_ENVELOPE_FIELDS',
+              'payload_ref',
+              'catalogs/events.yaml',
+              'schemas/events/',
+              '$id',
+              'properties.schema_version.const',
+              'initial_events'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'export function validateAnalyticsQueueEnvelope',
+              'export function assertAnalyticsQueueEnvelope',
+              'export async function checkDataContracts',
+              'async function validateArchitectureEventCompatibility',
+              'function validateForbiddenEnvelopeFields',
+              'function validateSupportedSchemaVersions'
+            ]
+          })
+        ]),
     ...(runtimeSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_RUNTIME_FILE,
-          source: runtimeSource.source,
-          requiredFragments: [
-            'validateAnalyticsIngestRuntime',
-            'validateAnalyticsQueueEnvelope',
-            'repositoryRoot',
-            'architectureRoot',
-            'validateRepositoryEventContract',
-            'validateArchitectureEventSchema',
-            'initial_events',
-            'catalogs/events.yaml',
-            'schemas/events/',
-            'FORBIDDEN_EVENT_FIELDS',
-            'validateQueueEventConsistency',
-            'idempotency_key',
-            'payload_ref',
-            'must not include raw or sensitive field'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: CHECKER_RUNTIME_FILE,
+            source: runtimeSource.source,
+            requiredFragments: [
+              'repositoryRoot',
+              'architectureRoot',
+              'initial_events',
+              'catalogs/events.yaml',
+              'schemas/events/',
+              'FORBIDDEN_EVENT_FIELDS',
+              'idempotency_key',
+              'payload_ref',
+              'must not include raw or sensitive field'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_RUNTIME_FILE,
+            source: runtimeSource.source,
+            requiredFragments: [
+              'export async function validateAnalyticsIngestRuntime',
+              'validateAnalyticsQueueEnvelope',
+              'validateRepositoryEventContract',
+              'validateArchitectureEventSchema',
+              'validateQueueEventConsistency'
+            ]
+          })
+        ]),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_TEST_FILE,
-          source: testSource.source,
-          requiredFragments: [
-            'fails when required analytics contract fields drift',
-            'fails when ClickHouse is treated as final truth',
-            'fails when deletion ownership boundaries drift',
-            'rejects queue envelopes with raw payloads or missing trace fields',
-            'rejects nested sensitive fields in queue envelopes',
-            'passes current repository contracts against architecture event schemas',
-            'fails when an initial event is missing from the architecture catalog',
-            'fails when an architecture event schema file is missing',
-            'fails when an architecture event schema id drifts',
-            'fails when an architecture event schema omits required envelope fields',
-            'fails when an architecture event schema is malformed JSON',
-            'validates a runtime ingest candidate without writing to storage',
-            'rejects runtime events with nested sensitive fields',
-            'rejects runtime events that are not registered before ingest',
-            'rejects runtime events when architecture schema drifts',
-            'rejects runtime queue and event idempotency drift'
-          ]
-        }))
+      : [
+          ...validateSourceTestNames({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredTestNames: [
+              'fails when required analytics contract fields drift',
+              'fails when analytics schema versions are invalid',
+              'fails when ClickHouse is treated as final truth',
+              'fails when deletion ownership boundaries drift',
+              'rejects queue envelopes with raw payloads or missing trace fields',
+              'rejects nested sensitive fields in queue envelopes',
+              'passes current repository contracts against architecture event schemas',
+              'fails when an initial event is missing from the architecture catalog',
+              'fails when an architecture event schema file is missing',
+              'fails when an architecture event schema id drifts',
+              'fails when an architecture event schema omits required envelope fields',
+              'fails when an architecture event schema is malformed JSON',
+              'validates a runtime ingest candidate without writing to storage',
+              'rejects runtime events with nested sensitive fields',
+              'rejects runtime events that are not registered before ingest',
+              'rejects runtime events when architecture schema drifts',
+              'rejects runtime queue and event idempotency drift'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredFragments: [
+              'expect(',
+              'checkDataContracts',
+              'validateAnalyticsQueueEnvelope',
+              'validateAnalyticsIngestRuntime'
+            ]
+          })
+        ])
   ];
 }
 
@@ -647,6 +708,58 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredTestNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = new Set(extractTestCallNames(input.source));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const testName of input.requiredTestNames) {
+    if (testNames.has(testName)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        input.file,
+        'source',
+        `Data platform checker source must include test case \`${testName}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const sourceWithoutCommentsOrStrings = stripCommentsAndStringLiterals(
+    input.source
+  );
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (sourceWithoutCommentsOrStrings.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        input.file,
+        'source',
+        `Data platform checker source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredStringArrayEntries(input: {
   readonly value: unknown;
   readonly file: string;
@@ -655,7 +768,14 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -672,6 +792,31 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (candidate.every((item) => typeof item === 'string' && item.trim().length > 0)) {
+    return [];
+  }
+
+  return [
+    createDataPlatformDiagnostic(
+      input.file,
+      input.path,
+      `Data platform contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
+    )
+  ];
 }
 
 function validateExactValue(input: {

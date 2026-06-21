@@ -119,6 +119,10 @@ sdk_surface:
     - standard error envelope handling
   must_not_own:
     - refresh token storage
+  forbidden_values:
+    - raw_customer_payload
+  cross_language_requirements:
+    - UTC ISO-8601 datetime strings
 `
       },
       async (repositoryRoot) => {
@@ -147,9 +151,101 @@ sdk_surface:
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
           file: 'contracts/sdk-surface.yaml',
+          path: 'sdk_surface.required_behaviors',
+          message:
+            'Client SDKs contract `contracts/sdk-surface.yaml` must include `trace_id propagation` in `sdk_surface.required_behaviors`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-surface.yaml',
           path: 'sdk_surface.must_not_own',
           message:
             'Client SDKs contract `contracts/sdk-surface.yaml` must include `API contract source` in `sdk_surface.must_not_own`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-surface.yaml',
+          path: 'sdk_surface.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/sdk-surface.yaml` must include `refresh_token_plaintext` in `sdk_surface.forbidden_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-surface.yaml',
+          path: 'sdk_surface.cross_language_requirements',
+          message:
+            'Client SDKs contract `contracts/sdk-surface.yaml` must include `decimal-safe amount strings` in `sdk_surface.cross_language_requirements`.'
+        });
+      }
+    );
+  });
+
+  test('fails when client SDK contract string lists include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'contracts/sdk-surface.yaml': `
+sdk_surface:
+  languages:
+    - typescript
+    - dart
+    - rust
+  required_behaviors:
+    - request_id propagation
+    - trace_id propagation
+    - idempotency key propagation
+    - standard error envelope handling
+    - pagination handling
+    - upload handoff
+    - behavior_id: fake-object-item
+  must_not_own:
+    - API contract source
+    - refresh token storage
+    - final authorization decisions
+    - product-specific business rules
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
+    - screen_component_payload
+  cross_language_requirements:
+    - UTC ISO-8601 datetime strings
+    - decimal-safe amount strings
+    - BCP 47 locale strings
+    - normalized error code enum
+    - request id passthrough
+    - trace id passthrough
+status: skeleton
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-surface.yaml',
+          path: 'sdk_surface.required_behaviors',
+          message:
+            'Client SDKs contract `contracts/sdk-surface.yaml` must declare `sdk_surface.required_behaviors` as a string list.'
+        });
+        expect(diagnostics).not.toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-surface.yaml',
+          path: 'sdk_surface.required_behaviors',
+          message:
+            'Client SDKs contract `contracts/sdk-surface.yaml` must include `request_id propagation` in `sdk_surface.required_behaviors`.'
         });
       }
     );
@@ -228,6 +324,14 @@ sdk_generation_source:
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
           file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.required_route_metadata',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `credential_policy` in `sdk_generation_source.required_route_metadata`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
           path: 'sdk_generation_source.required_error_metadata',
           message:
             'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `trace_id` in `sdk_generation_source.required_error_metadata`.'
@@ -255,6 +359,14 @@ sdk_generation_source:
           path: 'sdk_generation_source.forbidden_values',
           message:
             'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `authorization_header` in `sdk_generation_source.forbidden_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `stack_trace` in `sdk_generation_source.forbidden_values`.'
         });
       }
     );
@@ -351,6 +463,14 @@ libs_export_source:
           message:
             'Client SDKs contract `contracts/libs-export-source.yaml` must include `provider_token` in `libs_export_source.forbidden_values`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/libs-export-source.yaml',
+          path: 'libs_export_source.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/libs-export-source.yaml` must include `stack_trace` in `libs_export_source.forbidden_values`.'
+        });
       }
     );
   });
@@ -398,6 +518,14 @@ auth_helper:
           message:
             'Client SDKs contract `contracts/auth-helper.yaml` must include `entitlement authority` in `auth_helper.must_not_own`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/auth-helper.yaml',
+          path: 'auth_helper.must_not_own',
+          message:
+            'Client SDKs contract `contracts/auth-helper.yaml` must include `session token storage` in `auth_helper.must_not_own`.'
+        });
       }
     );
   });
@@ -441,9 +569,58 @@ upload_client:
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
           file: 'contracts/upload-client.yaml',
+          path: 'upload_client.owns',
+          message:
+            'Client SDKs contract `contracts/upload-client.yaml` must include `idempotency key propagation` in `upload_client.owns`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/upload-client.yaml',
           path: 'upload_client.must_not_own',
           message:
             'Client SDKs contract `contracts/upload-client.yaml` must include `raw provider URLs as public contract` in `upload_client.must_not_own`.'
+        });
+      }
+    );
+  });
+
+  test('fails when the client SDK package check script drops typecheck or tests', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "bun run contracts:check && bun run generation:plan -- --check",
+    "test": "bun test",
+    "contracts:check": "bun scripts/check-client-sdk-contracts.ts",
+    "generation:plan": "bun scripts/plan-sdk-generation.ts --api-contracts-root ../zdp-api-contracts"
+  }
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Client SDKs package `check` script must include `tsc --noEmit`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Client SDKs package `check` script must include `bun test`.'
         });
       }
     );
@@ -512,7 +689,7 @@ test('SDK plan placeholder', () => {});
           file: 'tests/client-sdk-contracts.test.ts',
           path: 'source',
           message:
-            'Client SDKs checker source must include `fails when SDKs consume a different generation input source`.'
+            'Client SDKs checker source must include test case `fails when SDKs consume a different generation input source`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -552,7 +729,236 @@ test('SDK plan placeholder', () => {});
           file: 'tests/sdk-generation-plan.test.ts',
           path: 'source',
           message:
-            'Client SDKs checker source must include `builds a deterministic SDK generation plan`.'
+            'Client SDKs checker source must include test case `builds a deterministic SDK generation plan`.'
+        });
+      }
+    );
+  });
+
+  test('fails when client SDK source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'src/client-sdk-contracts/validator.ts': `
+const fakeProof = [
+  'REQUIRED_SDK_LANGUAGES',
+  'REQUIRED_SDK_BEHAVIORS',
+  'REQUIRED_SDK_FORBIDDEN_OWNERSHIP',
+  'REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES',
+  'REQUIRED_CROSS_LANGUAGE_REQUIREMENTS',
+  'REQUIRED_SDK_GENERATION_SOURCE_REPO',
+  'REQUIRED_SDK_GENERATION_SOURCE_CONTRACT',
+  'REQUIRED_ROUTE_METADATA',
+  'REQUIRED_ERROR_METADATA',
+  'REQUIRED_WEBHOOK_METADATA',
+  'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
+  'REQUIRED_LIBS_EXPORT_SOURCE_REPO',
+  'REQUIRED_LIBS_SOURCE_EXPORTS',
+  'REQUIRED_LIBS_SOURCE_METADATA',
+  'REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES',
+  'REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP',
+  'REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP',
+  'CLIENT_SDK_LANGUAGE_MISSING',
+  'CLIENT_SDK_BEHAVIOR_MISSING',
+  'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING',
+  'CLIENT_SDK_FORBIDDEN_VALUE_MISSING',
+  'CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING',
+  'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT',
+  'CLIENT_SDK_ROUTE_METADATA_MISSING',
+  'CLIENT_SDK_ERROR_METADATA_MISSING',
+  'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
+  'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT',
+  'CLIENT_SDK_LIBS_EXPORT_MISSING',
+  'CLIENT_SDK_LIBS_METADATA_MISSING',
+  'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING',
+  'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING',
+  'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING',
+  'export function validateClientSdkContracts',
+  'function validateRequiredEntries',
+  'function validateExactString',
+  'function validateAllowedStatus'
+];
+export { fakeProof };
+`,
+        'tests/client-sdk-contracts.test.ts': `
+const fakeProof = [
+  'fails when TypeScript SDK language support disappears',
+  'fails when SDKs stop propagating request ids',
+  'fails when SDKs become the API contract source',
+  'fails when SDKs consume a different generation input source',
+  'fails when SDKs consume a different libs export source',
+  'fails when libs schema export disappears from SDK generation metadata',
+  'fails when libs trace metadata disappears from SDK generation handoff',
+  'fails when libs source allows provider tokens into SDK handoff',
+  'fails when route idempotency metadata is dropped',
+  'fails when error trace metadata is dropped',
+  'fails when raw authorization headers become allowed SDK generation values',
+  'fails when auth helpers store refresh tokens',
+  'fails when upload clients expose raw provider URLs as public contracts',
+  'test(',
+  'expect(',
+  'validateClientSdkContracts'
+];
+export { fakeProof };
+`,
+        'src/sdk-generation-plan/plan.ts': `
+const fakeProof = [
+  'buildSdkGenerationPlan',
+  'validateClientSdkContracts',
+  '@zdp/client-sdk',
+  'zdp_client_sdk',
+  'zdp-client-sdk',
+  'validateApiGenerationInput',
+  'validateApiExportPlanHandoff',
+  'apiInputSourceContracts',
+  'apiExportPlanOutputKinds',
+  'apiExportPlanTraceFields',
+  'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
+  'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_FORBIDDEN_VALUE_DRIFT',
+  'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
+  'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
+  'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS',
+  'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
+  'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED',
+  'export function buildSdkGenerationPlan',
+  'function validatePlanInputs',
+  'function validateApiGenerationInput',
+  'function validateApiExportPlanHandoff',
+  'function createPlanTarget'
+];
+export { fakeProof };
+`,
+        'tests/sdk-generation-plan.test.ts': `
+const fakeProof = [
+  'builds a deterministic SDK generation plan',
+  'fails when contract validation fails before planning',
+  'fails when libs source does not cover an SDK generation target',
+  'fails when API SDK generation input drifts from client SDK source',
+  'fails when API export plan no longer exposes SDK generation output',
+  'fails when API export plan can write artifacts before SDK generation',
+  'zdp-libs-ts/schema',
+  'request_id',
+  'trace_id',
+  'test(',
+  'expect(',
+  'buildSdkGenerationPlan'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'src/client-sdk-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include code fragment `export function validateClientSdkContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'tests/client-sdk-contracts.test.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include test case `fails when TypeScript SDK language support disappears`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'src/sdk-generation-plan/plan.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include code fragment `export function buildSdkGenerationPlan`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'tests/sdk-generation-plan.test.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include test case `builds a deterministic SDK generation plan`.'
+        });
+      }
+    );
+  });
+
+  test('fails when client SDK test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidClientSdkContractFiles(),
+        'tests/client-sdk-contracts.test.ts': `
+import { expect, test } from 'bun:test';
+import { validateClientSdkContracts } from '../src/client-sdk-contracts/validator';
+const fakeProof = [
+  'fails when TypeScript SDK language support disappears',
+  'fails when SDKs stop propagating request ids',
+  'fails when SDKs become the API contract source',
+  'fails when SDKs consume a different generation input source',
+  'fails when SDKs consume a different libs export source',
+  'fails when libs schema export disappears from SDK generation metadata',
+  'fails when libs trace metadata disappears from SDK generation handoff',
+  'fails when libs source allows provider tokens into SDK handoff',
+  'fails when route idempotency metadata is dropped',
+  'fails when error trace metadata is dropped',
+  'fails when raw authorization headers become allowed SDK generation values',
+  'fails when auth helpers store refresh tokens',
+  'fails when upload clients expose raw provider URLs as public contracts'
+];
+test('client SDK placeholder', () => {
+  expect(fakeProof).toContain('fails when SDKs consume a different generation input source');
+  expect(validateClientSdkContracts).toBeDefined();
+});
+`,
+        'tests/sdk-generation-plan.test.ts': `
+import { expect, test } from 'bun:test';
+import { buildSdkGenerationPlan } from '../src/sdk-generation-plan/plan';
+const fakeProof = [
+  'builds a deterministic SDK generation plan',
+  'fails when contract validation fails before planning',
+  'fails when libs source does not cover an SDK generation target',
+  'fails when API SDK generation input drifts from client SDK source',
+  'fails when API export plan no longer exposes SDK generation output',
+  'fails when API export plan can write artifacts before SDK generation',
+  'zdp-libs-ts/schema',
+  'request_id',
+  'trace_id'
+];
+test('SDK generation plan placeholder', () => {
+  expect(fakeProof).toContain('builds a deterministic SDK generation plan');
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: createClientSdksServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'tests/client-sdk-contracts.test.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include test case `fails when SDKs consume a different generation input source`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'tests/sdk-generation-plan.test.ts',
+          path: 'source',
+          message:
+            'Client SDKs checker source must include test case `builds a deterministic SDK generation plan`.'
         });
       }
     );
@@ -575,6 +981,48 @@ test('SDK plan placeholder', () => {});
         });
 
         expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'service.yaml',
+          path: 'policy_gates.required_linter_rules',
+          message:
+            'Client SDKs service contract must require `ZDP-CLIENT-SDKS-001`.'
+        });
+      }
+    );
+  });
+
+  test('fails when service contract linter rules include non-string items', async () => {
+    await withRepositoryRoot(
+      createValidClientSdkContractFiles(),
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryClientSdksContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-client-sdks'
+            },
+            policy_gates: {
+              required_linter_rules: [
+                'ZDP-REPO-BASELINE-001',
+                'ZDP-CLIENT-SDKS-001',
+                {
+                  rule_id: 'ZDP-CLIENT-SDKS-001'
+                }
+              ]
+            }
+          }
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'service.yaml',
+          path: 'policy_gates.required_linter_rules',
+          message:
+            'Client SDKs service contract must declare `policy_gates.required_linter_rules` as a string list.'
+        });
+        expect(diagnostics).not.toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
           file: 'service.yaml',
@@ -633,6 +1081,8 @@ sdk_surface:
     - rust
   required_behaviors:
     - request_id propagation
+    - trace_id propagation
+    - idempotency key propagation
     - standard error envelope handling
     - pagination handling
     - upload handoff
@@ -641,6 +1091,19 @@ sdk_surface:
     - refresh token storage
     - final authorization decisions
     - product-specific business rules
+  forbidden_values:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
+    - screen_component_payload
+  cross_language_requirements:
+    - UTC ISO-8601 datetime strings
+    - decimal-safe amount strings
+    - BCP 47 locale strings
 `,
     'contracts/sdk-generation-source.yaml': `
 sdk_generation_source:
@@ -663,6 +1126,13 @@ sdk_generation_source:
     - permission_check
     - audit_event
     - idempotency
+    - owner_boundary
+    - tenant_boundary
+    - request_id_required
+    - trace_id_required
+    - session_effect
+    - credential_policy
+    - success_statuses
     - error_codes
   required_error_metadata:
     - code
@@ -691,6 +1161,8 @@ sdk_generation_source:
     - provider_secret
     - authorization_header
     - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
     - screen_component_payload
 `,
     'contracts/libs-export-source.yaml': `
@@ -731,7 +1203,9 @@ libs_export_source:
     - raw_provider_error
     - provider_secret
     - provider_token
+    - refresh_token_plaintext
     - secret_value
+    - stack_trace
     - screen_component_payload
 `,
     'contracts/auth-helper.yaml': `
@@ -742,6 +1216,8 @@ auth_helper:
     - current user context normalization input
   must_not_own:
     - refresh token storage
+    - session token storage
+    - raw credential storage
     - membership authority
     - entitlement authority
     - provider identity mapping source
@@ -753,6 +1229,8 @@ upload_client:
     - signed upload request shape
     - upload error mapping
     - request_id propagation
+    - trace_id propagation
+    - idempotency key propagation
   must_not_own:
     - object storage bucket names
     - raw provider URLs as public contract
@@ -823,6 +1301,8 @@ export interface ClientSdkContractDiagnostic {
 const REQUIRED_SDK_LANGUAGES = [];
 const REQUIRED_SDK_BEHAVIORS = [];
 const REQUIRED_SDK_FORBIDDEN_OWNERSHIP = [];
+const REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES = [];
+const REQUIRED_CROSS_LANGUAGE_REQUIREMENTS = [];
 const REQUIRED_SDK_GENERATION_SOURCE_REPO = 'zdp-api-contracts';
 const REQUIRED_SDK_GENERATION_SOURCE_CONTRACT = 'contracts/sdk-generation-input.yaml';
 const REQUIRED_ROUTE_METADATA = [];
@@ -838,6 +1318,8 @@ const REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP = [];
 const CLIENT_SDK_LANGUAGE_MISSING = 'CLIENT_SDK_LANGUAGE_MISSING';
 const CLIENT_SDK_BEHAVIOR_MISSING = 'CLIENT_SDK_BEHAVIOR_MISSING';
 const CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING';
+const CLIENT_SDK_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_FORBIDDEN_VALUE_MISSING';
+const CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING = 'CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING';
 const CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT = 'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT';
 const CLIENT_SDK_ROUTE_METADATA_MISSING = 'CLIENT_SDK_ROUTE_METADATA_MISSING';
 const CLIENT_SDK_ERROR_METADATA_MISSING = 'CLIENT_SDK_ERROR_METADATA_MISSING';
@@ -848,10 +1330,28 @@ const CLIENT_SDK_LIBS_METADATA_MISSING = 'CLIENT_SDK_LIBS_METADATA_MISSING';
 const CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING';
 const CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING';
 const CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING';
+export function validateClientSdkContracts(): unknown {
+  return [
+    validateRequiredEntries(REQUIRED_SDK_LANGUAGES),
+    validateExactString(REQUIRED_SDK_GENERATION_SOURCE_REPO),
+    validateAllowedStatus('skeleton')
+  ];
+}
+function validateRequiredEntries(value: unknown): unknown {
+  return value;
+}
+function validateExactString(value: unknown): unknown {
+  return value;
+}
+function validateAllowedStatus(value: unknown): unknown {
+  return value;
+}
 export {
   REQUIRED_SDK_LANGUAGES,
   REQUIRED_SDK_BEHAVIORS,
   REQUIRED_SDK_FORBIDDEN_OWNERSHIP,
+  REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES,
+  REQUIRED_CROSS_LANGUAGE_REQUIREMENTS,
   REQUIRED_SDK_GENERATION_SOURCE_REPO,
   REQUIRED_SDK_GENERATION_SOURCE_CONTRACT,
   REQUIRED_ROUTE_METADATA,
@@ -867,6 +1367,8 @@ export {
   CLIENT_SDK_LANGUAGE_MISSING,
   CLIENT_SDK_BEHAVIOR_MISSING,
   CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING,
+  CLIENT_SDK_FORBIDDEN_VALUE_MISSING,
+  CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING,
   CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT,
   CLIENT_SDK_ROUTE_METADATA_MISSING,
   CLIENT_SDK_ERROR_METADATA_MISSING,
@@ -880,22 +1382,73 @@ export {
 };
 `,
     'tests/client-sdk-contracts.test.ts': `
+import { expect, it } from 'bun:test';
+import { validateClientSdkContracts } from '../src/client-sdk-contracts/validator';
 const cases = [
   'fails when TypeScript SDK language support disappears',
   'fails when SDKs stop propagating request ids',
+  'fails when SDKs stop propagating trace ids',
   'fails when SDKs become the API contract source',
+  'fails when SDK surface allows plaintext refresh tokens',
+  'fails when SDK surface drops cross-language amount rules',
   'fails when SDKs consume a different generation input source',
   'fails when SDKs consume a different libs export source',
   'fails when libs schema export disappears from SDK generation metadata',
   'fails when libs trace metadata disappears from SDK generation handoff',
   'fails when libs source allows provider tokens into SDK handoff',
   'fails when route idempotency metadata is dropped',
+  'fails when route credential policy metadata is dropped',
   'fails when error trace metadata is dropped',
   'fails when raw authorization headers become allowed SDK generation values',
+  'fails when stack traces become allowed SDK generation values',
   'fails when auth helpers store refresh tokens',
+  'fails when auth helpers store session tokens',
+  'fails when upload clients drop idempotency key propagation',
   'fails when upload clients expose raw provider URLs as public contracts'
 ];
-export { cases };
+it('client SDK contract cases stay covered', () => {
+  expect(cases).toContain('fails when SDKs consume a different generation input source');
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when TypeScript SDK language support disappears', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when SDKs stop propagating request ids', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when SDKs become the API contract source', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when SDKs consume a different generation input source', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when SDKs consume a different libs export source', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when libs schema export disappears from SDK generation metadata', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when libs trace metadata disappears from SDK generation handoff', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when libs source allows provider tokens into SDK handoff', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when route idempotency metadata is dropped', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when error trace metadata is dropped', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when raw authorization headers become allowed SDK generation values', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when auth helpers store refresh tokens', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
+it('fails when upload clients expose raw provider URLs as public contracts', () => {
+  expect(validateClientSdkContracts).toBeDefined();
+});
 `,
     'src/sdk-generation-plan/cli.ts': `
 import { loadClientSdkContracts } from '../client-sdk-contracts/parser';
@@ -946,6 +1499,7 @@ const codes = [
   'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
   'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
   'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
+  'CLIENT_SDK_API_INPUT_FORBIDDEN_VALUE_DRIFT',
   'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
   'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
   'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS'
@@ -953,12 +1507,16 @@ const codes = [
 const apiInputSourceContracts = [];
 const apiExportPlanOutputKinds = [];
 const apiExportPlanTraceFields = [];
+function validatePlanInputs(): void {}
 function validateApiGenerationInput(): void {}
 function validateApiExportPlanHandoff(): void {}
+function createPlanTarget(): void {}
 export function buildSdkGenerationPlan(): void {
   validateClientSdkContracts;
+  validatePlanInputs;
   validateApiGenerationInput;
   validateApiExportPlanHandoff;
+  createPlanTarget;
   apiInputSourceContracts;
   apiExportPlanOutputKinds;
   apiExportPlanTraceFields;
@@ -976,18 +1534,42 @@ export interface SdkGenerationPlan {
 }
 `,
     'tests/sdk-generation-plan.test.ts': `
+import { expect, it } from 'bun:test';
+import { buildSdkGenerationPlan } from '../src/sdk-generation-plan/plan';
 const cases = [
   'builds a deterministic SDK generation plan',
   'fails when contract validation fails before planning',
   'fails when libs source does not cover an SDK generation target',
   'fails when API SDK generation input drifts from client SDK source',
+  'fails when API SDK generation input forbidden values drift from client SDK source',
   'fails when API export plan no longer exposes SDK generation output',
   'fails when API export plan can write artifacts before SDK generation',
   'zdp-libs-ts/schema',
   'request_id',
   'trace_id'
 ];
-export { cases };
+it('SDK generation plan cases stay covered', () => {
+  expect(cases).toContain('builds a deterministic SDK generation plan');
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('builds a deterministic SDK generation plan', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('fails when contract validation fails before planning', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('fails when libs source does not cover an SDK generation target', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('fails when API SDK generation input drifts from client SDK source', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('fails when API export plan no longer exposes SDK generation output', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
+it('fails when API export plan can write artifacts before SDK generation', () => {
+  expect(buildSdkGenerationPlan).toBeDefined();
+});
 `
   };
 }

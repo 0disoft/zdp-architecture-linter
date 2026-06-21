@@ -500,14 +500,30 @@ const files = [
   'contracts/webhook-replay.yaml',
   'contracts/provider-boundaries.yaml'
 ];
+const providerFields = [
+  'credential_capability_required',
+  'privacy_scope_required',
+  'sync_state_policy',
+  'webhook_replay_policy'
+];
 `,
     'src/connectors-contracts/types.ts': `
 export interface ConnectorsContracts {}
+export interface ProviderDefinition {
+  readonly credentialCapabilityRequired: boolean;
+  readonly privacyScopeRequired: boolean;
+  readonly syncStatePolicy: string;
+  readonly webhookReplayPolicy: string;
+}
 `,
     'src/connectors-contracts/validator.ts': `
 const REQUIRED_PROVIDERS = ['google', 'microsoft', 'telegram'];
 const codes = [
   'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+  'CON_PROVIDER_CREDENTIAL_CAPABILITY_NOT_REQUIRED',
+  'CON_PROVIDER_PRIVACY_SCOPE_NOT_REQUIRED',
+  'CON_PROVIDER_SYNC_STATE_POLICY_INVALID',
+  'CON_PROVIDER_WEBHOOK_REPLAY_POLICY_INVALID',
   'CON_SYNC_RAW_PAYLOAD_ALLOWED',
   'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
   'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
@@ -518,6 +534,7 @@ const codes = [
 const cases = [
   'fails when a required provider is missing',
   'fails when a provider bypasses credential vault capability',
+  'fails when a provider skips credential capability and replay policies',
   'fails when sync-state allows raw provider payload storage',
   'fails when webhook replay drops signature verification',
   'fails when webhook replay stores raw payloads instead of payload references',
@@ -711,6 +728,7 @@ pub const MARKER: BoundaryMarker = BoundaryMarker {
 pub const INITIAL_PROVIDER_BOUNDARIES: &[&str] = &["google", "microsoft", "telegram"];
 
 pub const DELEGATED_DECISIONS: &[&str] = &[
+    "credential_plaintext",
     "final_authorization",
     "entitlement",
     "ledger_or_credit_mutation",
@@ -726,38 +744,56 @@ provider_required:
   - provider_id
   - adapter_boundary
   - credential_source
+  - credential_capability_required
   - privacy_broker_required
+  - privacy_scope_required
   - sync_state_required
+  - sync_state_policy
+  - webhook_signature_required
+  - webhook_replay_policy
   - request_id_required
   - trace_id_required
 providers:
   - id: google
     adapter_boundary: logical
     credential_source: credential_vault_capability
+    credential_capability_required: true
     privacy_broker_required: true
+    privacy_scope_required: true
     sync_state_required: true
+    sync_state_policy: cursor_reference_only
     webhook_signature_required: true
+    webhook_replay_policy: signed_idempotent_payload_ref
     request_id_required: true
     trace_id_required: true
   - id: microsoft
     adapter_boundary: logical
     credential_source: credential_vault_capability
+    credential_capability_required: true
     privacy_broker_required: true
+    privacy_scope_required: true
     sync_state_required: true
+    sync_state_policy: cursor_reference_only
     webhook_signature_required: true
+    webhook_replay_policy: signed_idempotent_payload_ref
     request_id_required: true
     trace_id_required: true
   - id: telegram
     adapter_boundary: logical
     credential_source: credential_vault_capability
+    credential_capability_required: true
     privacy_broker_required: true
+    privacy_scope_required: true
     sync_state_required: true
+    sync_state_policy: cursor_reference_only
     webhook_signature_required: true
+    webhook_replay_policy: signed_idempotent_payload_ref
     request_id_required: true
     trace_id_required: true
 forbidden_values:
   - oauth_refresh_token_plaintext
   - provider_api_credential_plaintext
+  - provider_api_key_plaintext
   - webhook_secret_plaintext
   - authorization_header
   - cookie
@@ -783,6 +819,8 @@ required_fields:
   - cursor_ref
   - schema_version
   - last_success_at
+  - retry_count
+  - next_retry_at
   - failure_count
   - request_id
   - trace_id
@@ -807,6 +845,8 @@ forbidden_values:
   - raw_mail_body
   - raw_message_body
   - raw_file_body
+  - raw_contact_body
+  - credential_plaintext
 `,
     'contracts/webhook-replay.yaml': `
 contract:
@@ -824,11 +864,13 @@ payload_storage:
 required_fields:
   - provider_id
   - provider_event_id
+  - signature_verified
   - idempotency_key
   - received_at
   - request_id
   - trace_id
   - payload_ref
+  - dead_letter_policy
 retry_policy:
   max_attempts_required: true
   next_attempt_at_required: true
@@ -841,6 +883,8 @@ forbidden_values:
   - authorization_header
   - cookie
   - payment_payload
+  - raw_provider_payload
+  - raw_payment_payload
   - raw_mail_body
   - raw_message_body
   - raw_file_body
@@ -869,7 +913,9 @@ forbidden_ownership:
   - credential_plaintext
   - final_authorization
   - entitlement_decision
+  - entitlement
   - ledger_credit_mutation
+  - ledger_or_credit_mutation
   - privacy_data_access_policy
   - raw_source_data_policy
 forbidden_values:

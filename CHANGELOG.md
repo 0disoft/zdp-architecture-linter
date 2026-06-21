@@ -1,5 +1,73 @@
 # 변경 내역
 
+## 0.39.52
+
+- `ZDP-CONNECTORS-001`이 provider registry의 credential capability, privacy scope, sync-state policy, webhook replay policy를 검사하도록 강화했다.
+- connectors sync-state, webhook replay, provider-boundary 필수 필드와 금지값을 repo-local Rust boundary marker와 맞췄다.
+- connectors contract fixture와 source proof를 새 provider/sync/webhook 경계 필드 기준으로 동기화했다.
+- `ZDP-SECURITY-001` source proof가 threat-model review status, secret logging evidence, promotion blocker 타입/파서 표면 누락도 잡도록 강화했다.
+
+## 0.39.51
+
+- `ZDP-PRIVACY-001`이 privacy-access-broker package `check` script가 TypeScript, Bun tests, contract checker, Rust fmt/check/test를 함께 실행하는지 검사한다.
+- privacy-access-broker checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 code fragment와 실제 test case name 검사를 추가했다.
+- privacy access broker contract 문자열 목록에 비문자 항목이 섞이면 실패하도록 강화했다.
+
+## 0.39.50
+
+- `ZDP-CREDENTIAL-001`이 credential-vault package `check` script가 TypeScript, Bun tests, contract checker, Rust fmt/check/test를 함께 실행하는지 검사한다.
+- credential-vault checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 code fragment와 실제 test case name 검사를 추가했다.
+- credential vault contract 문자열 목록에 비문자 항목이 섞이면 실패하도록 강화했다.
+
+## 0.39.49
+
+- `ZDP-DATA-PLATFORM-001`이 data-platform package `check` script가 typecheck, test, contract check, architecture compatibility check를 함께 실행하는지 검사한다.
+- `zdp-data-platform` repo-local checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 code fragment와 실제 test case name 검사를 추가했다.
+- data-platform contract 문자열 목록에 비문자 항목이 섞이면 실패하도록 강화했다.
+
+## 0.39.48
+
+- `ZDP-OBS-001`이 deploy/job/webhook telemetry attribute, dashboard required panel, alert field/severity/signal 형식까지 검사하도록 강화했다.
+- `zdp-platform-observability` repo-local checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 code fragment와 실제 test case name 검사를 추가했다.
+- observability package `check` script가 typecheck, test, contract check를 함께 실행하는지 검사한다.
+
+## 0.39.47
+
+- `ZDP-INFRA-001`이 provider 연결 전 `contracts/dns-records.yaml`의 `records`와 `contracts/firewall-rules.yaml`의 `rules`가 비어 있는지 검사하도록 강화했다.
+- `zdp-platform-infra` repo-local checker source proof가 DNS/firewall entry 금지 회귀 테스트 fragment를 포함해야 통과하도록 맞췄다.
+
+## 0.39.46
+
+- `ZDP-INFRA-001`이 `contracts/dns-records.yaml`과 `contracts/firewall-rules.yaml`을 직접 읽어 provider mutation, secret value, live DNS record/server IP 허용 drift를 검사하도록 강화했다.
+- `zdp-platform-infra` repo-local checker source proof가 pricing review required, DNS provider mutation, firewall live IP 회귀 테스트 fragment를 포함해야 통과하도록 맞췄다.
+
+## 0.39.45
+
+- `ZDP-SECURITY-001`이 threat model template의 `template.review_statuses`에 `draft`, `reviewed`, `blocked`, `accepted_risk`가 유지되는지 검사하도록 강화했다.
+- secret handling contract의 `logging.allowed_evidence`와 `promotion_blocking` 필수 항목을 중앙 linter에서도 검사해 repo-local checker와 검증 강도를 맞췄다.
+- `zdp-platform-security` repo-local checker source proof가 review status, logging evidence, secret promotion blocker 회귀 테스트 fragment를 포함해야 통과하도록 강화했다.
+
+## 0.39.44
+
+- `ZDP-RUNTIME-001`이 runtime smoke target과 one-shot contract check target의 `required_before` gate를 검사하도록 강화했다.
+- runtime smoke target의 `required_before`, readiness check, required file/evidence 같은 필수 문자열 배열에 비문자 항목이 섞이면 실패하도록 강화했다.
+- `blocked_production_when`이 구조화 객체와 legacy 문자열 항목을 섞어도 실패하도록 malformed item 진단을 추가했다.
+- `ZDP-CLIENT-SDKS-001`이 client SDK package `check` script가 typecheck, test, contract check, generation plan check를 함께 실행하는지 검사한다.
+- runtime smoke runner와 client SDK checker의 source proof가 문자열 리터럴 stub이나 placeholder test로 통과하지 않도록 code fragment와 `test()`/`it()` 실제 test case name 검사를 추가했다.
+- runtime smoke contract의 `contract_checks` 배열 누락 진단이 중복으로 쏟아지지 않게 정리하고, client SDK service contract와 contract YAML의 필수 문자열 배열이 비문자열 항목을 포함하면 실패하도록 강화했다.
+
+## 0.39.43
+
+- `ZDP-RUNTIME-001`이 `zdp-platform-runtime`의 `blocked_production_when`을 문자열 목록이 아니라 `{ condition, enforced_by }` 객체 목록으로 검사하도록 강화했다.
+- runtime smoke target과 one-shot contract check target의 enforcement owner가 `smoke_runner`, `architecture_linter`, `owning_contract_checker`, `operator_review` 중 하나로 유지되는지 검사한다.
+- runtime package `check` script가 `tsc --noEmit`과 `bun test`를 함께 실행하는지 검사한다.
+
+## 0.39.42
+
+- `ZDP-CLIENT-SDKS-001`이 `zdp-client-sdks`의 auth/session route metadata, forbidden values, SDK surface cross-language rules를 검사하도록 강화했다.
+- SDK surface와 upload client가 `trace_id`와 idempotency key propagation을 잃거나, auth helper가 session token/raw credential storage 금지 경계를 잃으면 실패한다.
+- client SDK generation plan이 API input forbidden values를 양방향 drift로 검증하는 표면도 유지하도록 검사한다.
+
 ## 0.39.41
 
 - `ZDP-CORE-001`이 `zdp-core-platform` auth durable storage transaction/outbox 계약을 검사하도록 강화했다.

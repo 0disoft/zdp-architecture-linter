@@ -371,6 +371,14 @@ test('placeholder', () => {});
           ruleId: 'ZDP-CREDENTIAL-001',
           severity: 'error',
           file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Credential vault package `check` script must include `cargo test`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'package.json',
           path: 'scripts.test',
           message: 'Credential vault package must declare `test` script.'
         });
@@ -396,7 +404,169 @@ test('placeholder', () => {});
           file: 'tests/credential-vault-contracts.test.ts',
           path: 'source',
           message:
-            'Credential vault checker source must include `fails when restore evidence can include secret values`.'
+            'Credential vault checker source must include test case `validates the committed credential vault contracts`.'
+        });
+      }
+    );
+  });
+
+  test('fails when credential vault contract string lists include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCredentialVaultFiles(),
+        'contracts/credential-boundary.yaml': `
+contract:
+  version: 1
+  status: draft
+credential_owner: zdp-privacy-credential-vault
+default_plaintext_export_allowed: false
+credential_classes:
+  - id: oauth_refresh_token
+    plaintext_export_allowed: false
+    encryption_required: true
+    audit_required: true
+    rotation_supported: true
+    storage_scope: vault_only
+  - id: webhook_secret
+    plaintext_export_allowed: false
+    encryption_required: true
+    audit_required: true
+    rotation_supported: true
+    storage_scope: vault_only
+  - id: provider_api_credential
+    plaintext_export_allowed: false
+    encryption_required: true
+    audit_required: true
+    rotation_supported: true
+    storage_scope: vault_only
+forbidden_consumers:
+  - product_repositories
+  - connector_repositories
+  - ai_services
+  - analytics_services
+  - {}
+forbidden_values:
+  - raw_oauth_refresh_token
+  - raw_webhook_secret
+  - raw_provider_api_credential
+  - authorization_header
+  - cookie
+capabilities:
+  max_ttl_seconds: 300
+  requester_must_identify:
+    - service_id
+    - actor_id
+    - tenant_id
+    - purpose
+    - credential_ref
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/credential-boundary.yaml',
+          path: 'forbidden_consumers',
+          message:
+            'Credential vault contract `contracts/credential-boundary.yaml` must declare `forbidden_consumers` as a string list.'
+        });
+      }
+    );
+  });
+
+  test('fails when credential vault source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCredentialVaultFiles(),
+        'src/credential-vault-contracts/validator.ts': `
+const fakeProof = [
+  'MAX_CAPABILITY_TTL_SECONDS',
+  'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED',
+  'CRED_CAPABILITY_TTL_TOO_HIGH',
+  'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+  'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
+  'CRED_RESTORE_SECRET_VALUES_ALLOWED',
+  'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED',
+  'CRED_RUST_CREDENTIAL_CLASS_DRIFT',
+  'CRED_RUST_SECRET_LOGGING_PATTERN',
+  'RUST_MARKER_EXPECTATIONS',
+  'RUST_WEAK_CRYPTO_PATTERNS',
+  'export function validateCredentialVaultContracts',
+  'function validateCredentialBoundary',
+  'function validateCapabilityIssuance',
+  'function validateAccessAudit',
+  'function validateStorageBoundary',
+  'function validateRustBoundaryMarkers',
+  'function validateRustSecurityPatterns'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/credential-vault-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Credential vault checker source must include code fragment `export function validateCredentialVaultContracts`.'
+        });
+      }
+    );
+  });
+
+  test('fails when credential vault test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCredentialVaultFiles(),
+        'tests/credential-vault-contracts.test.ts': `
+import { expect, test } from 'bun:test';
+import { validateCredentialVaultContracts } from '../src/credential-vault-contracts/validator';
+
+function loadCommittedContracts() {}
+
+const fakeProof = [
+  'validates the committed credential vault contracts',
+  'fails when a credential class allows plaintext export',
+  'fails when capability ttl is longer than five minutes',
+  'fails when connector repositories can persist capabilities',
+  'fails when stateless credential capabilities are allowed by default',
+  'fails when audit records can include encrypted credential payloads',
+  'fails when restore evidence can include secret values',
+  'fails when Rust boundary markers drift from YAML contracts',
+  'fails when Rust source introduces weak crypto or secret logging patterns'
+];
+
+test('credential vault placeholder', () => {
+  expect(fakeProof).toContain('validates the committed credential vault contracts');
+  expect(validateCredentialVaultContracts).toBeDefined();
+  expect(loadCommittedContracts).toBeDefined();
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'tests/credential-vault-contracts.test.ts',
+          path: 'source',
+          message:
+            'Credential vault checker source must include test case `validates the committed credential vault contracts`.'
         });
       }
     );
@@ -486,7 +656,7 @@ function createValidCredentialVaultFiles(): Record<string, string> {
     'package.json': `
 {
   "scripts": {
-    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check": "tsc --noEmit && bun test && bun run contracts:check && cargo fmt --check && cargo check && cargo test",
     "test": "bun test",
     "contracts:check": "bun scripts/check-credential-vault-contracts.ts"
   }
@@ -526,22 +696,93 @@ export interface CredentialVaultContracts {}
 `,
     'src/credential-vault-contracts/validator.ts': `
 const MAX_CAPABILITY_TTL_SECONDS = 300;
-const codes = [
-  'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED',
-  'CRED_CAPABILITY_TTL_TOO_HIGH',
-  'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
-  'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
-  'CRED_RESTORE_SECRET_VALUES_ALLOWED'
+const RUST_MARKER_EXPECTATIONS = [
+  'CRED_RUST_CREDENTIAL_CLASS_DRIFT',
 ];
+const RUST_WEAK_CRYPTO_PATTERNS = [];
+const RUST_SECRET_LOGGING_PATTERN = /secret/;
+
+export function validateCredentialVaultContracts(): void {
+  validateCredentialBoundary();
+  validateCapabilityIssuance();
+  validateAccessAudit();
+  validateStorageBoundary();
+  validateRustBoundaryMarkers();
+  validateRustSecurityPatterns();
+}
+
+function validateCredentialBoundary(): void {
+  const code = 'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED';
+  void code;
+}
+
+function validateCapabilityIssuance(): void {
+  const codes = [
+    'CRED_CAPABILITY_TTL_TOO_HIGH',
+    'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+    'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED'
+  ];
+  void codes;
+}
+
+function validateAccessAudit(): void {
+  const code = 'CRED_AUDIT_FORBIDDEN_VALUE_MISSING';
+  void code;
+}
+
+function validateStorageBoundary(): void {
+  const code = 'CRED_RESTORE_SECRET_VALUES_ALLOWED';
+  void code;
+}
+
+function validateRustBoundaryMarkers(): void {
+  void RUST_MARKER_EXPECTATIONS;
+  void MAX_CAPABILITY_TTL_SECONDS;
+}
+
+function validateRustSecurityPatterns(): void {
+  const code = 'CRED_RUST_SECRET_LOGGING_PATTERN';
+  void RUST_WEAK_CRYPTO_PATTERNS;
+  void RUST_SECRET_LOGGING_PATTERN;
+  void code;
+}
 `,
     'tests/credential-vault-contracts.test.ts': `
-const cases = [
-  'fails when a credential class allows plaintext export',
-  'fails when capability ttl is longer than five minutes',
-  'fails when connector repositories can persist capabilities',
-  'fails when audit records can include encrypted credential payloads',
-  'fails when restore evidence can include secret values'
-];
+import { expect, it } from 'bun:test';
+import { validateCredentialVaultContracts } from '../src/credential-vault-contracts/validator';
+
+function loadCommittedContracts() {
+  return {};
+}
+
+it('validates the committed credential vault contracts', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+  expect(loadCommittedContracts).toBeDefined();
+});
+it('fails when a credential class allows plaintext export', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when capability ttl is longer than five minutes', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when connector repositories can persist capabilities', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when stateless credential capabilities are allowed by default', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when audit records can include encrypted credential payloads', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when restore evidence can include secret values', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when Rust boundary markers drift from YAML contracts', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when Rust source introduces weak crypto or secret logging patterns', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
 `,
     'Cargo.toml': `
 [package]

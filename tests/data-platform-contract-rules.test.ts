@@ -325,6 +325,14 @@ test('data platform placeholder', () => {});
           ruleId: 'ZDP-DATA-PLATFORM-001',
           severity: 'error',
           file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Data platform package `check` script must include `bun test`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'package.json',
           path: 'scripts.test',
           message: 'Data platform package must declare `test` script.'
         });
@@ -356,7 +364,7 @@ test('data platform placeholder', () => {});
           file: 'src/analytics-ingest/runtime.ts',
           path: 'source',
           message:
-            'Data platform checker source must include `validateAnalyticsQueueEnvelope`.'
+            'Data platform checker source must include code fragment `validateAnalyticsQueueEnvelope`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-DATA-PLATFORM-001',
@@ -364,7 +372,173 @@ test('data platform placeholder', () => {});
           file: 'tests/analytics-ingest.test.ts',
           path: 'source',
           message:
-            'Data platform checker source must include `rejects nested sensitive fields in queue envelopes`.'
+            'Data platform checker source must include test case `rejects nested sensitive fields in queue envelopes`.'
+        });
+      }
+    );
+  });
+
+  test('fails when data platform contract string lists include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidDataPlatformFiles(),
+        'contracts/analytics-ingest.yaml': `
+source_of_truth:
+  event_catalog: zdp-architecture/catalogs/events.yaml
+  event_schemas: zdp-architecture/schemas/events/*.json
+ingest:
+  accepted_from:
+    - zdp-edge-workers
+  direct_browser_to_clickhouse: forbidden
+  direct_product_api_to_clickhouse: forbidden
+  envelope_required:
+    - event_id
+    - schema_version
+    - source
+    - product_id
+    - occurred_at
+    - request_id
+    - trace_id
+    - 123
+  idempotency:
+    key: event_id
+  queue:
+    dead_letter_required: true
+forbidden_payload_fields:
+  - email
+  - name
+  - phone
+  - address
+  - raw_search_query
+  - form_body
+  - prompt_body
+  - mail_subject
+  - authorization
+  - cookie
+  - secret
+  - token
+  - payment_payload
+initial_events:
+  - web.page-viewed
+  - product.signup-started
+  - product.signup-completed
+  - product.activation-completed
+  - experiment.exposure-recorded
+  - billing.checkout-started
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryDataPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createDataPlatformServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingest.yaml',
+          path: 'ingest.envelope_required',
+          message:
+            'Data platform contract `contracts/analytics-ingest.yaml` must declare `ingest.envelope_required` as a string list.'
+        });
+      }
+    );
+  });
+
+  test('fails when data platform source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidDataPlatformFiles(),
+        'src/analytics-ingest/validator.ts': `
+const fakeProof = [
+  'contracts/analytics-ingest.yaml',
+  'contracts/clickhouse-storage.yaml',
+  'contracts/deletion-anonymization.yaml',
+  'service.yaml',
+  'analytics.event.ingest',
+  'FORBIDDEN_ENVELOPE_FIELDS',
+  'payload_ref',
+  'catalogs/events.yaml',
+  'schemas/events/',
+  '$id',
+  'properties.schema_version.const',
+  'initial_events',
+  'export function validateAnalyticsQueueEnvelope',
+  'export function assertAnalyticsQueueEnvelope',
+  'export async function checkDataContracts',
+  'async function validateArchitectureEventCompatibility',
+  'function validateForbiddenEnvelopeFields',
+  'function validateSupportedSchemaVersions'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryDataPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createDataPlatformServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'src/analytics-ingest/validator.ts',
+          path: 'source',
+          message:
+            'Data platform checker source must include code fragment `export function validateAnalyticsQueueEnvelope`.'
+        });
+      }
+    );
+  });
+
+  test('fails when data platform test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidDataPlatformFiles(),
+        'tests/analytics-ingest.test.ts': `
+import { expect, test } from 'bun:test';
+import { checkDataContracts, validateAnalyticsQueueEnvelope } from '../src/analytics-ingest/validator';
+import { validateAnalyticsIngestRuntime } from '../src/analytics-ingest/runtime';
+const fakeProof = [
+  'fails when required analytics contract fields drift',
+  'fails when analytics schema versions are invalid',
+  'fails when ClickHouse is treated as final truth',
+  'fails when deletion ownership boundaries drift',
+  'rejects queue envelopes with raw payloads or missing trace fields',
+  'rejects nested sensitive fields in queue envelopes',
+  'passes current repository contracts against architecture event schemas',
+  'fails when an initial event is missing from the architecture catalog',
+  'fails when an architecture event schema file is missing',
+  'fails when an architecture event schema id drifts',
+  'fails when an architecture event schema omits required envelope fields',
+  'fails when an architecture event schema is malformed JSON',
+  'validates a runtime ingest candidate without writing to storage',
+  'rejects runtime events with nested sensitive fields',
+  'rejects runtime events that are not registered before ingest',
+  'rejects runtime events when architecture schema drifts',
+  'rejects runtime queue and event idempotency drift'
+];
+test('data platform placeholder', () => {
+  expect(fakeProof).toContain('rejects nested sensitive fields in queue envelopes');
+  expect(checkDataContracts).toBeDefined();
+  expect(validateAnalyticsQueueEnvelope).toBeDefined();
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryDataPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createDataPlatformServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'tests/analytics-ingest.test.ts',
+          path: 'source',
+          message:
+            'Data platform checker source must include test case `fails when required analytics contract fields drift`.'
         });
       }
     );
@@ -502,7 +676,7 @@ function createValidDataPlatformCheckerFiles(): Record<string, string> {
     'package.json': `
 {
   "scripts": {
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && bun test && bun run contracts:check && bun run contracts:check -- --architecture ../../docs/zdp-architecture",
     "test": "bun test",
     "contracts:check": "bun scripts/check-data-contracts.ts"
   }
@@ -558,13 +732,21 @@ const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
 const SERVICE_FILE = 'service.yaml';
 const FORBIDDEN_ENVELOPE_FIELDS = [];
 const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
+export async function checkDataContracts(): Promise<void> {
+  validateSupportedSchemaVersions();
+  await validateArchitectureEventCompatibility();
+}
 export function validateAnalyticsQueueEnvelope(): void {
   const jobType = 'analytics.event.ingest';
   const payload_ref = 'analytics-event://evt';
+  validateForbiddenEnvelopeFields();
   void jobType;
   void payload_ref;
 }
-function validateArchitectureEventCompatibility(): void {
+export function assertAnalyticsQueueEnvelope(): void {
+  validateAnalyticsQueueEnvelope();
+}
+async function validateArchitectureEventCompatibility(): Promise<void> {
   const schemaRoot = 'schemas/events/';
   const idField = '$id';
   const schemaVersion = 'properties.schema_version.const';
@@ -574,6 +756,8 @@ function validateArchitectureEventCompatibility(): void {
   void schemaVersion;
   void initialEvents;
 }
+function validateForbiddenEnvelopeFields(): void {}
+function validateSupportedSchemaVersions(): void {}
 export {
   ANALYTICS_INGEST_FILE,
   CLICKHOUSE_STORAGE_FILE,
@@ -621,25 +805,61 @@ function validateQueueEventConsistency(value: {
 }
 `,
     'tests/analytics-ingest.test.ts': `
-const cases = [
-  'fails when required analytics contract fields drift',
-  'fails when ClickHouse is treated as final truth',
-  'fails when deletion ownership boundaries drift',
-  'rejects queue envelopes with raw payloads or missing trace fields',
-  'rejects nested sensitive fields in queue envelopes',
-  'passes current repository contracts against architecture event schemas',
-  'fails when an initial event is missing from the architecture catalog',
-  'fails when an architecture event schema file is missing',
-  'fails when an architecture event schema id drifts',
-  'fails when an architecture event schema omits required envelope fields',
-  'fails when an architecture event schema is malformed JSON',
-  'validates a runtime ingest candidate without writing to storage',
-  'rejects runtime events with nested sensitive fields',
-  'rejects runtime events that are not registered before ingest',
-  'rejects runtime events when architecture schema drifts',
-  'rejects runtime queue and event idempotency drift'
-];
-export { cases };
+import { expect, test } from 'bun:test';
+import { checkDataContracts, validateAnalyticsQueueEnvelope } from '../src/analytics-ingest/validator';
+import { validateAnalyticsIngestRuntime } from '../src/analytics-ingest/runtime';
+
+test('fails when required analytics contract fields drift', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when analytics schema versions are invalid', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when ClickHouse is treated as final truth', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when deletion ownership boundaries drift', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('rejects queue envelopes with raw payloads or missing trace fields', () => {
+  expect(validateAnalyticsQueueEnvelope).toBeDefined();
+});
+test('rejects nested sensitive fields in queue envelopes', () => {
+  expect(validateAnalyticsQueueEnvelope).toBeDefined();
+});
+test('passes current repository contracts against architecture event schemas', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when an initial event is missing from the architecture catalog', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when an architecture event schema file is missing', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when an architecture event schema id drifts', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when an architecture event schema omits required envelope fields', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when an architecture event schema is malformed JSON', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('validates a runtime ingest candidate without writing to storage', () => {
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
+test('rejects runtime events with nested sensitive fields', () => {
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
+test('rejects runtime events that are not registered before ingest', () => {
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
+test('rejects runtime events when architecture schema drifts', () => {
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
+test('rejects runtime queue and event idempotency drift', () => {
+  expect(validateAnalyticsIngestRuntime).toBeDefined();
+});
 `
   };
 }

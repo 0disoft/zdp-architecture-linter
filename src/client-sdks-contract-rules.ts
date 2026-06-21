@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const CLIENT_SDKS_REPOSITORY_NAME = 'zdp-client-sdks';
 const CLIENT_SDKS_CONTRACT_RULE_ID = 'ZDP-CLIENT-SDKS-001';
@@ -51,9 +55,18 @@ const REQUIRED_PACKAGE_SCRIPTS = [
   'generation:plan'
 ] as const;
 
+const REQUIRED_CHECK_SCRIPT_FRAGMENTS = [
+  'tsc --noEmit',
+  'bun test',
+  'bun run contracts:check',
+  'bun run generation:plan -- --check'
+] as const;
+
 const REQUIRED_SDK_LANGUAGES = ['typescript', 'dart', 'rust'] as const;
 const REQUIRED_SDK_BEHAVIORS = [
   'request_id propagation',
+  'trace_id propagation',
+  'idempotency key propagation',
   'standard error envelope handling',
   'pagination handling',
   'upload handoff'
@@ -63,6 +76,21 @@ const REQUIRED_SDK_FORBIDDEN_OWNERSHIP = [
   'refresh token storage',
   'final authorization decisions',
   'product-specific business rules'
+] as const;
+const REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
+  'screen_component_payload'
+] as const;
+const REQUIRED_CROSS_LANGUAGE_REQUIREMENTS = [
+  'UTC ISO-8601 datetime strings',
+  'decimal-safe amount strings',
+  'BCP 47 locale strings'
 ] as const;
 
 const REQUIRED_SDK_GENERATION_SOURCE_REPO = 'zdp-api-contracts';
@@ -81,6 +109,13 @@ const REQUIRED_ROUTE_METADATA = [
   'permission_check',
   'audit_event',
   'idempotency',
+  'owner_boundary',
+  'tenant_boundary',
+  'request_id_required',
+  'trace_id_required',
+  'session_effect',
+  'credential_policy',
+  'success_statuses',
   'error_codes'
 ] as const;
 const REQUIRED_ERROR_METADATA = [
@@ -113,6 +148,8 @@ const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [
   'provider_secret',
   'authorization_header',
   'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
   'screen_component_payload'
 ] as const;
 
@@ -151,7 +188,9 @@ const REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES = [
   'raw_provider_error',
   'provider_secret',
   'provider_token',
+  'refresh_token_plaintext',
   'secret_value',
+  'stack_trace',
   'screen_component_payload'
 ] as const;
 
@@ -161,6 +200,8 @@ const REQUIRED_AUTH_HELPER_OWNERSHIP = [
 ] as const;
 const REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP = [
   'refresh token storage',
+  'session token storage',
+  'raw credential storage',
   'membership authority',
   'entitlement authority',
   'provider identity mapping source'
@@ -169,7 +210,9 @@ const REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP = [
 const REQUIRED_UPLOAD_CLIENT_OWNERSHIP = [
   'signed upload request shape',
   'upload error mapping',
-  'request_id propagation'
+  'request_id propagation',
+  'trace_id propagation',
+  'idempotency key propagation'
 ] as const;
 const REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP = [
   'object storage bucket names',
@@ -375,6 +418,20 @@ function validateSdkSurfaceContract(value: unknown): readonly Diagnostic[] {
       path: 'sdk_surface.must_not_own',
       field: 'sdk_surface.must_not_own',
       requiredEntries: REQUIRED_SDK_FORBIDDEN_OWNERSHIP
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_SURFACE_FILE,
+      path: 'sdk_surface.forbidden_values',
+      field: 'sdk_surface.forbidden_values',
+      requiredEntries: REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SDK_SURFACE_FILE,
+      path: 'sdk_surface.cross_language_requirements',
+      field: 'sdk_surface.cross_language_requirements',
+      requiredEntries: REQUIRED_CROSS_LANGUAGE_REQUIREMENTS
     })
   ];
 }
@@ -589,6 +646,24 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+
+  if (typeof checkScript === 'string') {
+    for (const requiredFragment of REQUIRED_CHECK_SCRIPT_FRAGMENTS) {
+      if (checkScript.includes(requiredFragment)) {
+        continue;
+      }
+
+      diagnostics.push(
+        createClientSdksDiagnostic(
+          PACKAGE_FILE,
+          'scripts.check',
+          `Client SDKs package \`check\` script must include \`${requiredFragment}\`.`
+        )
+      );
+    }
+  }
+
   return diagnostics;
 }
 
@@ -654,61 +729,84 @@ async function validateCheckerSurface(
         })),
     ...(validatorSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_VALIDATOR_FILE,
-          source: validatorSource.source,
-          requiredFragments: [
-            'REQUIRED_SDK_LANGUAGES',
-            'REQUIRED_SDK_BEHAVIORS',
-            'REQUIRED_SDK_FORBIDDEN_OWNERSHIP',
-            'REQUIRED_SDK_GENERATION_SOURCE_REPO',
-            'REQUIRED_SDK_GENERATION_SOURCE_CONTRACT',
-            'REQUIRED_ROUTE_METADATA',
-            'REQUIRED_ERROR_METADATA',
-            'REQUIRED_WEBHOOK_METADATA',
-            'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
-            'REQUIRED_LIBS_EXPORT_SOURCE_REPO',
-            'REQUIRED_LIBS_SOURCE_EXPORTS',
-            'REQUIRED_LIBS_SOURCE_METADATA',
-            'REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES',
-            'REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP',
-            'REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP',
-            'CLIENT_SDK_LANGUAGE_MISSING',
-            'CLIENT_SDK_BEHAVIOR_MISSING',
-            'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING',
-            'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT',
-            'CLIENT_SDK_ROUTE_METADATA_MISSING',
-            'CLIENT_SDK_ERROR_METADATA_MISSING',
-            'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
-            'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT',
-            'CLIENT_SDK_LIBS_EXPORT_MISSING',
-            'CLIENT_SDK_LIBS_METADATA_MISSING',
-            'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING',
-            'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING',
-            'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'REQUIRED_SDK_LANGUAGES',
+              'REQUIRED_SDK_BEHAVIORS',
+              'REQUIRED_SDK_FORBIDDEN_OWNERSHIP',
+              'REQUIRED_SDK_SURFACE_FORBIDDEN_VALUES',
+              'REQUIRED_CROSS_LANGUAGE_REQUIREMENTS',
+              'REQUIRED_SDK_GENERATION_SOURCE_REPO',
+              'REQUIRED_SDK_GENERATION_SOURCE_CONTRACT',
+              'REQUIRED_ROUTE_METADATA',
+              'REQUIRED_ERROR_METADATA',
+              'REQUIRED_WEBHOOK_METADATA',
+              'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
+              'REQUIRED_LIBS_EXPORT_SOURCE_REPO',
+              'REQUIRED_LIBS_SOURCE_EXPORTS',
+              'REQUIRED_LIBS_SOURCE_METADATA',
+              'REQUIRED_LIBS_SOURCE_FORBIDDEN_VALUES',
+              'REQUIRED_AUTH_HELPER_FORBIDDEN_OWNERSHIP',
+              'REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP',
+              'CLIENT_SDK_LANGUAGE_MISSING',
+              'CLIENT_SDK_BEHAVIOR_MISSING',
+              'CLIENT_SDK_FORBIDDEN_OWNERSHIP_MISSING',
+              'CLIENT_SDK_FORBIDDEN_VALUE_MISSING',
+              'CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING',
+              'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT',
+              'CLIENT_SDK_ROUTE_METADATA_MISSING',
+              'CLIENT_SDK_ERROR_METADATA_MISSING',
+              'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
+              'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT',
+              'CLIENT_SDK_LIBS_EXPORT_MISSING',
+              'CLIENT_SDK_LIBS_METADATA_MISSING',
+              'CLIENT_SDK_LIBS_FORBIDDEN_VALUE_MISSING',
+              'CLIENT_SDK_AUTH_HELPER_FORBIDDEN_OWNERSHIP_MISSING',
+              'CLIENT_SDK_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP_MISSING'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'export function validateClientSdkContracts',
+              'function validateRequiredEntries',
+              'function validateExactString',
+              'function validateAllowedStatus'
+            ]
+          })
+        ]),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_TEST_FILE,
-          source: testSource.source,
-          requiredFragments: [
-            'fails when TypeScript SDK language support disappears',
-            'fails when SDKs stop propagating request ids',
-            'fails when SDKs become the API contract source',
-            'fails when SDKs consume a different generation input source',
-            'fails when SDKs consume a different libs export source',
-            'fails when libs schema export disappears from SDK generation metadata',
-            'fails when libs trace metadata disappears from SDK generation handoff',
-            'fails when libs source allows provider tokens into SDK handoff',
-            'fails when route idempotency metadata is dropped',
-            'fails when error trace metadata is dropped',
-            'fails when raw authorization headers become allowed SDK generation values',
-            'fails when auth helpers store refresh tokens',
-            'fails when upload clients expose raw provider URLs as public contracts'
-          ]
-        })),
+      : [
+          ...validateSourceTestNames({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredTestNames: [
+              'fails when TypeScript SDK language support disappears',
+              'fails when SDKs stop propagating request ids',
+              'fails when SDKs become the API contract source',
+              'fails when SDKs consume a different generation input source',
+              'fails when SDKs consume a different libs export source',
+              'fails when libs schema export disappears from SDK generation metadata',
+              'fails when libs trace metadata disappears from SDK generation handoff',
+              'fails when libs source allows provider tokens into SDK handoff',
+              'fails when route idempotency metadata is dropped',
+              'fails when error trace metadata is dropped',
+              'fails when raw authorization headers become allowed SDK generation values',
+              'fails when auth helpers store refresh tokens',
+              'fails when upload clients expose raw provider URLs as public contracts'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredFragments: ['expect(', 'validateClientSdkContracts']
+          })
+        ]),
     ...(generationPlanScript.source === null
       ? []
       : validateSourceIncludes({
@@ -757,31 +855,45 @@ async function validateCheckerSurface(
         })),
     ...(generationPlanSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: GENERATION_PLAN_SOURCE_FILE,
-          source: generationPlanSource.source,
-          requiredFragments: [
-            'buildSdkGenerationPlan',
-            'validateClientSdkContracts',
-            '@zdp/client-sdk',
-            'zdp_client_sdk',
-            'zdp-client-sdk',
-            'validateApiGenerationInput',
-            'validateApiExportPlanHandoff',
-            'apiInputSourceContracts',
-            'apiExportPlanOutputKinds',
-            'apiExportPlanTraceFields',
-            'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
-            'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
-            'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
-            'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
-            'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
-            'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
-            'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS',
-            'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
-            'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: GENERATION_PLAN_SOURCE_FILE,
+            source: generationPlanSource.source,
+            requiredFragments: [
+              'buildSdkGenerationPlan',
+              'validateClientSdkContracts',
+              '@zdp/client-sdk',
+              'zdp_client_sdk',
+              'zdp-client-sdk',
+              'validateApiGenerationInput',
+              'validateApiExportPlanHandoff',
+              'apiInputSourceContracts',
+              'apiExportPlanOutputKinds',
+              'apiExportPlanTraceFields',
+              'CLIENT_SDK_API_INPUT_TARGET_DRIFT',
+              'CLIENT_SDK_API_INPUT_ROUTE_METADATA_DRIFT',
+              'CLIENT_SDK_API_INPUT_ERROR_METADATA_DRIFT',
+              'CLIENT_SDK_API_INPUT_WEBHOOK_METADATA_DRIFT',
+              'CLIENT_SDK_API_INPUT_FORBIDDEN_VALUE_DRIFT',
+              'CLIENT_SDK_API_EXPORT_PLAN_OUTPUT_MISSING',
+              'CLIENT_SDK_API_EXPORT_PLAN_TRACE_FIELD_MISSING',
+              'CLIENT_SDK_API_EXPORT_PLAN_WRITES_ARTIFACTS',
+              'CLIENT_SDK_GENERATION_PLAN_LIBS_TARGET_MISSING',
+              'CLIENT_SDK_GENERATION_PLAN_TARGET_UNSUPPORTED'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: GENERATION_PLAN_SOURCE_FILE,
+            source: generationPlanSource.source,
+            requiredFragments: [
+              'export function buildSdkGenerationPlan',
+              'function validatePlanInputs',
+              'function validateApiGenerationInput',
+              'function validateApiExportPlanHandoff',
+              'function createPlanTarget'
+            ]
+          })
+        ]),
     ...(generationPlanTypesSource.source === null
       ? []
       : validateSourceIncludes({
@@ -798,43 +910,67 @@ async function validateCheckerSurface(
         })),
     ...(generationPlanTestSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: GENERATION_PLAN_TEST_FILE,
-          source: generationPlanTestSource.source,
-          requiredFragments: [
-            'builds a deterministic SDK generation plan',
-            'fails when contract validation fails before planning',
-            'fails when libs source does not cover an SDK generation target',
-            'fails when API SDK generation input drifts from client SDK source',
-            'fails when API export plan no longer exposes SDK generation output',
-            'fails when API export plan can write artifacts before SDK generation',
-            'zdp-libs-ts/schema',
-            'request_id',
-            'trace_id'
-          ]
-        }))
+      : [
+          ...validateSourceTestNames({
+            file: GENERATION_PLAN_TEST_FILE,
+            source: generationPlanTestSource.source,
+            requiredTestNames: [
+              'builds a deterministic SDK generation plan',
+              'fails when contract validation fails before planning',
+              'fails when libs source does not cover an SDK generation target',
+              'fails when API SDK generation input drifts from client SDK source',
+              'fails when API export plan no longer exposes SDK generation output',
+              'fails when API export plan can write artifacts before SDK generation'
+            ]
+          }),
+          ...validateSourceIncludes({
+            file: GENERATION_PLAN_TEST_FILE,
+            source: generationPlanTestSource.source,
+            requiredFragments: [
+              'zdp-libs-ts/schema',
+              'request_id',
+              'trace_id'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: GENERATION_PLAN_TEST_FILE,
+            source: generationPlanTestSource.source,
+            requiredFragments: ['expect(', 'buildSdkGenerationPlan']
+          })
+        ])
   ];
 }
 
 function validateRequiredLinterRule(
   repositoryServiceContract: unknown
 ): readonly Diagnostic[] {
+  const diagnostics = [
+    ...validateStringArrayItems({
+      value: repositoryServiceContract,
+      file: 'service.yaml',
+      path: 'policy_gates.required_linter_rules',
+      message:
+        'Client SDKs service contract must declare `policy_gates.required_linter_rules` as a string list.'
+    })
+  ];
   const requiredRules = readStringArrayPath(
     repositoryServiceContract,
     'policy_gates.required_linter_rules'
   );
 
   if (requiredRules.includes(CLIENT_SDKS_CONTRACT_RULE_ID)) {
-    return [];
+    return diagnostics;
   }
 
-  return [
+  diagnostics.push(
     createClientSdksDiagnostic(
       'service.yaml',
       'policy_gates.required_linter_rules',
       `Client SDKs service contract must require \`${CLIENT_SDKS_CONTRACT_RULE_ID}\`.`
     )
-  ];
+  );
+
+  return diagnostics;
 }
 
 function validateSourceIncludes(input: {
@@ -861,6 +997,58 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredTestNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = new Set(extractTestCallNames(input.source));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const testName of input.requiredTestNames) {
+    if (testNames.has(testName)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createClientSdksDiagnostic(
+        input.file,
+        'source',
+        `Client SDKs checker source must include test case \`${testName}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const sourceWithoutCommentsOrStrings = stripCommentsAndStringLiterals(
+    input.source
+  );
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (sourceWithoutCommentsOrStrings.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createClientSdksDiagnostic(
+        input.file,
+        'source',
+        `Client SDKs checker source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredStringArrayEntries(input: {
   readonly value: unknown;
   readonly file: string;
@@ -869,7 +1057,14 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      message: `Client SDKs contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -886,6 +1081,25 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.path);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (candidate.every((item) => typeof item === 'string')) {
+    return [];
+  }
+
+  return [createClientSdksDiagnostic(input.file, input.path, input.message)];
 }
 
 function validateExactValue(input: {

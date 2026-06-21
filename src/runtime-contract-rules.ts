@@ -2,9 +2,31 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const RUNTIME_REPOSITORY_NAME = 'zdp-platform-runtime';
 const RUNTIME_CONTRACT_RULE_ID = 'ZDP-RUNTIME-001';
+const RUNTIME_CONTRACT_ENFORCEMENTS = [
+  'smoke_runner',
+  'architecture_linter',
+  'owning_contract_checker',
+  'operator_review'
+] as const;
+
+type RuntimeContractEnforcement = (typeof RUNTIME_CONTRACT_ENFORCEMENTS)[number];
+
+interface RequiredBlockedProductionCondition {
+  readonly condition: string;
+  readonly enforcedBy: RuntimeContractEnforcement;
+}
+
+interface BlockedProductionConditionEntry {
+  readonly condition: string;
+  readonly enforcedBy: string;
+}
 
 const HEALTHCHECK_FILE = 'contracts/healthcheck.yaml';
 const SMOKE_TARGETS_FILE = 'contracts/smoke-targets.yaml';
@@ -21,6 +43,39 @@ const REQUIRED_PACKAGE_SCRIPTS = [
   'test',
   'smoke:plan',
   'smoke:run'
+] as const;
+
+const REQUIRED_CORE_API_REQUIRED_BEFORE = [
+  'hello-origin',
+  'production-runtime-template'
+] as const;
+const REQUIRED_APP_CONSOLE_REQUIRED_BEFORE = [
+  'first-console-preview',
+  'production-runtime-template'
+] as const;
+const REQUIRED_EDGE_WEBHOOK_INGRESS_REQUIRED_BEFORE = [
+  'hello-edge',
+  'production-runtime-template'
+] as const;
+const REQUIRED_MONEY_API_REQUIRED_BEFORE = [
+  'money-ledger-migration',
+  'production-runtime-template'
+] as const;
+const REQUIRED_CONNECTORS_PLATFORM_REQUIRED_BEFORE = [
+  'provider-onboarding',
+  'production-runtime-template'
+] as const;
+const REQUIRED_PLATFORM_SECURITY_REQUIRED_BEFORE = [
+  'critical-platform-promotion',
+  'production-runtime-template'
+] as const;
+const REQUIRED_PLATFORM_INFRA_REQUIRED_BEFORE = [
+  'provider-account-connection',
+  'production-runtime-template'
+] as const;
+const REQUIRED_PLATFORM_OBSERVABILITY_REQUIRED_BEFORE = [
+  'observability-provider-connection',
+  'production-runtime-template'
 ] as const;
 
 const REQUIRED_SMOKE_RUNNER_FILES = [
@@ -347,6 +402,7 @@ function validateHealthcheckContract(value: unknown): readonly Diagnostic[] {
 function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const targets = readPath(value, 'targets');
+  const contractChecks = readPath(value, 'contract_checks');
 
   if (!Array.isArray(targets)) {
     return [
@@ -381,13 +437,36 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     ...validateMoneyApiSmokeTarget(targetById.get('money-api')),
     ...validateConnectorsPlatformSmokeTarget(
       targetById.get('connectors-platform')
-    ),
-    ...validatePlatformSecurityContractCheck(value),
-    ...validatePlatformInfraContractCheck(value),
-    ...validatePlatformObservabilityContractCheck(value)
+    )
   );
 
+  if (!Array.isArray(contractChecks)) {
+    diagnostics.push(...validateContractChecksArray(value));
+  } else {
+    diagnostics.push(
+      ...validatePlatformSecurityContractCheck(value),
+      ...validatePlatformInfraContractCheck(value),
+      ...validatePlatformObservabilityContractCheck(value)
+    );
+  }
+
   return diagnostics;
+}
+
+function validateContractChecksArray(value: unknown): readonly Diagnostic[] {
+  const contractChecks = readPath(value, 'contract_checks');
+
+  if (Array.isArray(contractChecks)) {
+    return [];
+  }
+
+  return [
+    createRuntimeDiagnostic(
+      SMOKE_TARGETS_FILE,
+      'contract_checks',
+      'Runtime smoke contract must declare a `contract_checks` array.'
+    )
+  ];
 }
 
 function validateCoreApiSmokeTarget(
@@ -405,6 +484,13 @@ function validateCoreApiSmokeTarget(
 
   return [
     ...validateTargetIdentity(target, 'core-api', 'zdp-core-platform'),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.core-api.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_CORE_API_REQUIRED_BEFORE
+    }),
     ...validateExactValue({
       value: target,
       file: SMOKE_TARGETS_FILE,
@@ -437,12 +523,17 @@ function validateCoreApiSmokeTarget(
       field: 'readyz.expect_json.checks',
       requiredEntries: ['contracts']
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.core-api.blocked_production_when',
       field: 'blocked_production_when',
-      requiredEntries: ['readyz checks omit contracts']
+      requiredEntries: [
+        {
+          condition: 'readyz checks omit contracts',
+          enforcedBy: 'smoke_runner'
+        }
+      ]
     })
   ];
 }
@@ -462,6 +553,13 @@ function validateAppConsoleSmokeTarget(
 
   return [
     ...validateTargetIdentity(target, 'app-console', 'zdp-web-apps'),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.app-console.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_APP_CONSOLE_REQUIRED_BEFORE
+    }),
     ...validateExactValue({
       value: target,
       file: SMOKE_TARGETS_FILE,
@@ -534,15 +632,25 @@ function validateAppConsoleSmokeTarget(
       field: 'readyz.expect_json_when_missing_env.missing',
       requiredEntries: ['ZDP_CORE_API_BASE_URL']
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.app-console.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'ZDP_CORE_API_BASE_URL is missing',
-        'readyz does not report core-api as an upstream',
-        'app shell attempts direct core, money, privacy, or credential datastore access'
+        {
+          condition: 'ZDP_CORE_API_BASE_URL is missing',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition: 'readyz does not report core-api as an upstream',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition:
+            'app shell attempts direct core, money, privacy, or credential datastore access',
+          enforcedBy: 'architecture_linter'
+        }
       ]
     })
   ];
@@ -567,6 +675,13 @@ function validateEdgeWebhookIngressSmokeTarget(
       'edge-webhook-ingress',
       'zdp-edge-workers'
     ),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.edge-webhook-ingress.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_EDGE_WEBHOOK_INGRESS_REQUIRED_BEFORE
+    }),
     ...validateExactValue({
       value: target,
       file: SMOKE_TARGETS_FILE,
@@ -610,15 +725,25 @@ function validateEdgeWebhookIngressSmokeTarget(
       field: 'readyz.expect_json.checks',
       requiredEntries: ['contracts']
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.edge-webhook-ingress.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'x-request-id is not propagated',
-        'traceparent is not propagated when present',
-        'edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions'
+        {
+          condition: 'x-request-id is not propagated',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition: 'traceparent is not propagated when present',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition:
+            'edge worker becomes the source of final authorization, entitlement, ledger, or privacy decisions',
+          enforcedBy: 'architecture_linter'
+        }
       ]
     })
   ];
@@ -639,6 +764,13 @@ function validateMoneyApiSmokeTarget(
 
   return [
     ...validateTargetIdentity(target, 'money-api', 'zdp-money-platform'),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_MONEY_API_REQUIRED_BEFORE
+    }),
     ...validateExactValue({
       value: target,
       file: SMOKE_TARGETS_FILE,
@@ -679,16 +811,30 @@ function validateMoneyApiSmokeTarget(
       field: 'readyz.expect_json.checks',
       requiredEntries: ['contracts']
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.money-api.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'healthz service id does not match money-api',
-        'readyz checks omit contracts',
-        'smoke check requires a real payment, refund, credit mutation, customer account, or provider credential',
-        'money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists'
+        {
+          condition: 'healthz service id does not match money-api',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition: 'readyz checks omit contracts',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition:
+            'smoke check requires a real payment, refund, credit mutation, customer account, or provider credential',
+          enforcedBy: 'operator_review'
+        },
+        {
+          condition:
+            'money-api exposes payment, refund, credit, or ledger write routes before ledger storage migration exists',
+          enforcedBy: 'architecture_linter'
+        }
       ]
     })
   ];
@@ -713,6 +859,13 @@ function validateConnectorsPlatformSmokeTarget(
       'connectors-platform',
       'zdp-connectors-platform'
     ),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.connectors-platform.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_CONNECTORS_PLATFORM_REQUIRED_BEFORE
+    }),
     ...validateExactValue({
       value: target,
       file: SMOKE_TARGETS_FILE,
@@ -756,16 +909,30 @@ function validateConnectorsPlatformSmokeTarget(
       field: 'readyz.expect_json.checks',
       requiredEntries: ['contracts']
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.connectors-platform.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'healthz service id does not match connectors-platform',
-        'readyz checks omit contracts',
-        'smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync',
-        'connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented'
+        {
+          condition: 'healthz service id does not match connectors-platform',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition: 'readyz checks omit contracts',
+          enforcedBy: 'smoke_runner'
+        },
+        {
+          condition:
+            'smoke check requires a real OAuth provider, source payload, plaintext credential, webhook delivery, or user data sync',
+          enforcedBy: 'operator_review'
+        },
+        {
+          condition:
+            'connectors-platform exposes provider OAuth, sync worker, webhook ingest, or raw source payload routes before provider boundary contracts are implemented',
+          enforcedBy: 'architecture_linter'
+        }
       ]
     })
   ];
@@ -840,6 +1007,13 @@ function validatePlatformSecurityContractCheck(value: unknown): readonly Diagnos
     ...validateRequiredStringArrayEntries({
       value: target,
       file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-security-contracts.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_PLATFORM_SECURITY_REQUIRED_BEFORE
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-security-contracts.required_files',
       field: 'required_files',
       requiredEntries: [
@@ -861,15 +1035,25 @@ function validatePlatformSecurityContractCheck(value: unknown): readonly Diagnos
         'checker does not require exploit payloads, private incident details, or secret values'
       ]
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-security-contracts.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'security baseline contracts are missing or unparseable',
-        'contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value',
-        'security promotion relies on dashboard-only scanner evidence'
+        {
+          condition: 'security baseline contracts are missing or unparseable',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition:
+            'contract checker requires scanner output, provider account, exploit payload, private incident detail, or secret value',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition: 'security promotion relies on dashboard-only scanner evidence',
+          enforcedBy: 'operator_review'
+        }
       ]
     })
   ];
@@ -944,6 +1128,13 @@ function validatePlatformInfraContractCheck(value: unknown): readonly Diagnostic
     ...validateRequiredStringArrayEntries({
       value: target,
       file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-infra-contracts.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_PLATFORM_INFRA_REQUIRED_BEFORE
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-infra-contracts.required_files',
       field: 'required_files',
       requiredEntries: [
@@ -965,15 +1156,25 @@ function validatePlatformInfraContractCheck(value: unknown): readonly Diagnostic
         'checker does not require account ids, server ips, dns challenge secrets, or provider tokens'
       ]
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-infra-contracts.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'infra contracts are missing or unparseable',
-        'contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state',
-        'infra promotion relies on dashboard-only provider evidence'
+        {
+          condition: 'infra contracts are missing or unparseable',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition:
+            'contract checker requires provider account, server ip, dns challenge secret, provider token, or terraform state',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition: 'infra promotion relies on dashboard-only provider evidence',
+          enforcedBy: 'operator_review'
+        }
       ]
     })
   ];
@@ -1050,6 +1251,13 @@ function validatePlatformObservabilityContractCheck(
     ...validateRequiredStringArrayEntries({
       value: target,
       file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.platform-observability-contracts.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_PLATFORM_OBSERVABILITY_REQUIRED_BEFORE
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-observability-contracts.required_files',
       field: 'required_files',
       requiredEntries: [
@@ -1070,15 +1278,26 @@ function validatePlatformObservabilityContractCheck(
         'checker does not require provider tokens, dashboard urls, raw logs, or trace samples'
       ]
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateRequiredBlockedProductionConditions({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'contract_checks.platform-observability-contracts.blocked_production_when',
       field: 'blocked_production_when',
       requiredEntries: [
-        'observability contracts are missing or unparseable',
-        'contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload',
-        'observability promotion relies on dashboard-only provider evidence'
+        {
+          condition: 'observability contracts are missing or unparseable',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition:
+            'contract checker requires provider account, provider token, dashboard url, raw log, raw trace, or customer payload',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition:
+            'observability promotion relies on dashboard-only provider evidence',
+          enforcedBy: 'operator_review'
+        }
       ]
     })
   ];
@@ -1224,6 +1443,21 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+  if (
+    typeof checkScript !== 'string' ||
+    !checkScript.includes('tsc --noEmit') ||
+    !checkScript.includes('bun test')
+  ) {
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        PACKAGE_FILE,
+        'scripts.check',
+        'Runtime package `check` script must run `tsc --noEmit` and `bun test`.'
+      )
+    );
+  }
+
   return diagnostics;
 }
 
@@ -1248,39 +1482,94 @@ async function validateSmokeRunnerSurface(
         })),
     ...(contractSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: SMOKE_RUNNER_CONTRACT_FILE,
-          source: contractSource.source,
-          requiredFragments: ['contracts/smoke-targets.yaml', 'targets']
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: SMOKE_RUNNER_CONTRACT_FILE,
+            source: contractSource.source,
+            requiredFragments: [
+              'contracts/smoke-targets.yaml',
+              'targets',
+              'blocked_production_when',
+              'enforced_by'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: SMOKE_RUNNER_CONTRACT_FILE,
+            source: contractSource.source,
+            requiredFragments: [
+              'export function parseSmokeTargetsContract',
+              'function parseTarget',
+              'function parseContractCheck',
+              'function requiredBlockedProductionConditionList',
+              'function parseBlockedProductionCondition',
+              'function isRuntimeContractEnforcement',
+              'Bun.YAML.parse'
+            ]
+          })
+        ]),
     ...(runnerSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: SMOKE_RUNNER_RUNNER_FILE,
-          source: runnerSource.source,
-          requiredFragments: [
-            'base_url_not_provided',
-            'x-request-id_not_propagated',
-            'traceparent_not_propagated'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: SMOKE_RUNNER_RUNNER_FILE,
+            source: runnerSource.source,
+            requiredFragments: [
+              'base_url_not_provided',
+              'x-request-id_not_propagated',
+              'traceparent_not_propagated',
+              'blockedProductionWhen'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: SMOKE_RUNNER_RUNNER_FILE,
+            source: runnerSource.source,
+            requiredFragments: [
+              'export function createSmokePlan',
+              'export async function runSmokeTargets',
+              'async function checkEndpoint',
+              'export function parseBaseUrlPairs',
+              'function validateJsonExpectation',
+              'AbortSignal.timeout',
+              'input.fetcher'
+            ]
+          })
+        ]),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: SMOKE_RUNNER_TEST_FILE,
-          source: testSource.source,
-          requiredFragments: [
-            'fails closed when run mode has no base URL',
-            'base_url_not_provided',
-            'platform-security-contracts',
-            'platform-infra-contracts',
-            'platform-observability-contracts',
-            'is plan-only',
-            'malformed_json_response',
-            'money-api',
-            'connectors-platform'
-          ]
-        }))
+      : [
+          ...validateSourceTestNames({
+            file: SMOKE_RUNNER_TEST_FILE,
+            source: testSource.source,
+            requiredTestNames: [
+              'fails closed when run mode has no base URL',
+              'rejects blocked production conditions without enforcement owners'
+            ]
+          }),
+          ...validateSourceIncludes({
+            file: SMOKE_RUNNER_TEST_FILE,
+            source: testSource.source,
+            requiredFragments: [
+              'base_url_not_provided',
+              'platform-security-contracts',
+              'platform-infra-contracts',
+              'platform-observability-contracts',
+              'is plan-only',
+              'malformed_json_response',
+              'money-api',
+              'connectors-platform'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: SMOKE_RUNNER_TEST_FILE,
+            source: testSource.source,
+            requiredFragments: [
+              'expect(',
+              'parseSmokeTargetsContract',
+              'createSmokePlan',
+              'runSmokeTargets'
+            ]
+          })
+        ])
   ];
 }
 
@@ -1308,6 +1597,58 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredTestNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = new Set(extractTestCallNames(input.source));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const testName of input.requiredTestNames) {
+    if (testNames.has(testName)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        input.file,
+        'source',
+        `Runtime smoke runner source must include test case \`${testName}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const sourceWithoutCommentsOrStrings = stripCommentsAndStringLiterals(
+    input.source
+  );
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (sourceWithoutCommentsOrStrings.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        input.file,
+        'source',
+        `Runtime smoke runner source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredStringArrayEntries(input: {
   readonly value: unknown;
   readonly file: string;
@@ -1316,7 +1657,14 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -1333,6 +1681,188 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (candidate.every((item) => typeof item === 'string')) {
+    return [];
+  }
+
+  return [
+    createRuntimeDiagnostic(
+      input.file,
+      input.path,
+      `Runtime contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
+    )
+  ];
+}
+
+function validateRequiredBlockedProductionConditions(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly requiredEntries: readonly RequiredBlockedProductionCondition[];
+}): readonly Diagnostic[] {
+  const entries = readBlockedProductionConditionEntries(input.value, input.field);
+  const diagnostics: Diagnostic[] = [];
+
+  diagnostics.push(
+    ...validateBlockedProductionConditionShape({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  );
+
+  if (entries.length === 0) {
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must declare \`${input.field}\` as a non-empty list of \`{ condition, enforced_by }\` objects.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateBlockedProductionEnforcementValues({
+      entries,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  );
+
+  for (const requiredEntry of input.requiredEntries) {
+    const actualEntry = entries.find(
+      (entry) => entry.condition === requiredEntry.condition
+    );
+
+    if (actualEntry === undefined) {
+      diagnostics.push(
+        createRuntimeDiagnostic(
+          input.file,
+          input.path,
+          `Runtime contract \`${input.file}\` must include \`${requiredEntry.condition}\` in \`${input.field}\`.`
+        )
+      );
+      continue;
+    }
+
+    if (actualEntry.enforcedBy !== requiredEntry.enforcedBy) {
+      diagnostics.push(
+        createRuntimeDiagnostic(
+          input.file,
+          input.path,
+          `Runtime contract \`${input.file}\` must assign \`${requiredEntry.condition}\` in \`${input.field}\` to enforcement owner \`${requiredEntry.enforcedBy}\`.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function validateBlockedProductionConditionShape(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  for (const entry of candidate) {
+    if (
+      isRecord(entry) &&
+      readStringField(entry, 'condition') !== null &&
+      readStringField(entry, 'enforced_by') !== null
+    ) {
+      continue;
+    }
+
+    return [
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must declare every \`${input.field}\` item as a \`{ condition, enforced_by }\` object.`
+      )
+    ];
+  }
+
+  return [];
+}
+
+function validateBlockedProductionEnforcementValues(input: {
+  readonly entries: readonly BlockedProductionConditionEntry[];
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const entry of input.entries) {
+    if (isRuntimeContractEnforcement(entry.enforcedBy)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must use a known \`enforced_by\` value for \`${entry.condition}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function readBlockedProductionConditionEntries(
+  value: unknown,
+  path: string
+): readonly BlockedProductionConditionEntry[] {
+  const candidate = readPath(value, path);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.flatMap((entry) => {
+    if (!isRecord(entry)) {
+      return [];
+    }
+
+    const condition = readStringField(entry, 'condition');
+    const enforcedBy = readStringField(entry, 'enforced_by');
+
+    if (condition === null || enforcedBy === null) {
+      return [];
+    }
+
+    return [
+      {
+        condition,
+        enforcedBy
+      }
+    ];
+  });
 }
 
 function validateExactValue(input: {
@@ -1369,6 +1899,14 @@ function readStringArrayPath(value: unknown, path: string): readonly string[] {
 
   return candidate.flatMap((entry) =>
     typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
+}
+
+function isRuntimeContractEnforcement(
+  value: string
+): value is RuntimeContractEnforcement {
+  return RUNTIME_CONTRACT_ENFORCEMENTS.includes(
+    value as RuntimeContractEnforcement
   );
 }
 

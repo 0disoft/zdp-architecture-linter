@@ -9,6 +9,8 @@ const INFRA_CONTRACT_RULE_ID = 'ZDP-INFRA-001';
 const RESOURCE_INVENTORY_FILE = 'contracts/resource-inventory.yaml';
 const ENVIRONMENT_SCHEMA_FILE = 'contracts/environment.schema.yaml';
 const BACKUP_RESTORE_FILE = 'contracts/backup-restore.yaml';
+const DNS_RECORDS_FILE = 'contracts/dns-records.yaml';
+const FIREWALL_RULES_FILE = 'contracts/firewall-rules.yaml';
 const PACKAGE_FILE = 'package.json';
 const INFRA_CHECK_SCRIPT_FILE = 'scripts/check-infra-contracts.ts';
 const INFRA_PLAN_SCRIPT_FILE = 'scripts/infra-plan.ts';
@@ -81,11 +83,19 @@ export async function validateRepositoryInfraContract(input: {
     return [];
   }
 
-  const [resourceInventory, environmentSchema, backupRestore, packageJson] =
-    await Promise.all([
+  const [
+    resourceInventory,
+    environmentSchema,
+    backupRestore,
+    dnsRecords,
+    firewallRules,
+    packageJson
+  ] = await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, RESOURCE_INVENTORY_FILE),
       readRequiredYamlContract(input.repositoryRoot, ENVIRONMENT_SCHEMA_FILE),
       readRequiredYamlContract(input.repositoryRoot, BACKUP_RESTORE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, DNS_RECORDS_FILE),
+      readRequiredYamlContract(input.repositoryRoot, FIREWALL_RULES_FILE),
       readRequiredJsonFile(input.repositoryRoot, PACKAGE_FILE)
     ]);
 
@@ -93,6 +103,8 @@ export async function validateRepositoryInfraContract(input: {
     ...resourceInventory.diagnostics,
     ...environmentSchema.diagnostics,
     ...backupRestore.diagnostics,
+    ...dnsRecords.diagnostics,
+    ...firewallRules.diagnostics,
     ...packageJson.diagnostics,
     ...(resourceInventory.value === null
       ? []
@@ -103,6 +115,10 @@ export async function validateRepositoryInfraContract(input: {
     ...(backupRestore.value === null
       ? []
       : validateBackupRestoreContract(backupRestore.value)),
+    ...(dnsRecords.value === null ? [] : validateDnsRecordsContract(dnsRecords.value)),
+    ...(firewallRules.value === null
+      ? []
+      : validateFirewallRulesContract(firewallRules.value)),
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...(await validateInfraCheckerSurface(input.repositoryRoot))
   ];
@@ -396,6 +412,88 @@ function validateBackupRestoreContract(value: unknown): readonly Diagnostic[] {
   ];
 }
 
+function validateDnsRecordsContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: DNS_RECORDS_FILE,
+      path: 'dns_policy.source_of_truth',
+      expected: 'repository-contract-first',
+      message: 'Infrastructure DNS records must keep repository contracts first.'
+    }),
+    ...validateExactValue({
+      value,
+      file: DNS_RECORDS_FILE,
+      path: 'dns_policy.provider_mutation_allowed',
+      expected: false,
+      message: 'Infrastructure DNS records must not allow provider mutation.'
+    }),
+    ...validateExactValue({
+      value,
+      file: DNS_RECORDS_FILE,
+      path: 'dns_policy.secret_values_allowed',
+      expected: false,
+      message: 'Infrastructure DNS records must forbid secret values.'
+    }),
+    ...validateExactValue({
+      value,
+      file: DNS_RECORDS_FILE,
+      path: 'dns_policy.actual_record_values_allowed',
+      expected: false,
+      message:
+        'Infrastructure DNS records must not contain live record target values before provider connection.'
+    }),
+    ...validateEmptyArrayPath({
+      value,
+      file: DNS_RECORDS_FILE,
+      path: 'records',
+      message:
+        'Infrastructure DNS record entries must stay empty until provider connection and live record value policy are reviewed.'
+    })
+  ];
+}
+
+function validateFirewallRulesContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: FIREWALL_RULES_FILE,
+      path: 'firewall_policy.source_of_truth',
+      expected: 'repository-contract-first',
+      message: 'Infrastructure firewall rules must keep repository contracts first.'
+    }),
+    ...validateExactValue({
+      value,
+      file: FIREWALL_RULES_FILE,
+      path: 'firewall_policy.provider_mutation_allowed',
+      expected: false,
+      message: 'Infrastructure firewall rules must not allow provider mutation.'
+    }),
+    ...validateExactValue({
+      value,
+      file: FIREWALL_RULES_FILE,
+      path: 'firewall_policy.secret_values_allowed',
+      expected: false,
+      message: 'Infrastructure firewall rules must forbid secret values.'
+    }),
+    ...validateExactValue({
+      value,
+      file: FIREWALL_RULES_FILE,
+      path: 'firewall_policy.actual_server_ips_allowed',
+      expected: false,
+      message:
+        'Infrastructure firewall rules must not contain live server IP values before provider connection.'
+    }),
+    ...validateEmptyArrayPath({
+      value,
+      file: FIREWALL_RULES_FILE,
+      path: 'rules',
+      message:
+        'Infrastructure firewall rule entries must stay empty until provider connection and live server IP policy are reviewed.'
+    })
+  ];
+}
+
 function validatePackageScripts(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
@@ -457,7 +555,9 @@ async function validateInfraCheckerSurface(
           requiredFragments: [
             'resource-inventory.yaml',
             'environment.schema.yaml',
-            'backup-restore.yaml'
+            'backup-restore.yaml',
+            'dns-records.yaml',
+            'firewall-rules.yaml'
           ]
         })),
     ...(validator.source === null
@@ -470,7 +570,12 @@ async function validateInfraCheckerSurface(
             'backfill-contract-or-revert-dashboard',
             'least-privilege',
             'server ips',
-            'rollback notes'
+            'rollback notes',
+            'INFRA_PRICING_REVIEW_NOT_REQUIRED',
+            'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
+            'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
+            'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
+            'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
           ]
         })),
     ...(plan.source === null
@@ -495,7 +600,12 @@ async function validateInfraCheckerSurface(
             'INFRA_SOURCE_OF_TRUTH_INVALID',
             'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID',
             'INFRA_FORBIDDEN_VALUE_MISSING',
-            'INFRA_RESTORE_EVIDENCE_FIELD_MISSING'
+            'INFRA_RESTORE_EVIDENCE_FIELD_MISSING',
+            'INFRA_PRICING_REVIEW_NOT_REQUIRED',
+            'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
+            'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
+            'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
+            'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
           ]
         }))
   ];
@@ -616,6 +726,21 @@ function validateExactValue(input: {
   const actual = readPath(input.value, input.field ?? input.path);
 
   if (actual === input.expected) {
+    return [];
+  }
+
+  return [createInfraDiagnostic(input.file, input.path, input.message)];
+}
+
+function validateEmptyArrayPath(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const actual = readPath(input.value, input.path);
+
+  if (Array.isArray(actual) && actual.length === 0) {
     return [];
   }
 

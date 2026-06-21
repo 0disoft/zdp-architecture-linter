@@ -65,6 +65,22 @@ describe('infra contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-INFRA-001',
         severity: 'error',
+        file: 'contracts/dns-records.yaml',
+        path: 'repository.root',
+        message:
+          'Infrastructure repository must include `contracts/dns-records.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-INFRA-001',
+        severity: 'error',
+        file: 'contracts/firewall-rules.yaml',
+        path: 'repository.root',
+        message:
+          'Infrastructure repository must include `contracts/firewall-rules.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-INFRA-001',
+        severity: 'error',
         file: 'package.json',
         path: 'repository.root',
         message: 'Infrastructure repository must include `package.json`.'
@@ -148,6 +164,14 @@ inventory_policy:
           path: 'inventory_policy.dashboard_drift_action',
           message:
             'Infrastructure resource inventory must require dashboard drift to be backfilled or reverted.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/resource-inventory.yaml',
+          path: 'inventory_policy.latest_pricing_review_required',
+          message:
+            'Infrastructure resource inventory must require latest pricing review before implementation.'
         });
       }
     );
@@ -258,6 +282,87 @@ restore_drills:
           path: 'restore_drills.hello-origin-restore.expected_evidence',
           message:
             'Infrastructure contract `contracts/backup-restore.yaml` must include `rollback notes` in `expected_evidence`.'
+        });
+      }
+    );
+  });
+
+  test('fails when DNS and firewall contracts allow provider-owned values or mutation', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidInfraFiles(),
+        'contracts/dns-records.yaml': `
+dns_policy:
+  source_of_truth: provider-dashboard
+  provider_mutation_allowed: true
+  secret_values_allowed: true
+  actual_record_values_allowed: true
+records:
+  - name: future-public-name
+    value: placeholder-target
+`,
+        'contracts/firewall-rules.yaml': `
+firewall_policy:
+  source_of_truth: provider-dashboard
+  provider_mutation_allowed: true
+  secret_values_allowed: true
+  actual_server_ips_allowed: true
+rules:
+  - name: future-ssh-rule
+    source: placeholder-source
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryInfraContract({
+          repositoryRoot,
+          repositoryServiceContract: createInfraServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/dns-records.yaml',
+          path: 'dns_policy.provider_mutation_allowed',
+          message: 'Infrastructure DNS records must not allow provider mutation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/dns-records.yaml',
+          path: 'dns_policy.actual_record_values_allowed',
+          message:
+            'Infrastructure DNS records must not contain live record target values before provider connection.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/dns-records.yaml',
+          path: 'records',
+          message:
+            'Infrastructure DNS record entries must stay empty until provider connection and live record value policy are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/firewall-rules.yaml',
+          path: 'firewall_policy.provider_mutation_allowed',
+          message: 'Infrastructure firewall rules must not allow provider mutation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/firewall-rules.yaml',
+          path: 'firewall_policy.actual_server_ips_allowed',
+          message:
+            'Infrastructure firewall rules must not contain live server IP values before provider connection.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-INFRA-001',
+          severity: 'error',
+          file: 'contracts/firewall-rules.yaml',
+          path: 'rules',
+          message:
+            'Infrastructure firewall rule entries must stay empty until provider connection and live server IP policy are reviewed.'
         });
       }
     );
@@ -416,6 +521,22 @@ restore_drills:
       - data integrity check result
       - rollback notes
 `,
+    'contracts/dns-records.yaml': `
+dns_policy:
+  source_of_truth: repository-contract-first
+  provider_mutation_allowed: false
+  secret_values_allowed: false
+  actual_record_values_allowed: false
+records: []
+`,
+    'contracts/firewall-rules.yaml': `
+firewall_policy:
+  source_of_truth: repository-contract-first
+  provider_mutation_allowed: false
+  secret_values_allowed: false
+  actual_server_ips_allowed: false
+rules: []
+`,
     'package.json': `
 {
   "scripts": {
@@ -435,10 +556,10 @@ import { runInfraPlanCli } from '../src/infra-contracts/cli';
 await runInfraPlanCli(['plan']);
 `,
     'src/infra-contracts/parser.ts': `
-export const files = ['resource-inventory.yaml', 'environment.schema.yaml', 'backup-restore.yaml'];
+export const files = ['resource-inventory.yaml', 'environment.schema.yaml', 'backup-restore.yaml', 'dns-records.yaml', 'firewall-rules.yaml'];
 `,
     'src/infra-contracts/validator.ts': `
-export const checks = ['repository-contract-first', 'backfill-contract-or-revert-dashboard', 'least-privilege', 'server ips', 'rollback notes'];
+export const checks = ['repository-contract-first', 'backfill-contract-or-revert-dashboard', 'least-privilege', 'server ips', 'rollback notes', 'INFRA_PRICING_REVIEW_NOT_REQUIRED', 'INFRA_DNS_PROVIDER_MUTATION_ALLOWED', 'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION', 'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED', 'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'];
 `,
     'src/infra-contracts/plan.ts': `
 export function createInfrastructurePlan(): unknown {
@@ -455,7 +576,22 @@ test('provider-neutral dry-run plan', () => {
   const environment = 'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID';
   const forbidden = 'INFRA_FORBIDDEN_VALUE_MISSING';
   const restore = 'INFRA_RESTORE_EVIDENCE_FIELD_MISSING';
-  return [sourceOfTruth, environment, forbidden, restore];
+  const pricing = 'INFRA_PRICING_REVIEW_NOT_REQUIRED';
+  const dns = 'INFRA_DNS_PROVIDER_MUTATION_ALLOWED';
+  const dnsEntries = 'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION';
+  const firewall = 'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED';
+  const firewallEntries = 'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION';
+  return [
+    sourceOfTruth,
+    environment,
+    forbidden,
+    restore,
+    pricing,
+    dns,
+    dnsEntries,
+    firewall,
+    firewallEntries
+  ];
 });
 `
   };

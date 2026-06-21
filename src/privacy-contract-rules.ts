@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const PRIVACY_REPOSITORY_NAME = 'zdp-privacy-access-broker';
 const PRIVACY_CONTRACT_RULE_ID = 'ZDP-PRIVACY-001';
@@ -41,6 +45,14 @@ const REQUIRED_PRIVACY_CHECKER_FILES = [
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_CHECK_SCRIPT_FRAGMENTS = [
+  'tsc --noEmit',
+  'bun test',
+  'bun run contracts:check',
+  'cargo fmt --check',
+  'cargo check',
+  'cargo test'
+] as const;
 
 const REQUIRED_PRIVACY_RUNTIME_FILES = [
   CARGO_FILE,
@@ -754,6 +766,25 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+  if (typeof checkScript !== 'string') {
+    return diagnostics;
+  }
+
+  for (const fragment of REQUIRED_CHECK_SCRIPT_FRAGMENTS) {
+    if (checkScript.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createPrivacyDiagnostic(
+        PACKAGE_FILE,
+        'scripts.check',
+        `Privacy broker package \`check\` script must include \`${fragment}\`.`
+      )
+    );
+  }
+
   return diagnostics;
 }
 
@@ -814,21 +845,56 @@ async function validateCheckerSurface(
             'PRIV_POLICY_DEFAULT_NOT_DENY',
             'PRIV_CAPABILITY_TTL_TOO_HIGH',
             'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+            'PRIV_CAPABILITY_STATELESS_CONSENT_TOKEN_DEFAULT_ALLOWED',
             'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
-            'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED'
+            'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED',
+            'PRIV_RUST_ALLOWED_OUTPUT_SHAPE_DRIFT',
+            'PRIV_RUST_SECRET_OR_PII_LOGGING_PATTERN',
+            'PRIV_RUST_SOURCE_PROXY_ROUTE_REQUIRES_MASKING_REVIEW',
+            'RUST_MARKER_EXPECTATIONS'
+          ]
+        })),
+    ...(validatorSource.source === null
+      ? []
+      : validateSourceCodeIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'export function validatePrivacyContracts',
+            'function validateAccessPolicy',
+            'function validateCapabilityGrants',
+            'function validateDataMinimization',
+            'function validateAccessCapability',
+            'function validateRustBoundaryMarkers',
+            'function validateRustPrivacyPatterns'
           ]
         })),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
+      : validateSourceCodeIncludes({
           file: CHECKER_TEST_FILE,
           source: testSource.source,
           requiredFragments: [
+            'validatePrivacyContracts',
+            'loadCommittedContracts',
+            'expect('
+          ]
+        })),
+    ...(testSource.source === null
+      ? []
+      : validateSourceTestNames({
+          file: CHECKER_TEST_FILE,
+          source: testSource.source,
+          requiredNames: [
+            'validates the committed privacy broker contracts',
             'fails when access policy does not default deny',
             'fails when capability ttl is longer than five minutes',
             'fails when capability can skip policy recheck',
+            'fails when stateless consent tokens are allowed by default',
             'fails when data minimization can retain raw source data',
-            'fails when growth or analytics can receive subject-level raw streams'
+            'fails when growth or analytics can receive subject-level raw streams',
+            'fails when Rust boundary markers drift from YAML contracts',
+            'fails when Rust source logs PII or adds raw source proxy routes'
           ]
         }))
   ];
@@ -1023,6 +1089,56 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const codeOnlySource = stripCommentsAndStringLiterals(input.source);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (codeOnlySource.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createPrivacyDiagnostic(
+        input.file,
+        'source',
+        `Privacy broker checker source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = extractTestCallNames(input.source);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const name of input.requiredNames) {
+    if (testNames.includes(name)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createPrivacyDiagnostic(
+        input.file,
+        'source',
+        `Privacy broker checker source must include test case \`${name}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredLinterRule(value: unknown): readonly Diagnostic[] {
   const requiredRules = readStringArrayPath(
     value,
@@ -1050,7 +1166,14 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -1067,6 +1190,31 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (candidate.every((item) => typeof item === 'string' && item.trim().length > 0)) {
+    return [];
+  }
+
+  return [
+    createPrivacyDiagnostic(
+      input.file,
+      input.path,
+      `Privacy broker contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
+    )
+  ];
 }
 
 function validateExactValue(input: {

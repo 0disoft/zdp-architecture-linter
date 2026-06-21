@@ -174,6 +174,8 @@ template:
     - system
   required_boundary_types:
     - identity
+  review_statuses:
+    - draft
 controls:
   required_for_sensitive_boundaries:
     - audit_event
@@ -194,6 +196,10 @@ secret_handling:
 logging:
   forbidden_fields:
     - secret
+  allowed_evidence:
+    - redacted_key_name
+promotion_blocking:
+  - secret value appears in repository
 `,
         'contracts/dependency-review.yaml': `
 dependency_review:
@@ -234,9 +240,33 @@ promotion_blocking:
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
           severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
+          path: 'template.review_statuses',
+          message:
+            'Security contract `contracts/threat-model-template.yaml` must include `accepted_risk` in `template.review_statuses`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
           file: 'contracts/secret-handling.yaml',
           path: 'secret_handling.repository_policy',
           message: 'Security secret handling must declare `no-secret-values` policy.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'logging.allowed_evidence',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `audit_event_id` in `logging.allowed_evidence`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'promotion_blocking',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `break-glass path lacks audit evidence` in `promotion_blocking`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
@@ -273,6 +303,11 @@ promotion_blocking:
         'src/security-contracts/validator.ts': `
 export function validateSecurityContracts(): void {}
 `,
+        'src/security-contracts/types.ts': `
+export interface SecurityDiagnostic {
+  readonly code: string;
+}
+`,
         'tests/security-contracts.test.ts': `
 import { test } from 'bun:test';
 test('security placeholder', () => {});
@@ -304,6 +339,13 @@ test('security placeholder', () => {});
           file: 'src/security-contracts/validator.ts',
           path: 'source',
           message: 'Security checker source must include `REQUIRED_REVIEWS`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'src/security-contracts/types.ts',
+          path: 'source',
+          message: 'Security checker source must include `reviewStatuses`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
@@ -437,6 +479,11 @@ template:
     - runtime
     - infra
     - analytics
+  review_statuses:
+    - draft
+    - reviewed
+    - blocked
+    - accepted_risk
 controls:
   required_for_sensitive_boundaries:
     - server_side_authorization
@@ -486,6 +533,15 @@ logging:
     - password
     - private_key
     - webhook_signature
+  allowed_evidence:
+    - redacted_key_name
+    - hash_prefix
+    - rotation_event_id
+    - audit_event_id
+promotion_blocking:
+  - secret value appears in repository
+  - secret owner lacks rotation policy
+  - break-glass path lacks audit evidence
 `,
     'contracts/dependency-review.yaml': `
 dependency_review:
@@ -564,24 +620,38 @@ const files = [
   'contracts/secret-handling.yaml',
   'contracts/dependency-review.yaml'
 ];
+const yamlFields = ['review_statuses', 'allowed_evidence', 'promotion_blocking'];
 export { files };
 `,
     'src/security-contracts/types.ts': `
 export interface SecurityDiagnostic {
   readonly code: string;
 }
+export interface ThreatModelTemplateContract {
+  readonly reviewStatuses: readonly string[];
+}
+export interface SecretHandlingContract {
+  readonly loggingAllowedEvidence: readonly string[];
+  readonly promotionBlocking: readonly string[];
+}
 `,
     'src/security-contracts/validator.ts': `
 const REQUIRED_REVIEWS = [];
 const REQUIRED_THREAT_MODEL_FIELDS = [];
+const REQUIRED_THREAT_MODEL_REVIEW_STATUSES = [];
 const REQUIRED_SECRET_FORBIDDEN_VALUES = [];
+const REQUIRED_LOGGING_ALLOWED_EVIDENCE = [];
+const REQUIRED_SECRET_PROMOTION_BLOCKERS = [];
 const REQUIRED_DEPENDENCY_FIELDS = [];
 const SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED =
   'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED';
 export {
   REQUIRED_REVIEWS,
   REQUIRED_THREAT_MODEL_FIELDS,
+  REQUIRED_THREAT_MODEL_REVIEW_STATUSES,
   REQUIRED_SECRET_FORBIDDEN_VALUES,
+  REQUIRED_LOGGING_ALLOWED_EVIDENCE,
+  REQUIRED_SECRET_PROMOTION_BLOCKERS,
   REQUIRED_DEPENDENCY_FIELDS,
   SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED
 };
@@ -590,7 +660,10 @@ export {
 const cases = [
   'fails when a required review trigger is missing',
   'fails when threat models stop requiring server-side authorization controls',
+  'fails when threat model review statuses no longer include accepted risk',
   'fails when the repository can store secret values',
+  'fails when logging evidence no longer requires audit event ids',
+  'fails when secret handling no longer blocks unaudited break-glass paths',
   'fails when critical path dependencies can be single-maintainer by default',
   'fails when critical path dependencies no longer require a replacement plan'
 ];

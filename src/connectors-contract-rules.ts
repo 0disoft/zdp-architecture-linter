@@ -60,8 +60,13 @@ const REQUIRED_PROVIDER_FIELDS = [
   'provider_id',
   'adapter_boundary',
   'credential_source',
+  'credential_capability_required',
   'privacy_broker_required',
+  'privacy_scope_required',
   'sync_state_required',
+  'sync_state_policy',
+  'webhook_signature_required',
+  'webhook_replay_policy',
   'request_id_required',
   'trace_id_required'
 ] as const;
@@ -69,6 +74,7 @@ const REQUIRED_PROVIDER_FIELDS = [
 const REQUIRED_PROVIDER_FORBIDDEN_VALUES = [
   'oauth_refresh_token_plaintext',
   'provider_api_credential_plaintext',
+  'provider_api_key_plaintext',
   'webhook_secret_plaintext',
   'authorization_header',
   'cookie',
@@ -85,6 +91,8 @@ const REQUIRED_SYNC_FIELDS = [
   'cursor_ref',
   'schema_version',
   'last_success_at',
+  'retry_count',
+  'next_retry_at',
   'failure_count',
   'request_id',
   'trace_id'
@@ -108,17 +116,21 @@ const REQUIRED_SYNC_FORBIDDEN_VALUES = [
   'cookie',
   'raw_mail_body',
   'raw_message_body',
-  'raw_file_body'
+  'raw_file_body',
+  'raw_contact_body',
+  'credential_plaintext'
 ] as const;
 
 const REQUIRED_WEBHOOK_FIELDS = [
   'provider_id',
   'provider_event_id',
+  'signature_verified',
   'idempotency_key',
   'received_at',
   'request_id',
   'trace_id',
-  'payload_ref'
+  'payload_ref',
+  'dead_letter_policy'
 ] as const;
 
 const REQUIRED_WEBHOOK_FORBIDDEN_VALUES = [
@@ -129,6 +141,8 @@ const REQUIRED_WEBHOOK_FORBIDDEN_VALUES = [
   'authorization_header',
   'cookie',
   'payment_payload',
+  'raw_provider_payload',
+  'raw_payment_payload',
   'raw_mail_body',
   'raw_message_body',
   'raw_file_body'
@@ -145,7 +159,9 @@ const REQUIRED_FORBIDDEN_OWNERSHIP = [
   'credential_plaintext',
   'final_authorization',
   'entitlement_decision',
+  'entitlement',
   'ledger_credit_mutation',
+  'ledger_or_credit_mutation',
   'privacy_data_access_policy',
   'raw_source_data_policy'
 ] as const;
@@ -416,10 +432,27 @@ function validateProviders(value: unknown): readonly Diagnostic[] {
       ...validateExactValue({
         value: provider,
         file: PROVIDER_REGISTRY_FILE,
+        path: 'credential_capability_required',
+        diagnosticPath: `providers.${providerId}.credential_capability_required`,
+        expected: true,
+        message:
+          `Provider \`${providerId}\` must require credential vault capability checks.`
+      }),
+      ...validateExactValue({
+        value: provider,
+        file: PROVIDER_REGISTRY_FILE,
         path: 'privacy_broker_required',
         diagnosticPath: `providers.${providerId}.privacy_broker_required`,
         expected: true,
         message: `Provider \`${providerId}\` must require privacy broker scope.`
+      }),
+      ...validateExactValue({
+        value: provider,
+        file: PROVIDER_REGISTRY_FILE,
+        path: 'privacy_scope_required',
+        diagnosticPath: `providers.${providerId}.privacy_scope_required`,
+        expected: true,
+        message: `Provider \`${providerId}\` must require privacy scope propagation.`
       }),
       ...validateExactValue({
         value: provider,
@@ -432,10 +465,28 @@ function validateProviders(value: unknown): readonly Diagnostic[] {
       ...validateExactValue({
         value: provider,
         file: PROVIDER_REGISTRY_FILE,
+        path: 'sync_state_policy',
+        diagnosticPath: `providers.${providerId}.sync_state_policy`,
+        expected: 'cursor_reference_only',
+        message:
+          `Provider \`${providerId}\` must use cursor-reference-only sync state.`
+      }),
+      ...validateExactValue({
+        value: provider,
+        file: PROVIDER_REGISTRY_FILE,
         path: 'webhook_signature_required',
         diagnosticPath: `providers.${providerId}.webhook_signature_required`,
         expected: true,
         message: `Provider \`${providerId}\` must require webhook signature policy.`
+      }),
+      ...validateExactValue({
+        value: provider,
+        file: PROVIDER_REGISTRY_FILE,
+        path: 'webhook_replay_policy',
+        diagnosticPath: `providers.${providerId}.webhook_replay_policy`,
+        expected: 'signed_idempotent_payload_ref',
+        message:
+          `Provider \`${providerId}\` must use signed idempotent payload references for replay.`
       }),
       ...validateExactValue({
         value: provider,
@@ -891,7 +942,23 @@ async function validateCheckerSurface(
             PROVIDER_REGISTRY_FILE,
             SYNC_STATE_FILE,
             WEBHOOK_REPLAY_FILE,
-            PROVIDER_BOUNDARIES_FILE
+            PROVIDER_BOUNDARIES_FILE,
+            'credential_capability_required',
+            'privacy_scope_required',
+            'sync_state_policy',
+            'webhook_replay_policy'
+          ]
+        })),
+    ...(typesSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TYPES_FILE,
+          source: typesSource.source,
+          requiredFragments: [
+            'credentialCapabilityRequired',
+            'privacyScopeRequired',
+            'syncStatePolicy',
+            'webhookReplayPolicy'
           ]
         })),
     ...(validatorSource.source === null
@@ -902,6 +969,10 @@ async function validateCheckerSurface(
           requiredFragments: [
             'REQUIRED_PROVIDERS',
             'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+            'CON_PROVIDER_CREDENTIAL_CAPABILITY_NOT_REQUIRED',
+            'CON_PROVIDER_PRIVACY_SCOPE_NOT_REQUIRED',
+            'CON_PROVIDER_SYNC_STATE_POLICY_INVALID',
+            'CON_PROVIDER_WEBHOOK_REPLAY_POLICY_INVALID',
             'CON_SYNC_RAW_PAYLOAD_ALLOWED',
             'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
             'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
@@ -916,6 +987,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'fails when a required provider is missing',
             'fails when a provider bypasses credential vault capability',
+            'fails when a provider skips credential capability and replay policies',
             'fails when sync-state allows raw provider payload storage',
             'fails when webhook replay drops signature verification',
             'fails when webhook replay stores raw payloads instead of payload references',

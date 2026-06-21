@@ -97,6 +97,12 @@ required_attributes:
   all_services:
     - service_id
     - request_id
+  deploy_events:
+    - image_ref
+  jobs:
+    - job_id
+  webhooks:
+    - provider
 redacted_attributes:
   - authorization
 propagation_headers:
@@ -116,6 +122,30 @@ propagation_headers:
           path: 'required_attributes.all_services',
           message:
             'Observability contract `contracts/telemetry-conventions.yaml` must include `service_repo` in `required_attributes.all_services`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/telemetry-conventions.yaml',
+          path: 'required_attributes.deploy_events',
+          message:
+            'Observability contract `contracts/telemetry-conventions.yaml` must include `deploy_id` in `required_attributes.deploy_events`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/telemetry-conventions.yaml',
+          path: 'required_attributes.jobs',
+          message:
+            'Observability contract `contracts/telemetry-conventions.yaml` must include `attempt` in `required_attributes.jobs`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/telemetry-conventions.yaml',
+          path: 'required_attributes.webhooks',
+          message:
+            'Observability contract `contracts/telemetry-conventions.yaml` must include `webhook_event_id` in `required_attributes.webhooks`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-OBS-001',
@@ -145,6 +175,10 @@ propagation_headers:
 dashboards:
   - id: platform-health
     status: planned
+    required_panels:
+      - service availability
+      - p95 latency
+      - error rate
 policy:
   source_of_truth: dashboard
   dashboard_only_changes: allowed
@@ -164,6 +198,14 @@ policy:
           path: 'dashboards',
           message:
             'Observability contract `contracts/dashboard-inventory.yaml` must declare `platform-cost-and-ingest` in `dashboards`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/dashboard-inventory.yaml',
+          path: 'dashboards.platform-health.required_panels',
+          message:
+            'Observability contract `contracts/dashboard-inventory.yaml` must include `deployment markers` in `required_panels`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-OBS-001',
@@ -191,8 +233,11 @@ policy:
         ...createValidObservabilityFiles(),
         'contracts/alert-rules.yaml': `
 alerts:
-  - id: service-healthcheck-failing
+  - id: ServiceHealthcheckFailing
     status: draft
+    severity: critical
+    signal: ReadinessFailureRate
+    action: rollback
 `
       },
       async (repositoryRoot) => {
@@ -215,7 +260,124 @@ alerts:
           file: 'contracts/alert-rules.yaml',
           path: 'alerts',
           message:
+            'Observability contract `contracts/alert-rules.yaml` must declare `service-healthcheck-failing` in `alerts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/alert-rules.yaml',
+          path: 'alerts',
+          message:
             'Observability contract `contracts/alert-rules.yaml` must declare `telemetry-sensitive-data-detected` in `alerts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/alert-rules.yaml',
+          path: 'alerts[0].id',
+          message:
+            'Observability alert id `ServiceHealthcheckFailing` must use kebab-case.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/alert-rules.yaml',
+          path: 'alerts[0].severity',
+          message:
+            'Observability alert severity `critical` must be one of info, warning, review, page.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/alert-rules.yaml',
+          path: 'alerts[0].signal',
+          message:
+            'Observability alert signal `ReadinessFailureRate` must use snake_case.'
+        });
+      }
+    );
+  });
+
+  test('fails when observability contract string lists include non-string items', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'contracts/telemetry-conventions.yaml': `
+required_attributes:
+  all_services:
+    - service_id
+    - service_repo
+    - environment
+    - cost_center
+    - request_id
+    - trace_id
+    - bad: object
+  deploy_events:
+    - deploy_id
+    - image_ref
+  jobs:
+    - job_id
+    - job_type
+    - attempt
+  webhooks:
+    - provider
+    - webhook_event_id
+redacted_attributes:
+  - authorization
+  - cookie
+  - secret
+  - token
+  - database_url
+  - payment_payload
+  - ai_prompt
+propagation_headers:
+  - traceparent
+  - x-request-id
+`,
+        'contracts/dashboard-inventory.yaml': `
+dashboards:
+  - id: platform-health
+    status: planned
+    required_panels:
+      - service availability
+      - p95 latency
+      - error rate
+      - deployment markers
+      - bad: object
+  - id: platform-cost-and-ingest
+    status: planned
+    required_panels:
+      - telemetry ingest volume
+      - retained log gb
+      - provider cost dimensions
+      - alert noise review
+policy:
+  source_of_truth: repository-contract-first
+  dashboard_only_changes: forbidden
+  export_required_before_provider_migration: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/telemetry-conventions.yaml',
+          path: 'required_attributes.all_services',
+          message:
+            'Observability contract `contracts/telemetry-conventions.yaml` must declare `required_attributes.all_services` as a string list.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/dashboard-inventory.yaml',
+          path: 'dashboards[0].required_panels',
+          message:
+            'Observability contract `contracts/dashboard-inventory.yaml` must declare `required_panels` as a string list.'
         });
       }
     );
@@ -264,6 +426,22 @@ test('observability placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-OBS-001',
           severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Observability package `check` script must include `tsc --noEmit`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check',
+          message:
+            'Observability package `check` script must include `bun run contracts:check`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
           file: 'src/observability-contracts/validator.ts',
           path: 'source',
           message:
@@ -275,7 +453,117 @@ test('observability placeholder', () => {});
           file: 'tests/observability-contracts.test.ts',
           path: 'source',
           message:
-            'Observability checker source must include `fails when traceparent propagation is missing`.'
+            'Observability checker source must include test case `fails when traceparent propagation is missing`.'
+        });
+      }
+    );
+  });
+
+  test('fails when observability source proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'src/observability-contracts/validator.ts': `
+const fakeProof = [
+  'REQUIRED_SERVICE_ATTRIBUTES',
+  'REQUIRED_DEPLOY_EVENT_ATTRIBUTES',
+  'REQUIRED_JOB_ATTRIBUTES',
+  'REQUIRED_WEBHOOK_ATTRIBUTES',
+  'REQUIRED_PROPAGATION_HEADERS',
+  'FORBIDDEN_SENSITIVE_FIELDS',
+  'REQUIRED_DASHBOARD_PANELS',
+  'REQUIRED_ALERT_IDS',
+  'OBS_TELEMETRY_DEPLOY_EVENT_ATTRIBUTE_MISSING',
+  'OBS_TELEMETRY_JOB_ATTRIBUTE_MISSING',
+  'OBS_TELEMETRY_WEBHOOK_ATTRIBUTE_MISSING',
+  'OBS_DASHBOARD_ONLY_CHANGES_ALLOWED',
+  'OBS_DASHBOARD_REQUIRED_PANEL_MISSING',
+  'OBS_ALERT_FIELD_MISSING',
+  'OBS_ALERT_REQUIRED_ID_MISSING',
+  'export function validateObservabilityContracts',
+  'function validateRequiredListEntries'
+];
+export { fakeProof };
+`,
+        'tests/observability-contracts.test.ts': `
+const fakeProof = [
+  'fails when a required service attribute is missing',
+  'fails when deploy, job, or webhook telemetry attributes are missing',
+  'fails when traceparent propagation is missing',
+  'fails when sensitive fields are not redacted',
+  'fails when dashboard-only changes are allowed',
+  'fails when required dashboard panels are missing',
+  'fails when an alert rule misses a required field',
+  'fails when a required alert rule disappears',
+  'test(',
+  'expect(',
+  'validateObservabilityContracts'
+];
+export { fakeProof };
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'src/observability-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Observability checker source must include code fragment `export function validateObservabilityContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'tests/observability-contracts.test.ts',
+          path: 'source',
+          message:
+            'Observability checker source must include test case `fails when a required service attribute is missing`.'
+        });
+      }
+    );
+  });
+
+  test('fails when observability test proof is only a string list plus placeholder test', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'tests/observability-contracts.test.ts': `
+import { expect, test } from 'bun:test';
+import { validateObservabilityContracts } from '../src/observability-contracts/validator';
+const fakeProof = [
+  'fails when a required service attribute is missing',
+  'fails when deploy, job, or webhook telemetry attributes are missing',
+  'fails when traceparent propagation is missing',
+  'fails when sensitive fields are not redacted',
+  'fails when dashboard-only changes are allowed',
+  'fails when required dashboard panels are missing',
+  'fails when an alert rule misses a required field',
+  'fails when a required alert rule disappears'
+];
+test('observability placeholder', () => {
+  expect(fakeProof).toContain('fails when a required service attribute is missing');
+  expect(validateObservabilityContracts).toBeDefined();
+});
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'tests/observability-contracts.test.ts',
+          path: 'source',
+          message:
+            'Observability checker source must include test case `fails when a required service attribute is missing`.'
         });
       }
     );
@@ -322,6 +610,16 @@ required_attributes:
     - cost_center
     - request_id
     - trace_id
+  deploy_events:
+    - deploy_id
+    - image_ref
+  jobs:
+    - job_id
+    - job_type
+    - attempt
+  webhooks:
+    - provider
+    - webhook_event_id
 redacted_attributes:
   - authorization
   - cookie
@@ -338,8 +636,18 @@ propagation_headers:
 dashboards:
   - id: platform-health
     status: planned
+    required_panels:
+      - service availability
+      - p95 latency
+      - error rate
+      - deployment markers
   - id: platform-cost-and-ingest
     status: planned
+    required_panels:
+      - telemetry ingest volume
+      - retained log gb
+      - provider cost dimensions
+      - alert noise review
 policy:
   source_of_truth: repository-contract-first
   dashboard_only_changes: forbidden
@@ -349,12 +657,24 @@ policy:
 alerts:
   - id: service-healthcheck-failing
     status: draft
+    severity: page
+    signal: readiness_failure_rate
+    action: route traffic away or rollback recent deployment
   - id: backup-restore-drill-failed
     status: draft
+    severity: page
+    signal: restore_drill_failure
+    action: freeze destructive infra changes
   - id: telemetry-sensitive-data-detected
     status: draft
+    severity: page
+    signal: sensitive_pattern_in_logs
+    action: stop ingestion and start redaction review
   - id: provider-ingest-failing
     status: draft
+    severity: review
+    signal: telemetry_provider_ingest_error
+    action: preserve local evidence and reduce nonessential telemetry
 `
   };
 }
@@ -406,28 +726,132 @@ export interface ObservabilityDiagnostic {
 }
 `,
     'src/observability-contracts/validator.ts': `
-const REQUIRED_SERVICE_ATTRIBUTES = [];
-const REQUIRED_PROPAGATION_HEADERS = [];
-const FORBIDDEN_SENSITIVE_FIELDS = [];
+const REQUIRED_SERVICE_ATTRIBUTES = [
+  'service_id',
+  'service_repo',
+  'environment',
+  'cost_center',
+  'request_id',
+  'trace_id'
+];
+const REQUIRED_DEPLOY_EVENT_ATTRIBUTES = ['deploy_id', 'image_ref'];
+const REQUIRED_JOB_ATTRIBUTES = ['job_id', 'job_type', 'attempt'];
+const REQUIRED_WEBHOOK_ATTRIBUTES = ['provider', 'webhook_event_id'];
+const REQUIRED_PROPAGATION_HEADERS = ['traceparent', 'x-request-id'];
+const FORBIDDEN_SENSITIVE_FIELDS = [
+  'authorization',
+  'cookie',
+  'secret',
+  'token',
+  'database_url',
+  'payment_payload',
+  'ai_prompt'
+];
+const REQUIRED_DASHBOARD_PANELS = {
+  'platform-health': [
+    'service availability',
+    'p95 latency',
+    'error rate',
+    'deployment markers'
+  ],
+  'platform-cost-and-ingest': [
+    'telemetry ingest volume',
+    'retained log gb',
+    'provider cost dimensions',
+    'alert noise review'
+  ]
+};
+const REQUIRED_ALERT_IDS = [
+  'service-healthcheck-failing',
+  'backup-restore-drill-failed',
+  'telemetry-sensitive-data-detected',
+  'provider-ingest-failing'
+];
+const OBS_TELEMETRY_DEPLOY_EVENT_ATTRIBUTE_MISSING = 'OBS_TELEMETRY_DEPLOY_EVENT_ATTRIBUTE_MISSING';
+const OBS_TELEMETRY_JOB_ATTRIBUTE_MISSING = 'OBS_TELEMETRY_JOB_ATTRIBUTE_MISSING';
+const OBS_TELEMETRY_WEBHOOK_ATTRIBUTE_MISSING = 'OBS_TELEMETRY_WEBHOOK_ATTRIBUTE_MISSING';
 const OBS_DASHBOARD_ONLY_CHANGES_ALLOWED = 'OBS_DASHBOARD_ONLY_CHANGES_ALLOWED';
+const OBS_DASHBOARD_REQUIRED_PANEL_MISSING = 'OBS_DASHBOARD_REQUIRED_PANEL_MISSING';
 const OBS_ALERT_FIELD_MISSING = 'OBS_ALERT_FIELD_MISSING';
-export {
+const OBS_ALERT_REQUIRED_ID_MISSING = 'OBS_ALERT_REQUIRED_ID_MISSING';
+
+export function validateObservabilityContracts(): string[] {
+  return [
+    ...validateRequiredListEntries(REQUIRED_SERVICE_ATTRIBUTES),
+    ...validateRequiredListEntries(REQUIRED_DEPLOY_EVENT_ATTRIBUTES),
+    ...validateRequiredListEntries(REQUIRED_JOB_ATTRIBUTES),
+    ...validateRequiredListEntries(REQUIRED_WEBHOOK_ATTRIBUTES),
+    ...validateRequiredListEntries(REQUIRED_PROPAGATION_HEADERS),
+    ...validateRequiredListEntries(FORBIDDEN_SENSITIVE_FIELDS),
+    ...validateRequiredListEntries(Object.keys(REQUIRED_DASHBOARD_PANELS)),
+    ...validateRequiredListEntries(REQUIRED_ALERT_IDS),
+    OBS_TELEMETRY_DEPLOY_EVENT_ATTRIBUTE_MISSING,
+    OBS_TELEMETRY_JOB_ATTRIBUTE_MISSING,
+    OBS_TELEMETRY_WEBHOOK_ATTRIBUTE_MISSING,
+    OBS_DASHBOARD_ONLY_CHANGES_ALLOWED,
+    OBS_DASHBOARD_REQUIRED_PANEL_MISSING,
+    OBS_ALERT_FIELD_MISSING,
+    OBS_ALERT_REQUIRED_ID_MISSING
+  ];
+}
+
+function validateRequiredListEntries(entries: readonly string[]): string[] {
+  return [...entries];
+}
+
+export const observabilityCheckerMarkers = {
   REQUIRED_SERVICE_ATTRIBUTES,
+  REQUIRED_DEPLOY_EVENT_ATTRIBUTES,
+  REQUIRED_JOB_ATTRIBUTES,
+  REQUIRED_WEBHOOK_ATTRIBUTES,
   REQUIRED_PROPAGATION_HEADERS,
   FORBIDDEN_SENSITIVE_FIELDS,
+  REQUIRED_DASHBOARD_PANELS,
+  REQUIRED_ALERT_IDS,
+  OBS_TELEMETRY_DEPLOY_EVENT_ATTRIBUTE_MISSING,
+  OBS_TELEMETRY_JOB_ATTRIBUTE_MISSING,
+  OBS_TELEMETRY_WEBHOOK_ATTRIBUTE_MISSING,
   OBS_DASHBOARD_ONLY_CHANGES_ALLOWED,
-  OBS_ALERT_FIELD_MISSING
+  OBS_DASHBOARD_REQUIRED_PANEL_MISSING,
+  OBS_ALERT_FIELD_MISSING,
+  OBS_ALERT_REQUIRED_ID_MISSING
 };
 `,
     'tests/observability-contracts.test.ts': `
-const cases = [
-  'fails when a required service attribute is missing',
-  'fails when traceparent propagation is missing',
-  'fails when sensitive fields are not redacted',
-  'fails when dashboard-only changes are allowed',
-  'fails when an alert rule misses a required field'
-];
-export { cases };
+import { expect, test } from 'bun:test';
+import { validateObservabilityContracts } from '../src/observability-contracts/validator';
+
+test('fails when a required service attribute is missing', () => {
+  expect(validateObservabilityContracts()).toContain('service_id');
+});
+
+test('fails when deploy, job, or webhook telemetry attributes are missing', () => {
+  expect(validateObservabilityContracts()).toContain('deploy_id');
+});
+
+test('fails when traceparent propagation is missing', () => {
+  expect(validateObservabilityContracts()).toContain('traceparent');
+});
+
+test('fails when sensitive fields are not redacted', () => {
+  expect(validateObservabilityContracts()).toContain('database_url');
+});
+
+test('fails when dashboard-only changes are allowed', () => {
+  expect(validateObservabilityContracts()).toContain('OBS_DASHBOARD_ONLY_CHANGES_ALLOWED');
+});
+
+test('fails when required dashboard panels are missing', () => {
+  expect(validateObservabilityContracts()).toContain('platform-health');
+});
+
+test('fails when an alert rule misses a required field', () => {
+  expect(validateObservabilityContracts()).toContain('OBS_ALERT_FIELD_MISSING');
+});
+
+test('fails when a required alert rule disappears', () => {
+  expect(validateObservabilityContracts()).toContain('provider-ingest-failing');
+});
 `
   };
 }

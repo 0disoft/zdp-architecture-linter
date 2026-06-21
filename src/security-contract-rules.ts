@@ -105,6 +105,13 @@ const REQUIRED_BOUNDARY_TYPES = [
   'analytics'
 ] as const;
 
+const REQUIRED_THREAT_MODEL_REVIEW_STATUSES = [
+  'draft',
+  'reviewed',
+  'blocked',
+  'accepted_risk'
+] as const;
+
 const REQUIRED_SENSITIVE_BOUNDARY_CONTROLS = [
   'server_side_authorization',
   'audit_event',
@@ -156,6 +163,19 @@ const REQUIRED_LOGGING_FORBIDDEN_FIELDS = [
   'password',
   'private_key',
   'webhook_signature'
+] as const;
+
+const REQUIRED_LOGGING_ALLOWED_EVIDENCE = [
+  'redacted_key_name',
+  'hash_prefix',
+  'rotation_event_id',
+  'audit_event_id'
+] as const;
+
+const REQUIRED_SECRET_PROMOTION_BLOCKERS = [
+  'secret value appears in repository',
+  'secret owner lacks rotation policy',
+  'break-glass path lacks audit evidence'
 ] as const;
 
 const REQUIRED_DEPENDENCY_REVIEW_SURFACES = [
@@ -464,6 +484,13 @@ function validateThreatModelTemplateContract(
     ...validateRequiredStringArrayEntries({
       value,
       file: THREAT_MODEL_TEMPLATE_FILE,
+      path: 'template.review_statuses',
+      field: 'template.review_statuses',
+      requiredEntries: REQUIRED_THREAT_MODEL_REVIEW_STATUSES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: THREAT_MODEL_TEMPLATE_FILE,
       path: 'controls.required_for_sensitive_boundaries',
       field: 'controls.required_for_sensitive_boundaries',
       requiredEntries: REQUIRED_SENSITIVE_BOUNDARY_CONTROLS
@@ -530,6 +557,20 @@ function validateSecretHandlingContract(value: unknown): readonly Diagnostic[] {
       path: 'logging.forbidden_fields',
       field: 'logging.forbidden_fields',
       requiredEntries: REQUIRED_LOGGING_FORBIDDEN_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SECRET_HANDLING_FILE,
+      path: 'logging.allowed_evidence',
+      field: 'logging.allowed_evidence',
+      requiredEntries: REQUIRED_LOGGING_ALLOWED_EVIDENCE
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SECRET_HANDLING_FILE,
+      path: 'promotion_blocking',
+      field: 'promotion_blocking',
+      requiredEntries: REQUIRED_SECRET_PROMOTION_BLOCKERS
     })
   ];
 }
@@ -682,7 +723,21 @@ async function validateCheckerSurface(
             SECURITY_BASELINE_FILE,
             THREAT_MODEL_TEMPLATE_FILE,
             SECRET_HANDLING_FILE,
-            DEPENDENCY_REVIEW_FILE
+            DEPENDENCY_REVIEW_FILE,
+            'review_statuses',
+            'allowed_evidence',
+            'promotion_blocking'
+          ]
+        })),
+    ...(typesSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_TYPES_FILE,
+          source: typesSource.source,
+          requiredFragments: [
+            'reviewStatuses',
+            'loggingAllowedEvidence',
+            'promotionBlocking'
           ]
         })),
     ...(validatorSource.source === null
@@ -693,7 +748,10 @@ async function validateCheckerSurface(
           requiredFragments: [
             'REQUIRED_REVIEWS',
             'REQUIRED_THREAT_MODEL_FIELDS',
+            'REQUIRED_THREAT_MODEL_REVIEW_STATUSES',
             'REQUIRED_SECRET_FORBIDDEN_VALUES',
+            'REQUIRED_LOGGING_ALLOWED_EVIDENCE',
+            'REQUIRED_SECRET_PROMOTION_BLOCKERS',
             'REQUIRED_DEPENDENCY_FIELDS',
             'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED'
           ]
@@ -706,7 +764,10 @@ async function validateCheckerSurface(
           requiredFragments: [
             'fails when a required review trigger is missing',
             'fails when threat models stop requiring server-side authorization controls',
+            'fails when threat model review statuses no longer include accepted risk',
             'fails when the repository can store secret values',
+            'fails when logging evidence no longer requires audit event ids',
+            'fails when secret handling no longer blocks unaudited break-glass paths',
             'fails when critical path dependencies can be single-maintainer by default',
             'fails when critical path dependencies no longer require a replacement plan'
           ]
