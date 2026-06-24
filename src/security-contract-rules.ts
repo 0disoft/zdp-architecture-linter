@@ -201,6 +201,8 @@ const REQUIRED_DEPENDENCY_FIELDS = [
   'vulnerability_policy'
 ] as const;
 
+const REQUIRED_MAINTAINER_RISK_LEVELS = ['low', 'medium', 'high'] as const;
+
 const REQUIRED_DEPENDENCY_FORBIDDEN_VALUES = [
   'dependency with unknown license on critical path',
   'unpinned executable installer on critical path',
@@ -467,6 +469,14 @@ function validateThreatModelTemplateContract(
   value: unknown
 ): readonly Diagnostic[] {
   return [
+    ...validateExactValue({
+      value,
+      file: THREAT_MODEL_TEMPLATE_FILE,
+      path: 'contract.owner',
+      expected: 'platform-security',
+      message:
+        'Security threat model template contract must declare owner `platform-security`.'
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: THREAT_MODEL_TEMPLATE_FILE,
@@ -515,6 +525,14 @@ function validateThreatModelTemplateContract(
 
 function validateSecretHandlingContract(value: unknown): readonly Diagnostic[] {
   return [
+    ...validateExactValue({
+      value,
+      file: SECRET_HANDLING_FILE,
+      path: 'contract.owner',
+      expected: 'platform-security',
+      message:
+        'Security secret handling contract must declare owner `platform-security`.'
+    }),
     ...validateExactValue({
       value,
       file: SECRET_HANDLING_FILE,
@@ -577,6 +595,14 @@ function validateSecretHandlingContract(value: unknown): readonly Diagnostic[] {
 
 function validateDependencyReviewContract(value: unknown): readonly Diagnostic[] {
   return [
+    ...validateExactValue({
+      value,
+      file: DEPENDENCY_REVIEW_FILE,
+      path: 'contract.owner',
+      expected: 'platform-security',
+      message:
+        'Security dependency review contract must declare owner `platform-security`.'
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: DEPENDENCY_REVIEW_FILE,
@@ -590,6 +616,13 @@ function validateDependencyReviewContract(value: unknown): readonly Diagnostic[]
       path: 'dependency_review.required_fields',
       field: 'dependency_review.required_fields',
       requiredEntries: REQUIRED_DEPENDENCY_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: DEPENDENCY_REVIEW_FILE,
+      path: 'dependency_review.maintainer_risk_levels',
+      field: 'dependency_review.maintainer_risk_levels',
+      requiredEntries: REQUIRED_MAINTAINER_RISK_LEVELS
     }),
     ...validateExactValue({
       value,
@@ -606,6 +639,14 @@ function validateDependencyReviewContract(value: unknown): readonly Diagnostic[]
       expected: true,
       message:
         'Security dependency review must require replacement plans for critical paths.'
+    }),
+    ...validateExactValue({
+      value,
+      file: DEPENDENCY_REVIEW_FILE,
+      path: 'dependency_review.critical_path_policy.require_version_pin_reason',
+      expected: true,
+      message:
+        'Security dependency review must require version pin reasons for critical paths.'
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -725,6 +766,8 @@ async function validateCheckerSurface(
             SECRET_HANDLING_FILE,
             DEPENDENCY_REVIEW_FILE,
             'review_statuses',
+            'maintainer_risk_levels',
+            'require_version_pin_reason',
             'allowed_evidence',
             'promotion_blocking'
           ]
@@ -736,6 +779,8 @@ async function validateCheckerSurface(
           source: typesSource.source,
           requiredFragments: [
             'reviewStatuses',
+            'maintainerRiskLevels',
+            'requireVersionPinReason',
             'loggingAllowedEvidence',
             'promotionBlocking'
           ]
@@ -753,7 +798,10 @@ async function validateCheckerSurface(
             'REQUIRED_LOGGING_ALLOWED_EVIDENCE',
             'REQUIRED_SECRET_PROMOTION_BLOCKERS',
             'REQUIRED_DEPENDENCY_FIELDS',
-            'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED'
+            'REQUIRED_MAINTAINER_RISK_LEVELS',
+            'SECURITY_CONTRACT_OWNER_INVALID',
+            'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED',
+            'SECURITY_DEPENDENCY_VERSION_PIN_REASON_MISSING'
           ]
         })),
     ...(testSource.source === null
@@ -768,8 +816,11 @@ async function validateCheckerSurface(
             'fails when the repository can store secret values',
             'fails when logging evidence no longer requires audit event ids',
             'fails when secret handling no longer blocks unaudited break-glass paths',
+            'fails when a non-baseline security contract owner drifts',
+            'fails when dependency maintainer risk levels are incomplete',
             'fails when critical path dependencies can be single-maintainer by default',
-            'fails when critical path dependencies no longer require a replacement plan'
+            'fails when critical path dependencies no longer require a replacement plan',
+            'fails when critical path dependencies no longer require a version pin reason'
           ]
         }))
   ];

@@ -54,7 +54,15 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-boundaries.yaml`.'
       });
-      expect(diagnostics).toHaveLength(19);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CORE-001',
+        severity: 'error',
+        file: 'contracts/core-event-outbox.yaml',
+        path: 'repository.root',
+        message:
+          'Core platform repository must include `contracts/core-event-outbox.yaml`.'
+      });
+      expect(diagnostics).toHaveLength(20);
     });
   });
 
@@ -896,7 +904,7 @@ forbidden_storage_values:
           file: 'contracts/identity-session-store.yaml',
           path: 'contract.status',
           message:
-            'Core platform identity session store contract must stay `contract_only_no_migration` until migrations exist.'
+            'Core platform identity session store contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -905,6 +913,30 @@ forbidden_storage_values:
           path: 'required_session_record_fields',
           message:
             'Core platform contract `contracts/identity-session-store.yaml` must include `refresh_token_family_id` in `required_session_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_session_record_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `command_id` in `required_session_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_session_record_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `idempotency_key` in `required_session_record_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/identity-session-store.yaml',
+          path: 'required_session_record_fields',
+          message:
+            'Core platform contract `contracts/identity-session-store.yaml` must include `audit_event_ref` in `required_session_record_fields`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -961,6 +993,112 @@ forbidden_storage_values:
           path: 'forbidden_storage_values',
           message:
             'Core platform contract `contracts/identity-session-store.yaml` must include `session_secret_plaintext` in `forbidden_storage_values`.'
+        });
+      }
+    );
+  });
+
+  test('fails when core event outbox gates drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/core-event-outbox.yaml': `
+contract:
+  status: live_dispatcher_ready
+  owner: product-api
+runtime:
+  live_dispatcher_implemented: true
+  consumer_inbox_implemented: true
+  replay_worker_implemented: true
+  production_route_unblocked: true
+events:
+  cloud_events_required: false
+  source: product-api
+  produced:
+    - core.account.restriction_cleared
+  money_relevant:
+    - core.account.restriction_cleared
+storage:
+  outbox_table: product.events
+  delivery_attempt_table: product.delivery_attempts
+  append_only_tables:
+    - product.events
+  payload_ref_only: false
+  inline_personal_payload_allowed: true
+  inline_secret_payload_allowed: true
+required_outbox_fields:
+  - cloud_event_id
+required_delivery_attempt_fields:
+  - core_event_outbox_id
+controls:
+  - outbox_rows_are_append_only
+forbidden_values:
+  - raw_password
+forbidden_claims:
+  - product_route_unblocked
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform event outbox contract must stay `migration_shape_declared_no_dispatcher` until dispatcher and replay workers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'runtime.live_dispatcher_implemented',
+          message:
+            'Core platform event outbox contract must keep live_dispatcher_implemented false until dispatcher proof exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'events.produced',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `core.account.restricted` in `events.produced`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'events.money_relevant',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `core.identity.email_verified` in `events.money_relevant`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'required_outbox_fields',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `causation_command_id` in `required_outbox_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'controls',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `no_dispatcher_claim_until_worker_exists` in `controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'forbidden_claims',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `event_dispatcher_ready` in `forbidden_claims`.'
         });
       }
     );
@@ -1819,7 +1957,7 @@ required_gate_states:
       - contracts/auth-runtime-admission-context.yaml
       - contracts/auth-runtime-command-propagation.yaml
   - gate_id: session_store_contract
-    contract_status: contract_only_no_migration
+    contract_status: migration_shape_declared_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
     durable_implementation_status: durable_implementation_missing
     review_status: review_missing
@@ -1902,7 +2040,7 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
-    contract_status: contract_only_no_migration
+    contract_status: migration_shape_declared_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
     durable_implementation_status: durable_implementation_missing
     review_status: review_missing
@@ -2104,7 +2242,7 @@ forbidden_runtime_claims:
   - provider_token_exchange_ready
   - product_route_unblocked
 `,
-    'contracts/auth-durable-storage-admission.yaml': `
+'contracts/auth-durable-storage-admission.yaml': `
 contract:
   version: 1
   status: contract_only_no_migration
@@ -2366,10 +2504,10 @@ forbidden_readiness_claims:
   - oauth_provider_exchange_ready
   - product_route_unblocked
 `,
-    'contracts/identity-session-store.yaml': `
+'contracts/identity-session-store.yaml': `
 contract:
   version: 1
-  status: contract_only_no_migration
+  status: migration_shape_declared_no_adapter
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_session_record_fields:
@@ -2384,7 +2522,10 @@ required_session_record_fields:
   - refresh_token_hash
   - rotation_counter
   - created_by_command_id
+  - command_id
+  - idempotency_key
   - trace_id
+  - audit_event_ref
 state_values:
   - active
   - refreshed
@@ -2452,6 +2593,99 @@ forbidden_storage_values:
   - cookie_header
   - raw_provider_payload
   - password_hash
+`,
+    'contracts/core-event-outbox.yaml': `
+contract:
+  version: 1
+  status: migration_shape_declared_no_dispatcher
+  owner: zdp-core-platform
+runtime:
+  live_dispatcher_implemented: false
+  consumer_inbox_implemented: false
+  replay_worker_implemented: false
+  production_route_unblocked: false
+events:
+  cloud_events_required: true
+  source: zdp-core-platform
+  produced:
+    - core.account.restricted
+    - core.account.restriction_cleared
+    - core.identity.email_verified
+    - core.identity.security_pin_changed
+    - core.identity.human_readiness_changed
+    - core.permission.role_assignment_changed
+    - core.access.api_key_changed
+    - core.consent.withdrawn
+  money_relevant:
+    - core.account.restricted
+    - core.account.restriction_cleared
+    - core.identity.email_verified
+    - core.identity.security_pin_changed
+    - core.identity.human_readiness_changed
+storage:
+  outbox_table: audit.core_event_outbox
+  delivery_attempt_table: audit.core_event_delivery_attempts
+  append_only_tables:
+    - audit.core_event_outbox
+    - audit.core_event_delivery_attempts
+  payload_ref_only: true
+  inline_personal_payload_allowed: false
+  inline_secret_payload_allowed: false
+required_outbox_fields:
+  - cloud_event_id
+  - cloud_event_source
+  - cloud_event_type
+  - schema_version
+  - aggregate_type
+  - aggregate_id
+  - tenant_id
+  - actor_id
+  - subject_ref
+  - payload_ref
+  - redacted_summary
+  - causation_command_id
+  - idempotency_key
+  - audit_event_ref
+  - trace_id
+  - occurred_at
+  - available_at
+required_delivery_attempt_fields:
+  - core_event_outbox_id
+  - consumer_service_id
+  - attempt_number
+  - delivery_state
+  - dispatcher_ref
+  - attempted_at
+  - audit_event_ref
+  - trace_id
+controls:
+  - outbox_rows_are_append_only
+  - delivery_attempt_rows_are_append_only
+  - cloud_event_id_unique
+  - event_type_aggregate_command_unique
+  - payload_reference_only
+  - redacted_summary_only
+  - audit_event_reference_required
+  - command_idempotency_reference_required
+  - trace_reference_required
+  - dispatcher_ref_required_for_delivery_attempts
+  - no_dispatcher_claim_until_worker_exists
+forbidden_values:
+  - raw_password
+  - password_plaintext
+  - security_pin_plaintext
+  - raw_email
+  - phone_number
+  - authorization_header
+  - cookie_header
+  - refresh_token_plaintext
+  - provider_secret
+  - raw_personal_payload
+forbidden_claims:
+  - event_dispatcher_ready
+  - event_replay_ready
+  - money_platform_realtime_sync_ready
+  - product_route_unblocked
 `,
     'contracts/auth-passkey-challenge-store.yaml': `
 contract:

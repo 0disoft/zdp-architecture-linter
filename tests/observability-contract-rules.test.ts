@@ -223,6 +223,64 @@ policy:
           message:
             'Observability dashboard inventory must forbid dashboard-only changes.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/dashboard-inventory.yaml',
+          path: 'policy.export_required_before_provider_migration',
+          message:
+            'Observability dashboard inventory must require export before provider migration.'
+        });
+      }
+    );
+  });
+
+  test('fails when dashboard ids or required panels drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'contracts/dashboard-inventory.yaml': `
+dashboards:
+  - id: Platform Health
+    status: planned
+    required_panels:
+      - service availability
+      - p95 latency
+      - error rate
+      - deployment markers
+  - id: platform-cost-and-ingest
+    status: planned
+    required_panels:
+      - telemetry ingest volume
+      - retained log gb
+      - provider cost dimensions
+policy:
+  source_of_truth: repository-contract-first
+  dashboard_only_changes: forbidden
+  export_required_before_provider_migration: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/dashboard-inventory.yaml',
+          path: 'dashboards[0].id',
+          message: 'Observability dashboard id `Platform Health` must use kebab-case.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/dashboard-inventory.yaml',
+          path: 'dashboards.platform-cost-and-ingest.required_panels',
+          message:
+            'Observability contract `contracts/dashboard-inventory.yaml` must include `alert noise review` in `required_panels`.'
+        });
       }
     );
   });
@@ -293,6 +351,51 @@ alerts:
           path: 'alerts[0].signal',
           message:
             'Observability alert signal `ReadinessFailureRate` must use snake_case.'
+        });
+      }
+    );
+  });
+
+  test('fails when alert fields are blank', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidObservabilityFiles(),
+        'contracts/alert-rules.yaml': `
+alerts:
+  - id: service-healthcheck-failing
+    status: draft
+    severity: page
+    signal: readiness_failure_rate
+    action: ""
+  - id: backup-restore-drill-failed
+    status: draft
+    severity: page
+    signal: restore_drill_failure
+    action: freeze destructive infra changes
+  - id: telemetry-sensitive-data-detected
+    status: draft
+    severity: page
+    signal: sensitive_pattern_in_logs
+    action: stop ingestion and start redaction review
+  - id: provider-ingest-failing
+    status: draft
+    severity: review
+    signal: telemetry_provider_ingest_error
+    action: preserve local evidence and reduce nonessential telemetry
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryObservabilityContract({
+          repositoryRoot,
+          repositoryServiceContract: createObservabilityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-OBS-001',
+          severity: 'error',
+          file: 'contracts/alert-rules.yaml',
+          path: 'alerts[0].action',
+          message: 'Observability alert at index 0 must declare string field `action`.'
         });
       }
     );

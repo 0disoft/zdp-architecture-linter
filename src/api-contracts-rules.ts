@@ -69,12 +69,16 @@ const REQUIRED_ROUTE_FIELDS = [
 ] as const;
 
 const REQUIRED_FORBIDDEN_ROUTE_SHAPES = [
+  'raw_customer_payload',
+  'raw_provider_error',
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
   'screen_component_payload',
   'provider_specific_id_as_primary_id',
-  'raw_storage_url',
-  'authorization_header_payload',
-  'cookie_header_payload',
-  'refresh_token_plaintext'
+  'raw_storage_url'
 ] as const;
 
 const REQUIRED_ERROR_FIELDS = [
@@ -85,10 +89,14 @@ const REQUIRED_ERROR_FIELDS = [
 ] as const;
 
 const REQUIRED_FORBIDDEN_ERROR_FIELDS = [
-  'stack_trace',
-  'provider_secret',
+  'raw_customer_payload',
   'raw_provider_error',
-  'customer_private_payload'
+  'provider_secret',
+  'authorization_header',
+  'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
+  'screen_component_payload'
 ] as const;
 
 const REQUIRED_WEBHOOK_CONTROLS = [
@@ -110,7 +118,10 @@ const REQUIRED_FORBIDDEN_WEBHOOK_CONTROLS = [
 const REQUIRED_SDK_SOURCE_CONTRACTS = [
   ROUTE_CONTRACT_FILE,
   ERROR_ENVELOPE_FILE,
-  WEBHOOK_CONTRACT_FILE
+  WEBHOOK_CONTRACT_FILE,
+  SDK_GENERATION_INPUT_FILE,
+  API_CATALOG_FILE,
+  CORE_AUTH_SESSION_SCHEMA_FILE
 ] as const;
 
 const REQUIRED_SDK_GENERATION_TARGETS = [
@@ -175,6 +186,8 @@ const REQUIRED_FORBIDDEN_SDK_VALUES = [
   'provider_secret',
   'authorization_header',
   'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
   'screen_component_payload'
 ] as const;
 
@@ -207,6 +220,8 @@ const REQUIRED_API_CATALOG_FORBIDDEN_VALUES = [
   'provider_secret',
   'authorization_header',
   'cookie_header',
+  'refresh_token_plaintext',
+  'stack_trace',
   'screen_component_payload'
 ] as const;
 
@@ -222,7 +237,9 @@ const REQUIRED_AUTH_SCHEMA_FORBIDDEN_PAYLOAD_VALUES = [
   'refresh_token_plaintext',
   'provider_secret',
   'raw_provider_error',
-  'customer_private_payload'
+  'raw_customer_payload',
+  'stack_trace',
+  'screen_component_payload'
 ] as const;
 
 const REQUIRED_AUTH_SESSION_ROUTES = [
@@ -596,9 +613,9 @@ function validateAuthSessionRouteCatalog(value: unknown): readonly Diagnostic[] 
       value,
       file: API_CATALOG_FILE,
       path: 'api_catalog.status',
-      expected: 'route-catalog-active',
+      expected: 'route-catalog-contract-only',
       message:
-        'API catalog must stay active once core auth/session routes are declared.'
+        'API catalog must stay contract-only until live core auth/session handlers exist.'
     }),
     ...validateAuthRequiredStringArrayEntries({
       value,
@@ -870,7 +887,8 @@ async function validateCheckerSurface(
             ERROR_ENVELOPE_FILE,
             WEBHOOK_CONTRACT_FILE,
             SDK_GENERATION_INPUT_FILE,
-            API_CATALOG_FILE
+            API_CATALOG_FILE,
+            CORE_AUTH_SESSION_SCHEMA_FILE
           ]
         })),
     ...(validatorSource.source === null
@@ -900,6 +918,8 @@ async function validateCheckerSurface(
             'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE',
             'API_ERROR_FORBIDDEN_FIELD_MISSING',
             'API_WEBHOOK_REQUIRED_CONTROL_MISSING',
+            'API_SDK_GENERATION_SOURCE_CONTRACT_MISSING',
+            'API_SDK_GENERATION_SCHEMA_BUNDLE_SOURCE_MISSING',
             'API_SDK_GENERATION_TARGET_MISSING',
             'API_SDK_FORBIDDEN_OWNERSHIP_MISSING',
             'API_SDK_FORBIDDEN_VALUE_MISSING'

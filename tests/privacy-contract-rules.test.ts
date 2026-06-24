@@ -158,6 +158,21 @@ break_glass:
           ruleId: 'ZDP-PRIVACY-001',
           severity: 'error',
           file: 'contracts/privacy-access-policy.yaml',
+          path: 'allowed_callers',
+          message:
+            'Privacy broker contract `contracts/privacy-access-policy.yaml` must include `zdp-ai-platform` in `allowed_callers`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/privacy-access-policy.yaml',
+          path: 'break_glass.allowed',
+          message: 'Break-glass policy must be explicitly allowed and governed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/privacy-access-policy.yaml',
           path: 'break_glass.requires',
           message:
             'Privacy broker contract `contracts/privacy-access-policy.yaml` must include `human_approval` in `break_glass.requires`.'
@@ -233,6 +248,222 @@ audit:
     );
   });
 
+  test('fails when capability and policy cache ttl values are not positive integers', async () => {
+    const files = createValidPrivacyFiles();
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/capability-grants.yaml': files['contracts/capability-grants.yaml']
+          .replace('max_ttl_seconds: 300', 'max_ttl_seconds: 0')
+          .replace('max_ttl_seconds: 30', 'max_ttl_seconds: 0.5'),
+        'contracts/access-capability.yaml': files['contracts/access-capability.yaml'].replace(
+          'max_ttl_seconds: 300',
+          'max_ttl_seconds: -1'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/capability-grants.yaml',
+          path: 'max_ttl_seconds',
+          message:
+            'Privacy capability max TTL must be a positive integer number of seconds.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/capability-grants.yaml',
+          path: 'load_shedding.policy_consent_cache.max_ttl_seconds',
+          message:
+            'Privacy policy consent cache max TTL must be a positive integer number of seconds.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/access-capability.yaml',
+          path: 'capability.max_ttl_seconds',
+          message:
+            'Legacy privacy access capability max TTL must be a positive integer number of seconds.'
+        });
+      }
+    );
+  });
+
+  test('fails when capability grants add unapproved allowed operations', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'contracts/capability-grants.yaml': `
+contract:
+  version: 1
+  status: draft
+grant_owner: zdp-privacy-access-broker
+token_shape: opaque
+max_ttl_seconds: 300
+grant_request_required:
+  - actor_id
+  - tenant_id
+  - subject_id
+  - requester_service
+  - purpose
+  - resource_kind
+  - resource_scope
+  - allowed_operations
+  - consent_reference
+  - permission_reference
+  - idempotency_key
+  - request_id
+  - trace_id
+grant_record_required:
+  - grant_id
+  - issued_at
+  - expires_at
+  - actor_id
+  - tenant_id
+  - subject_id
+  - requester_service
+  - purpose
+  - resource_scope
+  - allowed_operations
+  - audit_event_id
+allowed_operations:
+  - read_masked_summary
+  - read_masked_excerpt
+  - search_limited_metadata
+  - request_human_review
+  - read_raw_subject_data
+forbidden_operations:
+  - read_raw_secret
+  - read_raw_oauth_token
+  - read_unbounded_content
+  - write_source_content
+  - mutate_entitlement
+  - mutate_ledger
+  - bypass_consent
+delegation:
+  onward_delegation_allowed: false
+  bearer_logging_allowed: false
+  persist_in_product_repo_allowed: false
+revocation:
+  supported: true
+  triggers:
+    - consent_withdrawn
+    - permission_changed
+    - tenant_membership_removed
+    - break_glass_window_expired
+audit:
+  reason_required: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/capability-grants.yaml',
+          path: 'allowed_operations',
+          message:
+            'Privacy broker contract `contracts/capability-grants.yaml` must not include unapproved `read_raw_subject_data` in `allowed_operations`.'
+        });
+      }
+    );
+  });
+
+  test('fails when capability grants duplicate allowed operations', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'contracts/capability-grants.yaml': `
+contract:
+  version: 1
+  status: draft
+grant_owner: zdp-privacy-access-broker
+token_shape: opaque
+max_ttl_seconds: 300
+grant_request_required:
+  - actor_id
+  - tenant_id
+  - subject_id
+  - requester_service
+  - purpose
+  - resource_kind
+  - resource_scope
+  - allowed_operations
+  - consent_reference
+  - permission_reference
+  - idempotency_key
+  - request_id
+  - trace_id
+grant_record_required:
+  - grant_id
+  - issued_at
+  - expires_at
+  - actor_id
+  - tenant_id
+  - subject_id
+  - requester_service
+  - purpose
+  - resource_scope
+  - allowed_operations
+  - audit_event_id
+allowed_operations:
+  - read_masked_summary
+  - read_masked_excerpt
+  - search_limited_metadata
+  - request_human_review
+  - read_masked_summary
+forbidden_operations:
+  - read_raw_secret
+  - read_raw_oauth_token
+  - read_unbounded_content
+  - write_source_content
+  - mutate_entitlement
+  - mutate_ledger
+  - bypass_consent
+delegation:
+  onward_delegation_allowed: false
+  bearer_logging_allowed: false
+  persist_in_product_repo_allowed: false
+revocation:
+  supported: true
+  triggers:
+    - consent_withdrawn
+    - permission_changed
+    - tenant_membership_removed
+    - break_glass_window_expired
+audit:
+  reason_required: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/capability-grants.yaml',
+          path: 'allowed_operations',
+          message:
+            'Privacy broker contract `contracts/capability-grants.yaml` must not duplicate `read_masked_summary` in `allowed_operations`.'
+        });
+      }
+    );
+  });
+
   test('fails when data minimization allows raw outputs', async () => {
     await withRepositoryRoot(
       {
@@ -280,6 +511,22 @@ logging:
           ruleId: 'ZDP-PRIVACY-001',
           severity: 'error',
           file: 'contracts/data-minimization.yaml',
+          path: 'purpose_limits.ai_answer_draft.forbidden_shapes',
+          message:
+            'Privacy broker contract `contracts/data-minimization.yaml` must include `credential_value` in `purpose_limits.ai_answer_draft.forbidden_shapes`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
+          path: 'purpose_limits.connector_sync.forbidden_shapes',
+          message:
+            'Privacy broker contract `contracts/data-minimization.yaml` must include `raw_oauth_token` in `purpose_limits.connector_sync.forbidden_shapes`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
           path: 'purpose_limits.growth_or_analytics.forbidden_shapes',
           message:
             'Privacy broker contract `contracts/data-minimization.yaml` must include `subject_level_event_stream` in `purpose_limits.growth_or_analytics.forbidden_shapes`.'
@@ -290,6 +537,163 @@ logging:
           file: 'contracts/data-minimization.yaml',
           path: 'logging.log_raw_payload',
           message: 'Privacy minimization must not log raw payloads.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
+          path: 'logging.log_policy_inputs',
+          message:
+            'Privacy minimization may log only bounded metadata policy inputs.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
+          path: 'implementation_guards.raw_source_response_allowed',
+          message: 'Privacy minimization must not allow raw source responses.'
+        });
+      }
+    );
+  });
+
+  test('fails when data minimization allowed output shapes add raw payloads', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'contracts/data-minimization.yaml': `
+contract:
+  version: 1
+  status: draft
+minimization_owner: zdp-privacy-access-broker
+default_output: deny
+allowed_output_shapes:
+  - masked_summary
+  - masked_excerpt
+  - limited_metadata
+  - aggregate_count
+  - policy_decision
+  - raw_payload
+forbidden_output_shapes:
+  - raw_payload
+  - raw_mail_body
+  - raw_message_body
+  - raw_file_body
+  - raw_prompt_body
+  - raw_payment_payload
+  - credential_value
+  - token_value
+required_redactions:
+  - email_address
+  - phone_number
+  - physical_address
+  - government_identifier
+  - payment_identifier
+  - authorization_header
+  - cookie
+  - secret
+  - token
+  - provider_credential
+purpose_limits:
+  growth_or_analytics:
+    allowed_shapes:
+      - aggregate_count
+    forbidden_shapes:
+      - raw_payload
+      - subject_level_event_stream
+      - reidentification_key
+retention:
+  raw_source_retention_allowed: false
+  deletion_requires_evidence: true
+logging:
+  log_raw_payload: false
+  log_capability_token: false
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
+          path: 'allowed_output_shapes',
+          message:
+            'Privacy broker contract `contracts/data-minimization.yaml` must not include unapproved `raw_payload` in `allowed_output_shapes`.'
+        });
+      }
+    );
+  });
+
+  test('fails when growth or analytics allowed shapes add subject outputs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPrivacyFiles(),
+        'contracts/data-minimization.yaml': `
+contract:
+  version: 1
+  status: draft
+minimization_owner: zdp-privacy-access-broker
+default_output: deny
+allowed_output_shapes:
+  - masked_summary
+  - masked_excerpt
+  - limited_metadata
+  - aggregate_count
+  - policy_decision
+forbidden_output_shapes:
+  - raw_payload
+  - raw_mail_body
+  - raw_message_body
+  - raw_file_body
+  - raw_prompt_body
+  - raw_payment_payload
+  - credential_value
+  - token_value
+required_redactions:
+  - email_address
+  - phone_number
+  - physical_address
+  - government_identifier
+  - payment_identifier
+  - authorization_header
+  - cookie
+  - secret
+  - token
+  - provider_credential
+purpose_limits:
+  growth_or_analytics:
+    allowed_shapes:
+      - aggregate_count
+      - masked_summary
+    forbidden_shapes:
+      - raw_payload
+      - subject_level_event_stream
+      - reidentification_key
+retention:
+  raw_source_retention_allowed: false
+  deletion_requires_evidence: true
+logging:
+  log_raw_payload: false
+  log_capability_token: false
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryPrivacyContract({
+          repositoryRoot,
+          repositoryServiceContract: createPrivacyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-PRIVACY-001',
+          severity: 'error',
+          file: 'contracts/data-minimization.yaml',
+          path: 'purpose_limits.growth_or_analytics.allowed_shapes',
+          message:
+            'Privacy broker contract `contracts/data-minimization.yaml` must not include unapproved `masked_summary` in `purpose_limits.growth_or_analytics.allowed_shapes`.'
         });
       }
     );
@@ -416,6 +820,11 @@ required_checks:
   - data_minimization
   - source_system_allowed
   - audit_event_prepared
+allowed_callers:
+  - zdp-ai-platform
+  - zdp-connectors-platform
+  - zdp-comm-platform
+  - zdp-web-apps
 forbidden_decisions:
   - final_authorization_for_product_feature
   - entitlement_decision
@@ -446,6 +855,7 @@ audit_events_required:
   - privacy.masking.applied
   - privacy.break_glass.used
 break_glass:
+  allowed: true
   requires:
     - human_approval
     - reason
@@ -725,22 +1135,53 @@ const files = [
   'contracts/privacy-access-policy.yaml',
   'contracts/capability-grants.yaml',
   'contracts/data-minimization.yaml',
-  'contracts/access-capability.yaml'
+  'contracts/access-capability.yaml',
+  'allowed_callers',
+  'derived_decision_retention_days',
+  'audit_retention_policy',
+  'required_identifiers',
+  'implementation_guards'
 ];
 `,
     'src/privacy-contracts/types.ts': `
-export interface PrivacyContracts {}
+export interface PrivacyContracts {
+  allowedCallers: string[];
+  derivedDecisionRetentionDays: number;
+  auditRetentionPolicy: string;
+  requiredIdentifiers: string[];
+  implementationGuards: unknown;
+}
 `,
     'src/privacy-contracts/validator.ts': `
 const MAX_CAPABILITY_TTL_SECONDS = 300;
 const RUST_MARKER_EXPECTATIONS = [];
 const codes = [
   'PRIV_POLICY_DEFAULT_NOT_DENY',
+  'PRIV_POLICY_ALLOWED_CALLER_DRIFT',
+  'PRIV_BREAK_GLASS_NOT_DECLARED',
+  'PRIV_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
   'PRIV_CAPABILITY_TTL_TOO_HIGH',
   'PRIV_CAPABILITY_POLICY_RECHECK_DISABLED',
+  'PRIV_CAPABILITY_POLICY_CONSENT_CACHE_TTL_NOT_POSITIVE_INTEGER',
+  'PRIV_CAPABILITY_ALLOWED_OPERATION_DRIFT',
   'PRIV_CAPABILITY_STATELESS_CONSENT_TOKEN_DEFAULT_ALLOWED',
+  'PRIV_LEGACY_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
   'PRIV_MINIMIZATION_RAW_RETENTION_ALLOWED',
+  'PRIV_MINIMIZATION_DERIVED_RETENTION_NOT_POSITIVE_INTEGER',
+  'PRIV_MINIMIZATION_DERIVED_RETENTION_TOO_LONG',
+  'PRIV_MINIMIZATION_AUDIT_RETENTION_POLICY_INVALID',
+  'PRIV_MINIMIZATION_ALLOWED_SHAPE_DRIFT',
+  'PRIV_MINIMIZATION_AI_RAW_OUTPUT_ALLOWED',
+  'PRIV_MINIMIZATION_CONNECTOR_RAW_OUTPUT_ALLOWED',
+  'PRIV_MINIMIZATION_ANALYTICS_ALLOWED_SHAPE_DRIFT',
   'PRIV_MINIMIZATION_ANALYTICS_RAW_STREAM_ALLOWED',
+  'PRIV_MINIMIZATION_POLICY_INPUT_LOGGING_INVALID',
+  'PRIV_MINIMIZATION_LOG_IDENTIFIER_MISSING',
+  'PRIV_MINIMIZATION_MASKING_GUARD_NOT_REQUIRED',
+  'PRIV_MINIMIZATION_RAW_SOURCE_RESPONSE_ALLOWED',
+  'PRIV_MINIMIZATION_REDACTION_EVIDENCE_NOT_REQUIRED',
+  'PRIV_MINIMIZATION_SOURCE_PROXY_REVIEW_NOT_REQUIRED',
+  'findDuplicateStrings',
   'PRIV_RUST_ALLOWED_OUTPUT_SHAPE_DRIFT',
   'PRIV_RUST_SECRET_OR_PII_LOGGING_PATTERN',
   'PRIV_RUST_SOURCE_PROXY_ROUTE_REQUIRES_MASKING_REVIEW'
@@ -776,10 +1217,18 @@ it('validates the committed privacy broker contracts', () => {
 
 it('fails when access policy does not default deny', () => {});
 it('fails when capability ttl is longer than five minutes', () => {});
+it('fails when capability and policy cache ttl values are not positive integers', () => {});
 it('fails when capability can skip policy recheck', () => {});
+it('fails when capability operations add an unapproved raw surface', () => {});
+it('fails when exact contract lists duplicate approved entries', () => {});
+it('fails when privacy access policy allows unapproved callers', () => {});
 it('fails when stateless consent tokens are allowed by default', () => {});
 it('fails when data minimization can retain raw source data', () => {});
+it('fails when data minimization retention, logging, and guards drift open', () => {});
+it('fails when data minimization allowed output shapes add raw payloads', () => {});
+it('fails when AI draft or connector sync purpose limits allow raw outputs', () => {});
 it('fails when growth or analytics can receive subject-level raw streams', () => {});
+it('fails when growth or analytics allowed shapes add subject-level outputs', () => {});
 it('fails when Rust boundary markers drift from YAML contracts', () => {});
 it('fails when Rust source logs PII or adds raw source proxy routes', () => {});
 `,
@@ -972,6 +1421,11 @@ required_checks:
   - data_minimization
   - source_system_allowed
   - audit_event_prepared
+allowed_callers:
+  - zdp-ai-platform
+  - zdp-connectors-platform
+  - zdp-comm-platform
+  - zdp-web-apps
 forbidden_decisions:
   - final_authorization_for_product_feature
   - entitlement_decision
@@ -1002,6 +1456,7 @@ audit_events_required:
   - privacy.masking.applied
   - privacy.break_glass.used
 break_glass:
+  allowed: true
   requires:
     - human_approval
     - reason
@@ -1020,6 +1475,7 @@ contract:
 grant_owner: zdp-privacy-access-broker
 token_shape: opaque
 max_ttl_seconds: 300
+renewal_policy: recheck_policy_and_consent
 grant_request_required:
   - actor_id
   - tenant_id
@@ -1046,6 +1502,11 @@ grant_record_required:
   - resource_scope
   - allowed_operations
   - audit_event_id
+allowed_operations:
+  - read_masked_summary
+  - read_masked_excerpt
+  - search_limited_metadata
+  - request_human_review
 forbidden_operations:
   - read_raw_secret
   - read_raw_oauth_token
@@ -1058,6 +1519,7 @@ delegation:
   onward_delegation_allowed: false
   bearer_logging_allowed: false
   persist_in_product_repo_allowed: false
+  usable_without_policy_recheck: false
 revocation:
   supported: true
   triggers:
@@ -1067,6 +1529,25 @@ revocation:
     - break_glass_window_expired
 audit:
   reason_required: true
+load_shedding:
+  policy_consent_cache:
+    allowed: true
+    scope: decision_metadata_only
+    max_ttl_seconds: 30
+    raw_subject_data_allowed: false
+    consent_snapshot_payload_allowed: false
+    invalidation_required:
+      - consent_withdrawn
+      - permission_changed
+      - tenant_membership_removed
+      - break_glass_window_expired
+  stateless_consent_token:
+    allowed_by_default: false
+    exception_requires:
+      - architecture_decision
+      - revocation_plan
+      - audit_correlation
+      - no_raw_subject_data_claims
 `,
     'contracts/data-minimization.yaml': `
 contract:
@@ -1101,6 +1582,20 @@ required_redactions:
   - token
   - provider_credential
 purpose_limits:
+  ai_answer_draft:
+    allowed_shapes:
+      - masked_summary
+      - masked_excerpt
+    forbidden_shapes:
+      - raw_payload
+      - credential_value
+  connector_sync:
+    allowed_shapes:
+      - limited_metadata
+      - policy_decision
+    forbidden_shapes:
+      - raw_oauth_token
+      - raw_payload
   growth_or_analytics:
     allowed_shapes:
       - aggregate_count
@@ -1110,10 +1605,24 @@ purpose_limits:
       - reidentification_key
 retention:
   raw_source_retention_allowed: false
+  derived_decision_retention_days: 30
+  audit_retention_policy: core-audit-retention
   deletion_requires_evidence: true
 logging:
   log_raw_payload: false
   log_capability_token: false
+  log_policy_inputs: bounded_metadata_only
+  required_identifiers:
+    - request_id
+    - trace_id
+    - actor_id
+    - tenant_id
+    - purpose
+implementation_guards:
+  masking_required_before_output: true
+  raw_source_response_allowed: false
+  redaction_evidence_required: true
+  source_proxy_route_requires_masking_review: true
 `,
     'contracts/access-capability.yaml': `
 contract:

@@ -127,6 +127,8 @@ fixtures/service-schema/fail/**
 
 0.39.17부터 `ZDP-AUTH-ROUTE-001`이 `zdp-api-contracts`의 core-api auth/session route catalog와 auth/session schema bundle을 검사한다. registration, session issue/refresh/revoke, recovery, passkey, OAuth callback route, identity owner boundary, request_id/trace_id, session effect, credential policy, 민감 payload 금지값이 사라지면 실패한다.
 
+0.39.63부터 `ZDP-API-CONTRACTS-001`과 `ZDP-AUTH-ROUTE-001`은 API 계약의 `raw_customer_payload`, `authorization_header`, `cookie_header`, `refresh_token_plaintext`, `stack_trace` 금지값, `route-catalog-contract-only` catalog status, SDK source contract의 auth/session schema bundle 포함 여부를 최신 `zdp-api-contracts` 기준으로 검사한다.
+
 0.39.18부터 `ZDP-APP-001`은 `zdp-web-apps` auth route promotion 계약이 `zdp-api-contracts/contracts/apis/catalog.yaml`의 core-api auth/session operation 목록을 명시하되, live core runtime handoff와 product reviewer approval 전에는 route를 열지 않는 상태를 유지하는지 검사한다.
 
 0.39.19부터 `ZDP-CORE-001`은 `zdp-core-platform` auth/session runtime handoff 계약이 `contracted_no_live_handler`, catalog source, 8개 auth/session operation, request/trace/idempotency/audit/session-store/credential-vault handoff, promotion blocker, plaintext refresh token 금지선을 유지하는지 검사한다.
@@ -145,7 +147,7 @@ fixtures/service-schema/fail/**
 
 0.39.39부터 `ZDP-CHATGPT-APP-001`은 `zdp-ai-chatgpt-gateway` conditional repo plan, `chatgpt-mcp-gateway` service contract, OpenAI provider의 ChatGPT Apps SDK/MCP host 경계를 검사한다. 새 Git 저장소 선생성 금지, `/mcp` edge adapter 위치, 직접 datastore 접근 금지, privacy broker·credential vault·audit·idempotency 선행 조건, structuredContent/content/_meta/widget state secret 금지, 구현 전 OpenAI 공식 문서 재확인 문구가 사라지면 실패한다.
 
-0.39.20부터 `ZDP-CORE-001`은 `zdp-core-platform` identity session store 계약이 `contract_only_no_migration`, identity owner boundary, session/refresh/revocation 필드, refresh token hash-only rotation, reuse detection, TTL, idempotency, audit reference, plaintext token/secret 금지선을 유지하는지 검사한다.
+0.39.20부터 `ZDP-CORE-001`은 `zdp-core-platform` identity session store 계약이 `contract_only_no_migration`, identity owner boundary, session/refresh/revocation 필드, refresh token hash-only rotation, reuse detection, TTL, idempotency, audit reference, plaintext token/secret 금지선을 유지하는지 검사한다. 0.39.62부터는 foundation migration shape가 선언된 최신 계약에 맞춰 `migration_shape_declared_no_adapter`, `command_id`, `idempotency_key`, `audit_event_ref`를 검사한다.
 
 0.39.31부터 `ZDP-CORE-001`은 identity session store 계약의 `typed_adapter_boundary_no_migration` adapter boundary도 검사한다. transactional session store 또는 session state table adapter kind, transaction/issue/refresh/revoke/reuse/review reference, session id와 refresh token hash uniqueness, atomic refresh rotation, reuse-family block, revocation state, TTL, audit event reference, plaintext refresh token 저장 금지 기준이 사라지면 실패한다. 이 상태는 durable session storage implementation이나 DB migration 완료를 의미하지 않는다.
 
@@ -160,6 +162,8 @@ fixtures/service-schema/fail/**
 0.39.29부터 `ZDP-APP-001`은 `zdp-web-apps` source route tree도 검사해 `/auth`, `/sign-in`, `/oauth/callback` 같은 auth route alias가 promotion 전에 생기면 실패한다. repo-local `check-app-shell`과 중앙 architecture validation은 같은 auth route 차단 경계를 봐야 한다.
 
 0.39.22부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit event persistence 계약이 audit owner boundary, identity source boundary, auth operation/session effect metadata, append-only audit store, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, auth failure event, audit write failure 차단, raw credential/provider payload 금지 기준을 유지하는지 검사한다.
+
+0.39.62부터 `ZDP-CORE-001`은 `zdp-core-platform` core event outbox 계약이 `migration_shape_declared_no_dispatcher`, dispatcher/replay/consumer 미구현 상태, CloudEvents source, money-relevant event 목록, append-only outbox/delivery attempt table, payload reference only, required outbox/delivery fields, dispatcher-ready claim 금지 기준을 유지하는지 검사한다. 이 상태는 dispatcher, replay worker, consumer inbox, production route unblock이 구현됐다는 뜻이 아니다.
 
 0.39.24부터 `ZDP-CORE-001`은 auth audit event persistence 상태를 `append_receipt_gate_no_durable_store`로 올리고, `outcome`, `request_id`, `transaction_or_outbox_ref` 필드를 필수로 검사한다. 이 상태는 성공 응답 전 append receipt gate가 있다는 뜻이지 durable append-only adapter나 DB migration이 있다는 뜻은 아니다.
 

@@ -106,12 +106,20 @@ const REQUIRED_COMMAND_FIELDS = [
 const REQUIRED_COMMAND_TYPES = [
   'billing.create_invoice_intent',
   'payments.record_provider_attempt',
+  'payments.record_provider_refund_attempt',
   'payments.record_provider_webhook',
   'payments.request_refund',
   'ledger.append_entry',
   'ledger.create_credit_hold',
   'ledger.capture_credit_hold',
   'ledger.release_credit_hold',
+  'ledger.record_daily_activity_reward_claim',
+  'billing.record_ship_pass_grant',
+  'billing.record_workspace_quota_grant',
+  'billing.record_workspace_billing_fallback',
+  'billing.record_captain_card_slot_event',
+  'billing.record_captain_card_evaluation',
+  'risk.record_operator_adjustment_request',
   'risk.open_review',
   'risk.close_review'
 ] as const;
@@ -130,7 +138,7 @@ const REQUIRED_LEDGER_ENTRY_FIELDS = [
   'ledger_account_id',
   'tenant_id',
   'currency',
-  'amount_minor',
+  'amount_credit_unit',
   'debit_or_credit',
   'entry_type',
   'occurred_at',
@@ -153,7 +161,7 @@ const REQUIRED_LEDGER_STORAGE_COLUMNS = [
   'ledger_account_id',
   'tenant_id',
   'currency',
-  'amount_minor',
+  'amount_credit_unit',
   'debit_or_credit',
   'entry_type',
   'occurred_at',
@@ -610,9 +618,9 @@ function validateLedgerEntryContract(value: unknown): readonly Diagnostic[] {
     ...validateExactValue({
       value,
       file: LEDGER_ENTRY_FILE,
-      path: 'ledger_entry.amount.integer_minor_units_required',
+      path: 'ledger_entry.amount.integer_credit_units_required',
       expected: true,
-      message: 'Ledger amounts must use integer minor units.'
+      message: 'Ledger amounts must use integer credit units.'
     }),
     ...validateExactValue({
       value,
@@ -713,9 +721,9 @@ function validateLedgerStorageContract(value: unknown): readonly Diagnostic[] {
     ...validateExactValue({
       value,
       file: LEDGER_STORAGE_FILE,
-      path: 'tables.ledger_entries.amount.integer_minor_units_required',
+      path: 'tables.ledger_entries.amount.integer_credit_units_required',
       expected: true,
-      message: 'Ledger storage amounts must use integer minor units.'
+      message: 'Ledger storage amounts must use integer credit units.'
     }),
     ...validateExactValue({
       value,

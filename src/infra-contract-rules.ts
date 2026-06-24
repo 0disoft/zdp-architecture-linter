@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const INFRA_REPOSITORY_NAME = 'zdp-platform-infra';
 const INFRA_CONTRACT_RULE_ID = 'ZDP-INFRA-001';
@@ -24,6 +28,13 @@ const REQUIRED_PACKAGE_SCRIPTS = [
   'test',
   'contracts:check',
   'infra:plan'
+] as const;
+
+const REQUIRED_CHECK_SCRIPT_FRAGMENTS = [
+  'tsc --noEmit',
+  'bun test',
+  'bun run contracts:check',
+  'bun run infra:plan'
 ] as const;
 
 const REQUIRED_INFRA_CHECKER_FILES = [
@@ -65,12 +76,58 @@ const FORBIDDEN_VALUES = [
   'dns challenge secrets'
 ] as const;
 
+const FORBIDDEN_SOURCE_PATTERNS = [
+  {
+    label: 'ssh private keys',
+    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/i
+  },
+  {
+    label: 'server ips',
+    pattern:
+      /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/
+  },
+  {
+    label: 'api tokens',
+    pattern:
+      /\b(?:api[_-]?token|api[_-]?key|secret[_-]?key|bearer)\b\s*[:=]\s*['"]?(?!redacted|placeholder|logical|none|false|null|not-set|example|future|manual)[A-Za-z0-9._-]{12,}/i
+  },
+  {
+    label: 'account ids',
+    pattern:
+      /\b(?:account[_-]?id|account id)\b\s*[:=]\s*['"]?(?!redacted|placeholder|logical|none|false|null|not-set|example|future|manual)[A-Za-z0-9_-]{6,}/i
+  },
+  {
+    label: 'dns challenge secrets',
+    pattern:
+      /\b(?:dns[_-]?challenge|challenge[_-]?secret|txt[_-]?value)\b\s*[:=]\s*['"]?(?!redacted|placeholder|logical|none|false|null|not-set|example|future|manual)[A-Za-z0-9._-]{12,}/i
+  }
+] as const;
+
 const REQUIRED_RESTORE_EVIDENCE = [
   'backup snapshot identifier without secret values',
   'restore start and end time',
   'data integrity check result',
   'rollback notes'
 ] as const;
+
+const REQUIRED_INFRA_TEST_NAMES = [
+  'validates the committed infra contracts',
+  'loads every required infra contract file',
+  'reports all contract load failures together',
+  'creates a provider-neutral dry-run plan without provider calls',
+  'fails when repository contracts stop being the source of truth',
+  'fails when local environment can access provider secrets',
+  'fails when forbidden provider values are no longer forbidden',
+  'fails when restore evidence is incomplete',
+  'accepts restore drills without a service-specific id',
+  'fails when pricing review is stale',
+  'fails when latest pricing review is no longer required',
+  'fails when contract source contains forbidden provider values',
+  'fails when DNS or firewall contracts allow provider mutations',
+  'fails when DNS or firewall entries appear before provider connection'
+] as const;
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function validateRepositoryInfraContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -106,6 +163,13 @@ export async function validateRepositoryInfraContract(input: {
     ...dnsRecords.diagnostics,
     ...firewallRules.diagnostics,
     ...packageJson.diagnostics,
+    ...validateForbiddenSourceValues([
+      { file: RESOURCE_INVENTORY_FILE, source: resourceInventory.source },
+      { file: ENVIRONMENT_SCHEMA_FILE, source: environmentSchema.source },
+      { file: BACKUP_RESTORE_FILE, source: backupRestore.source },
+      { file: DNS_RECORDS_FILE, source: dnsRecords.source },
+      { file: FIREWALL_RULES_FILE, source: firewallRules.source }
+    ]),
     ...(resourceInventory.value === null
       ? []
       : validateResourceInventoryContract(resourceInventory.value)),
@@ -129,6 +193,7 @@ async function readRequiredYamlContract(
   file: string
 ): Promise<{
   readonly value: unknown | null;
+  readonly source: string | null;
   readonly diagnostics: readonly Diagnostic[];
 }> {
   let source: string;
@@ -139,6 +204,7 @@ async function readRequiredYamlContract(
     if (isMissingPathError(error)) {
       return {
         value: null,
+        source: null,
         diagnostics: [
           createInfraDiagnostic(
             file,
@@ -153,13 +219,30 @@ async function readRequiredYamlContract(
   }
 
   try {
+    const value = parse(source) as unknown;
+    if (!isRecord(value)) {
+      return {
+        value: null,
+        source,
+        diagnostics: [
+          createInfraDiagnostic(
+            file,
+            'yaml',
+            `Infrastructure contract \`${file}\` must be a YAML object.`
+          )
+        ]
+      };
+    }
+
     return {
-      value: parse(source) as unknown,
+      value,
+      source,
       diagnostics: []
     };
   } catch (error) {
     return {
       value: null,
+      source,
       diagnostics: [
         createInfraDiagnostic(
           file,
@@ -289,11 +372,20 @@ function validateResourceInventoryContract(value: unknown): readonly Diagnostic[
       expected: true,
       message:
         'Infrastructure resource inventory must require latest pricing review before implementation.'
-    })
+    }),
+    ...validatePricingReviewContract(value)
   ];
 }
 
 function validateEnvironmentSchemaContract(value: unknown): readonly Diagnostic[] {
+  const environmentListDiagnostics = validateRecordArrayItems({
+    value,
+    file: ENVIRONMENT_SCHEMA_FILE,
+    path: 'environments',
+    allowEmpty: false,
+    message:
+      'Infrastructure contract `contracts/environment.schema.yaml` must declare non-empty object list `environments`.'
+  });
   const environments = readRecordArrayPath(value, 'environments');
   const environmentByName = new Map<string, Record<string, unknown>>();
 
@@ -306,6 +398,7 @@ function validateEnvironmentSchemaContract(value: unknown): readonly Diagnostic[
   }
 
   return [
+    ...environmentListDiagnostics,
     ...validateEnvironment({
       environment: environmentByName.get('local'),
       name: 'local',
@@ -513,6 +606,23 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  const checkScript = readPath(value, 'scripts.check');
+  if (typeof checkScript === 'string') {
+    for (const fragment of REQUIRED_CHECK_SCRIPT_FRAGMENTS) {
+      if (checkScript.includes(fragment)) {
+        continue;
+      }
+
+      diagnostics.push(
+        createInfraDiagnostic(
+          PACKAGE_FILE,
+          'scripts.check',
+          `Infrastructure package check script must run \`${fragment}\`.`
+        )
+      );
+    }
+  }
+
   return diagnostics;
 }
 
@@ -562,52 +672,94 @@ async function validateInfraCheckerSurface(
         })),
     ...(validator.source === null
       ? []
-      : validateSourceIncludes({
-          file: INFRA_VALIDATOR_FILE,
-          source: validator.source,
-          requiredFragments: [
-            'repository-contract-first',
-            'backfill-contract-or-revert-dashboard',
-            'least-privilege',
-            'server ips',
-            'rollback notes',
-            'INFRA_PRICING_REVIEW_NOT_REQUIRED',
-            'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
-            'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
-            'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
-            'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: INFRA_VALIDATOR_FILE,
+            source: validator.source,
+            requiredFragments: [
+              'repository-contract-first',
+              'backfill-contract-or-revert-dashboard',
+              'least-privilege',
+              'server ips',
+              'rollback notes',
+              'INFRA_PRICING_REVIEW_NOT_REQUIRED',
+              'INFRA_PRICING_REVIEW_DATE_INVALID',
+              'INFRA_PRICING_REVIEW_MAX_AGE_INVALID',
+              'INFRA_FORBIDDEN_API_TOKEN',
+              'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
+              'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
+              'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
+              'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: INFRA_VALIDATOR_FILE,
+            source: validator.source,
+            requiredFragments: [
+              'export function validateInfrastructureContracts',
+              'function validatePricingReview',
+              'function validateForbiddenSourceValues',
+              'function validateDnsRecords',
+              'function validateFirewallRules'
+            ]
+          })
+        ]),
     ...(plan.source === null
       ? []
-      : validateSourceIncludes({
-          file: INFRA_PLAN_FILE,
-          source: plan.source,
-          requiredFragments: [
-            'providerCalls: []',
-            'terraform apply',
-            'opentofu apply',
-            'restore execution'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: INFRA_PLAN_FILE,
+            source: plan.source,
+            requiredFragments: [
+              'providerCalls: []',
+              'terraform apply',
+              'opentofu apply',
+              'restore execution'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: INFRA_PLAN_FILE,
+            source: plan.source,
+            requiredFragments: ['export function createInfrastructurePlan']
+          })
+        ]),
     ...(test.source === null
       ? []
-      : validateSourceIncludes({
-          file: INFRA_TEST_FILE,
-          source: test.source,
-          requiredFragments: [
-            'provider-neutral dry-run plan',
-            'INFRA_SOURCE_OF_TRUTH_INVALID',
-            'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID',
-            'INFRA_FORBIDDEN_VALUE_MISSING',
-            'INFRA_RESTORE_EVIDENCE_FIELD_MISSING',
-            'INFRA_PRICING_REVIEW_NOT_REQUIRED',
-            'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
-            'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
-            'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
-            'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
-          ]
-        }))
+      : [
+          ...validateSourceIncludes({
+            file: INFRA_TEST_FILE,
+            source: test.source,
+            requiredFragments: [
+              'provider-neutral dry-run plan',
+              'INFRA_SOURCE_OF_TRUTH_INVALID',
+              'INFRA_ENVIRONMENT_SECRET_POLICY_INVALID',
+              'INFRA_FORBIDDEN_VALUE_MISSING',
+              'INFRA_RESTORE_EVIDENCE_FIELD_MISSING',
+              'INFRA_PRICING_REVIEW_NOT_REQUIRED',
+              'INFRA_PRICING_REVIEW_STALE',
+              'INFRA_FORBIDDEN_API_TOKEN',
+              'INFRA_DNS_PROVIDER_MUTATION_ALLOWED',
+              'INFRA_DNS_RECORDS_BEFORE_PROVIDER_CONNECTION',
+              'INFRA_FIREWALL_ACTUAL_SERVER_IPS_ALLOWED',
+              'INFRA_FIREWALL_RULES_BEFORE_PROVIDER_CONNECTION'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: INFRA_TEST_FILE,
+            source: test.source,
+            requiredFragments: [
+              'expect(',
+              'validateInfrastructureContracts',
+              'loadInfrastructureContracts',
+              'createInfrastructurePlan'
+            ]
+          }),
+          ...validateSourceTestNames({
+            file: INFRA_TEST_FILE,
+            source: test.source,
+            requiredTestNames: REQUIRED_INFRA_TEST_NAMES
+          })
+        ])
   ];
 }
 
@@ -635,29 +787,198 @@ function validateSourceIncludes(input: {
   return diagnostics;
 }
 
-function validateRestoreDrill(value: unknown): readonly Diagnostic[] {
-  const drills = readRecordArrayPath(value, 'restore_drills');
-  const drill = drills.find((candidate) => {
-    return readStringField(candidate, 'id') === 'hello-origin-restore';
-  });
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const sourceWithoutCommentsOrStrings = stripCommentsAndStringLiterals(
+    input.source
+  );
+  const diagnostics: Diagnostic[] = [];
 
-  if (drill === undefined) {
-    return [
+  for (const fragment of input.requiredFragments) {
+    if (sourceWithoutCommentsOrStrings.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
       createInfraDiagnostic(
-        BACKUP_RESTORE_FILE,
-        'restore_drills.hello-origin-restore',
-        'Infrastructure backup contract must declare `hello-origin-restore` restore drill.'
+        input.file,
+        'source',
+        `Infrastructure checker source must include code fragment \`${fragment}\`.`
       )
-    ];
+    );
   }
 
-  return validateRequiredStringArrayEntries({
-    value: drill,
-    file: BACKUP_RESTORE_FILE,
-    path: 'restore_drills.hello-origin-restore.expected_evidence',
-    field: 'expected_evidence',
-    requiredEntries: REQUIRED_RESTORE_EVIDENCE
-  });
+  return diagnostics;
+}
+
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredTestNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = new Set(extractTestCallNames(input.source));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const testName of input.requiredTestNames) {
+    if (testNames.has(testName)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createInfraDiagnostic(
+        input.file,
+        'source',
+        `Infrastructure checker source must include test case \`${testName}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validatePricingReviewContract(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const latestPricingReviewDate = readPath(
+    value,
+    'inventory_policy.latest_pricing_review_date'
+  );
+  const pricingReviewMaxAgeDays = readPath(
+    value,
+    'inventory_policy.pricing_review_max_age_days'
+  );
+
+  if (
+    typeof latestPricingReviewDate !== 'string' ||
+    !ISO_DATE_PATTERN.test(latestPricingReviewDate)
+  ) {
+    diagnostics.push(
+      createInfraDiagnostic(
+        RESOURCE_INVENTORY_FILE,
+        'inventory_policy.latest_pricing_review_date',
+        'Infrastructure latest pricing review date must use YYYY-MM-DD format.'
+      )
+    );
+  } else {
+    const reviewDate = new Date(`${latestPricingReviewDate}T00:00:00.000Z`);
+    if (
+      Number.isNaN(reviewDate.getTime()) ||
+      reviewDate.toISOString().slice(0, 10) !== latestPricingReviewDate
+    ) {
+      diagnostics.push(
+        createInfraDiagnostic(
+          RESOURCE_INVENTORY_FILE,
+          'inventory_policy.latest_pricing_review_date',
+          'Infrastructure latest pricing review date must be a real calendar date.'
+        )
+      );
+    }
+  }
+
+  if (
+    !Number.isInteger(pricingReviewMaxAgeDays) ||
+    (pricingReviewMaxAgeDays as number) <= 0
+  ) {
+    diagnostics.push(
+      createInfraDiagnostic(
+        RESOURCE_INVENTORY_FILE,
+        'inventory_policy.pricing_review_max_age_days',
+        'Infrastructure pricing review max age must be a positive integer.'
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateForbiddenSourceValues(
+  contracts: readonly {
+    readonly file: string;
+    readonly source: string | null;
+  }[]
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const contract of contracts) {
+    if (contract.source === null) {
+      continue;
+    }
+
+    for (const forbidden of FORBIDDEN_SOURCE_PATTERNS) {
+      if (!forbidden.pattern.test(contract.source)) {
+        continue;
+      }
+
+      diagnostics.push(
+        createInfraDiagnostic(
+          contract.file,
+          '$',
+          `Infrastructure contract source must not contain ${forbidden.label}.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function validateRestoreDrill(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [
+    ...validateRecordArrayItems({
+      value,
+      file: BACKUP_RESTORE_FILE,
+      path: 'restore_drills',
+      allowEmpty: false,
+      message:
+        'Infrastructure backup contract must declare non-empty object list `restore_drills`.'
+    })
+  ];
+  const drills = readRecordArrayPath(value, 'restore_drills');
+
+  for (const [index, drill] of drills.entries()) {
+    const drillId = readStringField(drill, 'id');
+
+    if (drillId === null) {
+      diagnostics.push(
+        createInfraDiagnostic(
+          BACKUP_RESTORE_FILE,
+          `restore_drills[${index}].id`,
+          `Infrastructure restore drill at index ${index} must declare string field \`id\`.`
+        )
+      );
+    }
+
+    for (const field of ['status', 'target'] as const) {
+      if (readStringField(drill, field) !== null) {
+        continue;
+      }
+
+      diagnostics.push(
+        createInfraDiagnostic(
+          BACKUP_RESTORE_FILE,
+          `restore_drills[${index}].${field}`,
+          `Infrastructure restore drill at index ${index} must declare string field \`${field}\`.`
+        )
+      );
+    }
+
+    diagnostics.push(
+      ...validateRequiredStringArrayEntries({
+        value: drill,
+        file: BACKUP_RESTORE_FILE,
+        path:
+          drillId === null
+            ? `restore_drills[${index}].expected_evidence`
+            : `restore_drills.${drillId}.expected_evidence`,
+        field: 'expected_evidence',
+        requiredEntries: REQUIRED_RESTORE_EVIDENCE
+      })
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateRequiredArrayFields(input: {
@@ -696,7 +1017,15 @@ function validateRequiredStringArrayEntries(input: {
   readonly requiredEntries: readonly string[];
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field,
+      message: `Infrastructure contract \`${input.file}\` must declare \`${input.field}\` as a non-empty string list.`
+    })
+  ];
 
   for (const requiredEntry of input.requiredEntries) {
     if (entries.includes(requiredEntry)) {
@@ -713,6 +1042,54 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateStringArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  if (
+    candidate.length > 0 &&
+    candidate.every(
+      (item) => typeof item === 'string' && item.trim().length > 0
+    )
+  ) {
+    return [];
+  }
+
+  return [createInfraDiagnostic(input.file, input.path, input.message)];
+}
+
+function validateRecordArrayItems(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly allowEmpty: boolean;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.path);
+
+  if (!Array.isArray(candidate)) {
+    return [createInfraDiagnostic(input.file, input.path, input.message)];
+  }
+
+  if (
+    (input.allowEmpty || candidate.length > 0) &&
+    candidate.every((item) => isRecord(item))
+  ) {
+    return [];
+  }
+
+  return [createInfraDiagnostic(input.file, input.path, input.message)];
 }
 
 function validateExactValue(input: {

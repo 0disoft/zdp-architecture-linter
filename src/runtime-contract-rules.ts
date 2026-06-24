@@ -45,6 +45,25 @@ const REQUIRED_PACKAGE_SCRIPTS = [
   'smoke:run'
 ] as const;
 
+const REQUIRED_PACKAGE_SCRIPT_FRAGMENTS = [
+  {
+    script: 'smoke:plan',
+    fragment: 'bun scripts/smoke-runner.ts plan'
+  },
+  {
+    script: 'smoke:run',
+    fragment: 'bun scripts/smoke-runner.ts run'
+  }
+] as const;
+
+const REQUIRED_SMOKE_TARGETS_PRODUCTION_PROMOTION_REQUIRES = [
+  'target health endpoint returns the declared service id',
+  'target readiness endpoint returns the declared readiness contract',
+  'platform contract checker targets pass before dependent runtime promotion',
+  'smoke check does not require real payment, customer data, or user mutation',
+  'runtime operator can reproduce the check from repository contracts'
+] as const;
+
 const REQUIRED_CORE_API_REQUIRED_BEFORE = [
   'hello-origin',
   'production-runtime-template'
@@ -109,6 +128,12 @@ const REQUIRED_ROLLBACK_RECORD_FIELDS = [
   'actor',
   'reason',
   'trace_id'
+] as const;
+
+const REQUIRED_ROLLBACK_BLOCKERS = [
+  'destructive migration has no rollback note',
+  'previous revision is missing',
+  'secret schema changed without compatibility note'
 ] as const;
 
 export async function validateRepositoryRuntimeContract(input: {
@@ -382,6 +407,41 @@ function validateHealthcheckContract(value: unknown): readonly Diagnostic[] {
       expected: SMOKE_TARGETS_FILE.split('/').at(-1),
       message: 'Runtime smoke contract must reference `smoke-targets.yaml`.'
     }),
+    ...validateExactValue({
+      value,
+      file: HEALTHCHECK_FILE,
+      path: 'healthcheck.smoke.required_before_production',
+      expected: true,
+      message: 'Runtime smoke contract must be required before production.'
+    }),
+    ...validateExactValue({
+      value,
+      file: HEALTHCHECK_FILE,
+      path: 'healthcheck.smoke.must_not_require_real_payment',
+      expected: true,
+      message: 'Runtime smoke contract must not require real payment.'
+    }),
+    ...validateExactValue({
+      value,
+      file: HEALTHCHECK_FILE,
+      path: 'healthcheck.smoke.must_not_require_user_data',
+      expected: true,
+      message: 'Runtime smoke contract must not require user data.'
+    }),
+    ...validateExactValue({
+      value,
+      file: HEALTHCHECK_FILE,
+      path: 'healthcheck.smoke.must_not_require_real_customer_account',
+      expected: true,
+      message: 'Runtime smoke contract must not require a real customer account.'
+    }),
+    ...validateExactValue({
+      value,
+      file: HEALTHCHECK_FILE,
+      path: 'healthcheck.smoke.must_not_perform_state_changes',
+      expected: true,
+      message: 'Runtime smoke contract must not perform state changes.'
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: HEALTHCHECK_FILE,
@@ -404,17 +464,22 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
   const targets = readPath(value, 'targets');
   const contractChecks = readPath(value, 'contract_checks');
 
+  diagnostics.push(...validateSmokeTargetsMetadata(value));
+
   if (!Array.isArray(targets)) {
-    return [
+    diagnostics.push(
       createRuntimeDiagnostic(
         SMOKE_TARGETS_FILE,
         'targets',
         'Runtime smoke contract must declare a `targets` array.'
       )
-    ];
+    );
+    return diagnostics;
   }
 
   const targetById = new Map<string, Record<string, unknown>>();
+
+  diagnostics.push(...validateGenericSmokeTargetEntries(targets));
 
   for (const target of targets) {
     if (!isRecord(target)) {
@@ -444,6 +509,7 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
     diagnostics.push(...validateContractChecksArray(value));
   } else {
     diagnostics.push(
+      ...validateGenericContractCheckEntries(contractChecks),
       ...validatePlatformSecurityContractCheck(value),
       ...validatePlatformInfraContractCheck(value),
       ...validatePlatformObservabilityContractCheck(value)
@@ -451,6 +517,255 @@ function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
   }
 
   return diagnostics;
+}
+
+function validateSmokeTargetsMetadata(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: 'smoke_targets.version',
+      expected: 1,
+      message: 'Runtime smoke contract metadata version must be 1.'
+    }),
+    ...validateExactValue({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: 'smoke_targets.stage',
+      expected: 'early-origin-runtime',
+      message:
+        'Runtime smoke contract metadata stage must be `early-origin-runtime`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: 'smoke_targets.production_promotion_requires',
+      field: 'smoke_targets.production_promotion_requires',
+      requiredEntries: REQUIRED_SMOKE_TARGETS_PRODUCTION_PROMOTION_REQUIRES
+    })
+  ];
+}
+
+function validateGenericSmokeTargetEntries(
+  targets: readonly unknown[]
+): readonly Diagnostic[] {
+  return targets.flatMap((target, index) => {
+    const id = isRecord(target) ? readStringField(target, 'id') : null;
+    const path = id === null ? `targets[${index}]` : `targets.${id}`;
+
+    if (!isRecord(target)) {
+      return [
+        createRuntimeDiagnostic(
+          SMOKE_TARGETS_FILE,
+          path,
+          'Runtime smoke contract must declare each `targets` item as an object.'
+        )
+      ];
+    }
+
+    return [
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.id`,
+        field: 'id',
+        label: 'smoke target id'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.repo`,
+        field: 'repo',
+        label: 'smoke target repo'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.service_id`,
+        field: 'service_id',
+        label: 'smoke target service id'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.process`,
+        field: 'process',
+        label: 'smoke target process'
+      }),
+      ...validateOptionalStringArrayField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.required_before`,
+        field: 'required_before'
+      }),
+      ...validateOptionalStringArrayField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.required_env`,
+        field: 'required_env'
+      }),
+      ...validateGenericEndpoint(target, path, 'healthz'),
+      ...validateGenericEndpoint(target, path, 'readyz'),
+      ...validateRequiredBlockedProductionConditions({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.blocked_production_when`,
+        field: 'blocked_production_when',
+        requiredEntries: []
+      })
+    ];
+  });
+}
+
+function validateGenericEndpoint(
+  target: Record<string, unknown>,
+  targetPath: string,
+  endpoint: 'healthz' | 'readyz'
+): readonly Diagnostic[] {
+  const value = readPath(target, endpoint);
+  const path = `${targetPath}.${endpoint}`;
+
+  if (!isRecord(value)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        path,
+        `Runtime smoke target must declare \`${endpoint}\` as an object.`
+      )
+    ];
+  }
+
+  return [
+    ...validateExactValue({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.method`,
+      field: 'method',
+      expected: 'GET',
+      message: `Runtime smoke target \`${path}\` must use \`GET\`.`
+    }),
+    ...validateRequiredStringField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.path`,
+      field: 'path',
+      label: `${path} path`
+    }),
+    ...validatePositiveIntegerField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.timeout_seconds`,
+      field: 'timeout_seconds'
+    }),
+    ...validateOptionalStringArrayField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.required_env`,
+      field: 'required_env'
+    }),
+    ...validateOptionalJsonExpectationField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.expect_json`,
+      field: 'expect_json'
+    }),
+    ...validateOptionalJsonExpectationField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.expect_json_when_configured`,
+      field: 'expect_json_when_configured'
+    }),
+    ...validateOptionalJsonExpectationField({
+      value,
+      file: SMOKE_TARGETS_FILE,
+      path: `${path}.expect_json_when_missing_env`,
+      field: 'expect_json_when_missing_env'
+    })
+  ];
+}
+
+function validateGenericContractCheckEntries(
+  contractChecks: readonly unknown[]
+): readonly Diagnostic[] {
+  return contractChecks.flatMap((target, index) => {
+    const id = isRecord(target) ? readStringField(target, 'id') : null;
+    const path = id === null ? `contract_checks[${index}]` : `contract_checks.${id}`;
+
+    if (!isRecord(target)) {
+      return [
+        createRuntimeDiagnostic(
+          SMOKE_TARGETS_FILE,
+          path,
+          'Runtime smoke contract must declare each `contract_checks` item as an object.'
+        )
+      ];
+    }
+
+    return [
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.id`,
+        field: 'id',
+        label: 'contract check id'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.repo`,
+        field: 'repo',
+        label: 'contract check repo'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.service_id`,
+        field: 'service_id',
+        label: 'contract check service id'
+      }),
+      ...validateExactValue({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.process`,
+        field: 'process',
+        expected: 'one-shot-checker',
+        message:
+          'Runtime contract check target must declare process `one-shot-checker`.'
+      }),
+      ...validateRequiredStringField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.command`,
+        field: 'command',
+        label: 'contract check command'
+      }),
+      ...validateOptionalStringArrayField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.required_before`,
+        field: 'required_before'
+      }),
+      ...validateRequiredStringArrayField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.required_files`,
+        field: 'required_files'
+      }),
+      ...validateRequiredStringArrayField({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.expected_evidence`,
+        field: 'expected_evidence'
+      }),
+      ...validateRequiredBlockedProductionConditions({
+        value: target,
+        file: SMOKE_TARGETS_FILE,
+        path: `${path}.blocked_production_when`,
+        field: 'blocked_production_when',
+        requiredEntries: []
+      })
+    ];
+  });
 }
 
 function validateContractChecksArray(value: unknown): readonly Diagnostic[] {
@@ -530,8 +845,17 @@ function validateCoreApiSmokeTarget(
       field: 'blocked_production_when',
       requiredEntries: [
         {
+          condition: 'healthz service id does not match core-api',
+          enforcedBy: 'smoke_runner'
+        },
+        {
           condition: 'readyz checks omit contracts',
           enforcedBy: 'smoke_runner'
+        },
+        {
+          condition:
+            'readiness depends on a database before the core migration slice exists',
+          enforcedBy: 'architecture_linter'
         }
       ]
     })
@@ -1391,6 +1715,14 @@ function validateDeploymentTemplateContract(value: unknown): readonly Diagnostic
     ...validateExactValue({
       value,
       file: DEPLOYMENT_TEMPLATE_FILE,
+      path: 'process_model.worker_process_optional',
+      expected: true,
+      message:
+        'Runtime deployment template must keep worker processes optional.'
+    }),
+    ...validateExactValue({
+      value,
+      file: DEPLOYMENT_TEMPLATE_FILE,
       path: 'process_model.state_in_process_memory_allowed',
       expected: false,
       message: 'Runtime deployment template must forbid process-memory state.'
@@ -1420,6 +1752,13 @@ function validateRollbackContract(value: unknown): readonly Diagnostic[] {
       path: 'rollback.record_fields',
       field: 'rollback.record_fields',
       requiredEntries: REQUIRED_ROLLBACK_RECORD_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ROLLBACK_FILE,
+      path: 'rollback.blocked_when',
+      field: 'rollback.blocked_when',
+      requiredEntries: REQUIRED_ROLLBACK_BLOCKERS
     })
   ];
 }
@@ -1458,6 +1797,25 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
     );
   }
 
+  for (const requiredScript of REQUIRED_PACKAGE_SCRIPT_FRAGMENTS) {
+    const actual = readPath(value, `scripts.${requiredScript.script}`);
+
+    if (
+      typeof actual !== 'string' ||
+      actual.includes(requiredScript.fragment)
+    ) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRuntimeDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${requiredScript.script}`,
+        `Runtime package \`${requiredScript.script}\` script must run \`${requiredScript.fragment}\`.`
+      )
+    );
+  }
+
   return diagnostics;
 }
 
@@ -1487,22 +1845,35 @@ async function validateSmokeRunnerSurface(
             file: SMOKE_RUNNER_CONTRACT_FILE,
             source: contractSource.source,
             requiredFragments: [
+              'contracts/healthcheck.yaml',
               'contracts/smoke-targets.yaml',
+              'contracts/deployment-template.yaml',
+              'contracts/rollback.yaml',
+              'smoke_targets',
               'targets',
               'blocked_production_when',
-              'enforced_by'
+              'blocked_when',
+              'enforced_by',
+              'worker_process_optional'
             ]
           }),
           ...validateSourceCodeIncludes({
             file: SMOKE_RUNNER_CONTRACT_FILE,
             source: contractSource.source,
             requiredFragments: [
+              'export function parseRuntimeContracts',
               'export function parseSmokeTargetsContract',
+              'export function parseHealthcheckContract',
+              'export function parseDeploymentTemplateContract',
+              'export function parseRollbackContract',
+              'function parseSmokeTargetsMetadata',
               'function parseTarget',
               'function parseContractCheck',
               'function requiredBlockedProductionConditionList',
               'function parseBlockedProductionCondition',
               'function isRuntimeContractEnforcement',
+              'function assertStringListContains',
+              'function requiredBoolean',
               'Bun.YAML.parse'
             ]
           })
@@ -1541,6 +1912,9 @@ async function validateSmokeRunnerSurface(
             file: SMOKE_RUNNER_TEST_FILE,
             source: testSource.source,
             requiredTestNames: [
+              'parses the committed runtime contract set before plan or run mode',
+              'rejects runtime contract sets with missing smoke metadata',
+              'rejects deployment and rollback contract drift before smoke execution',
               'fails closed when run mode has no base URL',
               'rejects blocked production conditions without enforcement owners'
             ]
@@ -1556,7 +1930,10 @@ async function validateSmokeRunnerSurface(
               'is plan-only',
               'malformed_json_response',
               'money-api',
-              'connectors-platform'
+              'connectors-platform',
+              'worker_process_optional',
+              'blocked_when',
+              'smoke_targets.production_promotion_requires'
             ]
           }),
           ...validateSourceCodeIncludes({
@@ -1564,6 +1941,7 @@ async function validateSmokeRunnerSurface(
             source: testSource.source,
             requiredFragments: [
               'expect(',
+              'parseRuntimeContracts',
               'parseSmokeTargetsContract',
               'createSmokePlan',
               'runSmokeTargets'
@@ -1647,6 +2025,129 @@ function validateSourceCodeIncludes(input: {
   }
 
   return diagnostics;
+}
+
+function validateRequiredStringField(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly label: string;
+}): readonly Diagnostic[] {
+  if (isRecord(input.value) && readStringField(input.value, input.field) !== null) {
+    return [];
+  }
+
+  return [
+    createRuntimeDiagnostic(
+      input.file,
+      input.path,
+      `Runtime contract \`${input.file}\` must declare ${input.label}.`
+    )
+  ];
+}
+
+function validateRequiredStringArrayField(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (!Array.isArray(candidate) || candidate.length === 0) {
+    return [
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must declare \`${input.field}\` as a non-empty string list.`
+      )
+    ];
+  }
+
+  return validateStringArrayItems(input);
+}
+
+function validateOptionalStringArrayField(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  if (readPath(input.value, input.field) === undefined) {
+    return [];
+  }
+
+  return validateStringArrayItems(input);
+}
+
+function validatePositiveIntegerField(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (
+    typeof candidate === 'number' &&
+    Number.isInteger(candidate) &&
+    candidate > 0
+  ) {
+    return [];
+  }
+
+  return [
+    createRuntimeDiagnostic(
+      input.file,
+      input.path,
+      `Runtime contract \`${input.file}\` must declare \`${input.field}\` as a positive integer.`
+    )
+  ];
+}
+
+function validateOptionalJsonExpectationField(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.field);
+
+  if (candidate === undefined) {
+    return [];
+  }
+
+  if (!isRecord(candidate)) {
+    return [
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must declare \`${input.field}\` as an object.`
+      )
+    ];
+  }
+
+  for (const value of Object.values(candidate)) {
+    if (
+      typeof value === 'boolean' ||
+      typeof value === 'string' ||
+      (Array.isArray(value) &&
+        value.every((entry) => typeof entry === 'string' && entry.trim().length > 0))
+    ) {
+      continue;
+    }
+
+    return [
+      createRuntimeDiagnostic(
+        input.file,
+        input.path,
+        `Runtime contract \`${input.file}\` must declare \`${input.field}\` values as booleans, strings, or string lists.`
+      )
+    ];
+  }
+
+  return [];
 }
 
 function validateRequiredStringArrayEntries(input: {

@@ -171,6 +171,84 @@ const REQUIRED_FORBIDDEN_STORAGE_LOCATIONS = [
   'public_discovery'
 ] as const;
 
+const REQUIRED_STATELESS_EXCEPTION_FIELDS = [
+  'architecture_decision',
+  'revocation_plan',
+  'audit_correlation',
+  'no_secret_material_claims'
+] as const;
+
+const RUST_MARKER_EXPECTATIONS = [
+  {
+    file: RUNTIME_CREDENTIAL_BOUNDARY_FILE,
+    constName: 'REQUIRED_CREDENTIAL_CLASSES',
+    yamlPath: 'credential_classes',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readRecordArrayPath(contracts.credentialBoundary, 'credential_classes').flatMap(
+        (entry) => {
+          const id = readStringField(entry, 'id');
+          return id === null ? [] : [id];
+        }
+      )
+  },
+  {
+    file: RUNTIME_CREDENTIAL_BOUNDARY_FILE,
+    constName: 'FORBIDDEN_CREDENTIAL_VALUES',
+    yamlPath: 'forbidden_values',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.credentialBoundary, 'forbidden_values')
+  },
+  {
+    file: RUNTIME_CAPABILITY_ISSUANCE_FILE,
+    constName: 'REQUIRED_CAPABILITY_REQUEST_FIELDS',
+    yamlPath: 'request_required',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.capabilityIssuance, 'request_required')
+  },
+  {
+    file: RUNTIME_CAPABILITY_ISSUANCE_FILE,
+    constName: 'FORBIDDEN_CAPABILITY_VALUES',
+    yamlPath: 'forbidden',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.capabilityIssuance, 'forbidden')
+  },
+  {
+    file: RUNTIME_ACCESS_AUDIT_FILE,
+    constName: 'REQUIRED_AUDIT_EVENTS',
+    yamlPath: 'events_required',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.accessAudit, 'events_required')
+  },
+  {
+    file: RUNTIME_ACCESS_AUDIT_FILE,
+    constName: 'FORBIDDEN_AUDIT_VALUES',
+    yamlPath: 'forbidden_values',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.accessAudit, 'forbidden_values')
+  },
+  {
+    file: RUNTIME_STORAGE_BOUNDARY_FILE,
+    constName: 'ALLOWED_INTERFACES',
+    yamlPath: 'allowed_interfaces',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.storageBoundary, 'allowed_interfaces')
+  },
+  {
+    file: RUNTIME_STORAGE_BOUNDARY_FILE,
+    constName: 'FORBIDDEN_STORAGE_LOCATIONS',
+    yamlPath: 'forbidden_storage_locations',
+    expectedEntries: (contracts: CredentialVaultContractValues) =>
+      readStringArrayPath(contracts.storageBoundary, 'forbidden_storage_locations')
+  }
+] as const;
+
+type CredentialVaultContractValues = {
+  readonly credentialBoundary: unknown;
+  readonly capabilityIssuance: unknown;
+  readonly accessAudit: unknown;
+  readonly storageBoundary: unknown;
+};
+
 export async function validateRepositoryCredentialVaultContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -191,6 +269,18 @@ export async function validateRepositoryCredentialVaultContract(input: {
       readRequiredYamlContract(input.repositoryRoot, STORAGE_BOUNDARY_FILE)
     ]);
   const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
+  const contractValues =
+    credentialBoundary.value === null ||
+    capabilityIssuance.value === null ||
+    accessAudit.value === null ||
+    storageBoundary.value === null
+      ? null
+      : {
+          credentialBoundary: credentialBoundary.value,
+          capabilityIssuance: capabilityIssuance.value,
+          accessAudit: accessAudit.value,
+          storageBoundary: storageBoundary.value
+        };
 
   return [
     ...credentialBoundary.diagnostics,
@@ -214,7 +304,7 @@ export async function validateRepositoryCredentialVaultContract(input: {
     ...validateServiceContract(input.repositoryServiceContract),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
     ...(await validateCheckerSurface(input.repositoryRoot)),
-    ...(await validateRuntimeSurface(input.repositoryRoot))
+    ...(await validateRuntimeSurface(input.repositoryRoot, contractValues))
   ];
 }
 
@@ -385,6 +475,12 @@ function validateCredentialBoundaryContract(value: unknown): readonly Diagnostic
       max: 300,
       message: 'Credential capability max TTL must be 300 seconds or less.'
     }),
+    ...validatePositiveSafeInteger({
+      value,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'capabilities.max_ttl_seconds',
+      message: 'Credential capability max TTL must be a positive integer.'
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: CREDENTIAL_BOUNDARY_FILE,
@@ -421,54 +517,66 @@ function validateCredentialClasses(value: unknown): readonly Diagnostic[] {
       continue;
     }
 
-    diagnostics.push(
-      ...validateExactValue({
-        value: credentialClass,
-        file: CREDENTIAL_BOUNDARY_FILE,
-        path: 'plaintext_export_allowed',
-        diagnosticPath: `credential_classes.${requiredClass}.plaintext_export_allowed`,
-        expected: false,
-        message:
-          `Credential class \`${requiredClass}\` must set plaintext export to false.`
-      }),
-      ...validateExactValue({
-        value: credentialClass,
-        file: CREDENTIAL_BOUNDARY_FILE,
-        path: 'encryption_required',
-        diagnosticPath: `credential_classes.${requiredClass}.encryption_required`,
-        expected: true,
-        message: `Credential class \`${requiredClass}\` must require encryption.`
-      }),
-      ...validateExactValue({
-        value: credentialClass,
-        file: CREDENTIAL_BOUNDARY_FILE,
-        path: 'audit_required',
-        diagnosticPath: `credential_classes.${requiredClass}.audit_required`,
-        expected: true,
-        message: `Credential class \`${requiredClass}\` must require audit.`
-      }),
-      ...validateExactValue({
-        value: credentialClass,
-        file: CREDENTIAL_BOUNDARY_FILE,
-        path: 'rotation_supported',
-        diagnosticPath: `credential_classes.${requiredClass}.rotation_supported`,
-        expected: true,
-        message: `Credential class \`${requiredClass}\` must support rotation.`
-      }),
-      ...validateExactValue({
-        value: credentialClass,
-        file: CREDENTIAL_BOUNDARY_FILE,
-        path: 'storage_scope',
-        diagnosticPath: `credential_classes.${requiredClass}.storage_scope`,
-        expected: 'vault_only',
-        message:
-          `Credential class \`${requiredClass}\` must keep storage scope at ` +
-          '`vault_only`.'
-      })
-    );
+  }
+
+  for (const credentialClass of classes) {
+    diagnostics.push(...validateCredentialClass(credentialClass));
   }
 
   return diagnostics;
+}
+
+function validateCredentialClass(
+  credentialClass: Record<string, unknown>
+): readonly Diagnostic[] {
+  const credentialClassId =
+    readStringField(credentialClass, 'id') ?? 'unknown_credential_class';
+
+  return [
+    ...validateExactValue({
+      value: credentialClass,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'plaintext_export_allowed',
+      diagnosticPath: `credential_classes.${credentialClassId}.plaintext_export_allowed`,
+      expected: false,
+      message:
+        `Credential class \`${credentialClassId}\` must set plaintext export to false.`
+    }),
+    ...validateExactValue({
+      value: credentialClass,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'encryption_required',
+      diagnosticPath: `credential_classes.${credentialClassId}.encryption_required`,
+      expected: true,
+      message: `Credential class \`${credentialClassId}\` must require encryption.`
+    }),
+    ...validateExactValue({
+      value: credentialClass,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'audit_required',
+      diagnosticPath: `credential_classes.${credentialClassId}.audit_required`,
+      expected: true,
+      message: `Credential class \`${credentialClassId}\` must require audit.`
+    }),
+    ...validateExactValue({
+      value: credentialClass,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'rotation_supported',
+      diagnosticPath: `credential_classes.${credentialClassId}.rotation_supported`,
+      expected: true,
+      message: `Credential class \`${credentialClassId}\` must support rotation.`
+    }),
+    ...validateExactValue({
+      value: credentialClass,
+      file: CREDENTIAL_BOUNDARY_FILE,
+      path: 'storage_scope',
+      diagnosticPath: `credential_classes.${credentialClassId}.storage_scope`,
+      expected: 'vault_only',
+      message:
+        `Credential class \`${credentialClassId}\` must keep storage scope at ` +
+        '`vault_only`.'
+    })
+  ];
 }
 
 function validateCapabilityIssuanceContract(value: unknown): readonly Diagnostic[] {
@@ -495,6 +603,12 @@ function validateCapabilityIssuanceContract(value: unknown): readonly Diagnostic
       max: 300,
       message: 'Credential capability max TTL must be 300 seconds or less.'
     }),
+    ...validatePositiveSafeInteger({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'max_ttl_seconds',
+      message: 'Credential capability max TTL must be a positive integer.'
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: CAPABILITY_ISSUANCE_FILE,
@@ -502,12 +616,12 @@ function validateCapabilityIssuanceContract(value: unknown): readonly Diagnostic
       field: 'request_required',
       requiredEntries: REQUIRED_CAPABILITY_REQUEST_FIELDS
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateExactStringArrayEntries({
       value,
       file: CAPABILITY_ISSUANCE_FILE,
       path: 'allowed_operations',
       field: 'allowed_operations',
-      requiredEntries: REQUIRED_ALLOWED_OPERATIONS
+      expectedEntries: REQUIRED_ALLOWED_OPERATIONS
     }),
     ...validateExactValue({
       value,
@@ -557,6 +671,98 @@ function validateCapabilityIssuanceContract(value: unknown): readonly Diagnostic
       path: 'audit.reason_required',
       expected: true,
       message: 'Credential capability issuance must require an audit reason.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.supported',
+      expected: true,
+      message: 'Credential capability renewal must stay supported.'
+    }),
+    ...validateMaxNumber({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.renew_before_expiry_seconds',
+      max: 300,
+      message:
+        'Credential capability renewal lead time must not exceed the capability TTL.'
+    }),
+    ...validatePositiveSafeInteger({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.renew_before_expiry_seconds',
+      message: 'Credential capability renewal lead time must be a positive integer.'
+    }),
+    ...validateMaxNumber({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.max_renewal_chain_seconds',
+      max: 900,
+      message:
+        'Credential capability renewal chains must stay short enough for revocation to matter.'
+    }),
+    ...validatePositiveSafeInteger({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.max_renewal_chain_seconds',
+      message:
+        'Credential capability renewal chain length must be a positive integer.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'renewal.requires_fresh_audit_reason',
+      expected: true,
+      message: 'Credential capability renewal must require a fresh audit reason.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.edge_validation_cache.allowed',
+      expected: true,
+      message: 'Credential edge validation cache must remain explicitly allowed.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.edge_validation_cache.scope',
+      expected: 'revocation_metadata_only',
+      message:
+        'Credential edge validation cache must be limited to revocation metadata.'
+    }),
+    ...validateMaxNumber({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.edge_validation_cache.max_ttl_seconds',
+      max: 30,
+      message: 'Credential edge validation cache TTL must be 30 seconds or less.'
+    }),
+    ...validatePositiveSafeInteger({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.edge_validation_cache.max_ttl_seconds',
+      message: 'Credential edge validation cache TTL must be a positive integer.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.edge_validation_cache.secret_material_allowed',
+      expected: false,
+      message: 'Credential edge validation cache must not allow secret material.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.stateless_capability.allowed_by_default',
+      expected: false,
+      message: 'Credential stateless capabilities must not be allowed by default.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CAPABILITY_ISSUANCE_FILE,
+      path: 'load_shedding.stateless_capability.exception_requires',
+      field: 'load_shedding.stateless_capability.exception_requires',
+      requiredEntries: REQUIRED_STATELESS_EXCEPTION_FIELDS
     })
   ];
 }
@@ -650,12 +856,12 @@ function validateStorageBoundaryContract(value: unknown): readonly Diagnostic[] 
       expected: false,
       message: 'Credential storage must not allow plaintext backups.'
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateExactStringArrayEntries({
       value,
       file: STORAGE_BOUNDARY_FILE,
       path: 'allowed_interfaces',
       field: 'allowed_interfaces',
-      requiredEntries: REQUIRED_ALLOWED_INTERFACES
+      expectedEntries: REQUIRED_ALLOWED_INTERFACES
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -877,23 +1083,63 @@ async function validateCheckerSurface(
         })),
     ...(validatorSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_VALIDATOR_FILE,
-          source: validatorSource.source,
-          requiredFragments: [
-            'MAX_CAPABILITY_TTL_SECONDS',
-            'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED',
-            'CRED_CAPABILITY_TTL_TOO_HIGH',
-            'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
-            'CRED_AUDIT_FORBIDDEN_VALUE_MISSING',
-            'CRED_RESTORE_SECRET_VALUES_ALLOWED',
-            'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED',
-            'CRED_RUST_CREDENTIAL_CLASS_DRIFT',
-            'CRED_RUST_SECRET_LOGGING_PATTERN',
-            'RUST_MARKER_EXPECTATIONS',
-            'RUST_WEAK_CRYPTO_PATTERNS'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'MAX_CAPABILITY_TTL_SECONDS',
+              'requirePositiveSafeInteger',
+              'CRED_RUST_CREDENTIAL_CLASS_DRIFT',
+              'RUST_MARKER_EXPECTATIONS',
+              'RUST_WEAK_CRYPTO_PATTERNS'
+            ]
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateCredentialBoundary',
+            requiredFragments: ['CRED_BOUNDARY_TTL_NOT_POSITIVE_INTEGER']
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateCredentialClass',
+            requiredFragments: ['CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED']
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateCapabilityIssuance',
+            requiredFragments: [
+              'CRED_CAPABILITY_TTL_TOO_HIGH',
+              'CRED_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
+              'CRED_CAPABILITY_RENEWAL_LEAD_NOT_POSITIVE_INTEGER',
+              'CRED_CAPABILITY_RENEWAL_CHAIN_NOT_POSITIVE_INTEGER',
+              'CRED_CAPABILITY_EDGE_CACHE_TTL_NOT_POSITIVE_INTEGER',
+              'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+              'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED'
+            ]
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateAccessAudit',
+            requiredFragments: ['CRED_AUDIT_FORBIDDEN_VALUE_MISSING']
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateStorageBoundary',
+            requiredFragments: ['CRED_RESTORE_SECRET_VALUES_ALLOWED']
+          }),
+          ...validateSourceFunctionIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            functionName: 'validateRustSecurityPatterns',
+            requiredFragments: ['CRED_RUST_SECRET_LOGGING_PATTERN']
+          })
+        ]),
     ...(validatorSource.source === null
       ? []
       : validateSourceCodeIncludes({
@@ -929,6 +1175,7 @@ async function validateCheckerSurface(
             'validates the committed credential vault contracts',
             'fails when a credential class allows plaintext export',
             'fails when capability ttl is longer than five minutes',
+            'fails when capability ttl and renewal windows are not positive integers',
             'fails when connector repositories can persist capabilities',
             'fails when stateless credential capabilities are allowed by default',
             'fails when audit records can include encrypted credential payloads',
@@ -941,7 +1188,8 @@ async function validateCheckerSurface(
 }
 
 async function validateRuntimeSurface(
-  repositoryRoot: string
+  repositoryRoot: string,
+  contracts: CredentialVaultContractValues | null
 ): Promise<readonly Diagnostic[]> {
   const [
     cargo,
@@ -1120,6 +1368,17 @@ async function validateRuntimeSurface(
             'logs',
             'public_discovery'
           ]
+        })),
+    ...(contracts === null
+      ? []
+      : validateRustSemanticMarkers({
+          contracts,
+          sources: [
+            [RUNTIME_CREDENTIAL_BOUNDARY_FILE, credentialBoundarySource.source],
+            [RUNTIME_CAPABILITY_ISSUANCE_FILE, capabilityIssuanceSource.source],
+            [RUNTIME_ACCESS_AUDIT_FILE, accessAuditSource.source],
+            [RUNTIME_STORAGE_BOUNDARY_FILE, storageBoundarySource.source]
+          ]
         }))
   ];
 }
@@ -1166,6 +1425,208 @@ function validateSourceCodeIncludes(input: {
         input.file,
         'source',
         `Credential vault checker source must include code fragment \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceFunctionIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly functionName: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const body = readFunctionBody(input.source, input.functionName);
+  const diagnostics: Diagnostic[] = [];
+
+  if (body === null) {
+    return [
+      createCredentialDiagnostic(
+        input.file,
+        'source',
+        `Credential vault checker source must include function \`${input.functionName}\`.`
+      )
+    ];
+  }
+
+  for (const fragment of input.requiredFragments) {
+    if (body.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        'source',
+        `Credential vault checker function \`${input.functionName}\` must use \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function readFunctionBody(source: string, functionName: string): string | null {
+  const codeOnlySource = stripCommentsAndStringLiterals(source);
+  const pattern = new RegExp(
+    `function\\s+${escapeRegExp(functionName)}\\s*\\(`,
+    'm'
+  );
+  const match = pattern.exec(codeOnlySource);
+  if (match === null) {
+    return null;
+  }
+
+  const openBrace = codeOnlySource.indexOf('{', match.index);
+  if (openBrace === -1) {
+    return null;
+  }
+
+  let depth = 0;
+  for (let index = openBrace; index < codeOnlySource.length; index += 1) {
+    const char = codeOnlySource[index];
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char !== '}') {
+      continue;
+    }
+
+    depth -= 1;
+    if (depth === 0) {
+      return source.slice(openBrace + 1, index);
+    }
+  }
+
+  return null;
+}
+
+function validateRustSemanticMarkers(input: {
+  readonly contracts: CredentialVaultContractValues;
+  readonly sources: readonly (readonly [string, string | null])[];
+}): readonly Diagnostic[] {
+  const sourcesByFile = new Map<string, string>();
+  for (const [file, source] of input.sources) {
+    if (source !== null) {
+      sourcesByFile.set(file, source);
+    }
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  for (const expectation of RUST_MARKER_EXPECTATIONS) {
+    const source = sourcesByFile.get(expectation.file);
+    if (source === undefined) {
+      continue;
+    }
+
+    const actual = readRustStringArrayConstant(source, expectation.constName);
+    if (actual === undefined) {
+      diagnostics.push(
+        createCredentialDiagnostic(
+          expectation.file,
+          expectation.constName,
+          `Credential vault Rust marker must declare \`${expectation.constName}\`.`
+        )
+      );
+      continue;
+    }
+
+    diagnostics.push(
+      ...validateExactStringSet({
+        actual,
+        expected: expectation.expectedEntries(input.contracts),
+        file: expectation.file,
+        path: expectation.yamlPath,
+        label: `Rust marker \`${expectation.constName}\``
+      })
+    );
+  }
+
+  const capabilitySource = sourcesByFile.get(RUNTIME_CAPABILITY_ISSUANCE_FILE);
+  if (capabilitySource === undefined) {
+    return diagnostics;
+  }
+
+  const rustTtl = readRustNumberConstant(
+    capabilitySource,
+    'MAX_CAPABILITY_TTL_SECONDS'
+  );
+  if (rustTtl === undefined) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        RUNTIME_CAPABILITY_ISSUANCE_FILE,
+        'MAX_CAPABILITY_TTL_SECONDS',
+        'Credential vault Rust marker must declare `MAX_CAPABILITY_TTL_SECONDS`.'
+      )
+    );
+    return diagnostics;
+  }
+
+  const capabilityTtl = readPath(
+    input.contracts.capabilityIssuance,
+    'max_ttl_seconds'
+  );
+  const boundaryTtl = readPath(
+    input.contracts.credentialBoundary,
+    'capabilities.max_ttl_seconds'
+  );
+
+  if (rustTtl !== capabilityTtl || rustTtl !== boundaryTtl) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        RUNTIME_CAPABILITY_ISSUANCE_FILE,
+        'MAX_CAPABILITY_TTL_SECONDS',
+        'Credential vault Rust capability TTL marker must match credential-boundary.yaml and capability-issuance.yaml.'
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateExactStringSet(input: {
+  readonly actual: readonly string[];
+  readonly expected: readonly string[];
+  readonly file: string;
+  readonly path: string;
+  readonly label: string;
+}): readonly Diagnostic[] {
+  const missingEntries = input.expected.filter((entry) => !input.actual.includes(entry));
+  const extraEntries = input.actual.filter((entry) => !input.expected.includes(entry));
+  const duplicateEntries = findDuplicateStrings(input.actual);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const missingEntry of missingEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `${input.label} must include \`${missingEntry}\` from the YAML contract.`
+      )
+    );
+  }
+
+  for (const extraEntry of extraEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `${input.label} must not include unapproved \`${extraEntry}\` outside the YAML contract.`
+      )
+    );
+  }
+
+  for (const duplicateEntry of duplicateEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `${input.label} must not duplicate \`${duplicateEntry}\`.`
       )
     );
   }
@@ -1251,6 +1712,63 @@ function validateRequiredStringArrayEntries(input: {
   return diagnostics;
 }
 
+function validateExactStringArrayEntries(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly expectedEntries: readonly string[];
+}): readonly Diagnostic[] {
+  const entries = readStringArrayPath(input.value, input.field);
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.value,
+      file: input.file,
+      path: input.path,
+      field: input.field
+    })
+  ];
+  const missingEntries = input.expectedEntries.filter(
+    (entry) => !entries.includes(entry)
+  );
+  const extraEntries = entries.filter(
+    (entry) => !input.expectedEntries.includes(entry)
+  );
+  const duplicateEntries = findDuplicateStrings(entries);
+
+  for (const missingEntry of missingEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `Credential vault contract \`${input.file}\` must include \`${missingEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  for (const extraEntry of extraEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `Credential vault contract \`${input.file}\` must not include unapproved \`${extraEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  for (const duplicateEntry of duplicateEntries) {
+    diagnostics.push(
+      createCredentialDiagnostic(
+        input.file,
+        input.path,
+        `Credential vault contract \`${input.file}\` must not duplicate \`${duplicateEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateStringArrayItems(input: {
   readonly value: unknown;
   readonly file: string;
@@ -1274,6 +1792,22 @@ function validateStringArrayItems(input: {
       `Credential vault contract \`${input.file}\` must declare \`${input.field}\` as a string list.`
     )
   ];
+}
+
+function findDuplicateStrings(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+      continue;
+    }
+
+    seen.add(value);
+  }
+
+  return [...duplicates].sort();
 }
 
 function validateExactValue(input: {
@@ -1313,6 +1847,66 @@ function validateMaxNumber(input: {
   }
 
   return [createCredentialDiagnostic(input.file, input.path, input.message)];
+}
+
+function validatePositiveSafeInteger(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const actual = readPath(input.value, input.path);
+
+  if (typeof actual === 'number' && Number.isSafeInteger(actual) && actual > 0) {
+    return [];
+  }
+
+  return [createCredentialDiagnostic(input.file, input.path, input.message)];
+}
+
+function readRustStringArrayConstant(
+  source: string,
+  constName: string
+): readonly string[] | undefined {
+  const pattern = new RegExp(
+    `pub\\s+const\\s+${escapeRegExp(
+      constName
+    )}\\s*:\\s*&\\[&str\\]\\s*=\\s*&\\[([\\s\\S]*?)\\];`,
+    'm'
+  );
+  const match = source.match(pattern);
+  if (match === null) {
+    return undefined;
+  }
+
+  const body = match[1] ?? '';
+  const values: string[] = [];
+  for (const value of body.matchAll(/"([^"]+)"/g)) {
+    const item = value[1];
+    if (item !== undefined) {
+      values.push(item);
+    }
+  }
+
+  return values;
+}
+
+function readRustNumberConstant(source: string, constName: string): number | undefined {
+  const pattern = new RegExp(
+    `pub\\s+const\\s+${escapeRegExp(constName)}\\s*:\\s*[^=]+?=\\s*(\\d+)\\s*;`,
+    'm'
+  );
+  const match = source.match(pattern);
+  if (match === null) {
+    return undefined;
+  }
+
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) ? value : undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function readRepositoryName(value: unknown): string | null {

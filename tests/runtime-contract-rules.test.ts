@@ -245,6 +245,22 @@ targets:
           message:
             'Runtime contract `contracts/smoke-targets.yaml` must include `contracts` in `readyz.expect_json.checks`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.core-api.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `healthz service id does not match core-api` in `blocked_production_when`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.core-api.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must include `readiness depends on a database before the core migration slice exists` in `blocked_production_when`.'
+        });
       }
     );
   });
@@ -1091,6 +1107,7 @@ deployment_template:
     - secret_values
 process_model:
   web_process_required: false
+  worker_process_optional: false
   state_in_process_memory_allowed: true
   graceful_shutdown_required: false
 `,
@@ -1099,6 +1116,8 @@ rollback:
   required: false
   record_fields:
     - deploy_id
+  blocked_when:
+    - previous revision is missing
 `
       },
       async (repositoryRoot) => {
@@ -1125,9 +1144,84 @@ rollback:
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-RUNTIME-001',
           severity: 'error',
+          file: 'contracts/deployment-template.yaml',
+          path: 'process_model.worker_process_optional',
+          message:
+            'Runtime deployment template must keep worker processes optional.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
           file: 'contracts/rollback.yaml',
           path: 'rollback.required',
           message: 'Runtime rollback contract must require rollback.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/rollback.yaml',
+          path: 'rollback.blocked_when',
+          message:
+            'Runtime contract `contracts/rollback.yaml` must include `destructive migration has no rollback note` in `rollback.blocked_when`.'
+        });
+      }
+    );
+  });
+
+  test('fails when an unknown smoke target violates the generic schema', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'contracts/smoke-targets.yaml': createSmokeTargetsYaml().replace(
+          '\ncontract_checks:',
+          `
+  - id: future-runtime
+    repo: zdp-future-runtime
+    service_id: future-runtime
+    process: web
+    healthz:
+      method: POST
+      path: /healthz
+      timeout_seconds: -1
+    readyz:
+      method: GET
+      path: /readyz
+      timeout_seconds: 3
+    blocked_production_when:
+      - future runtime contract fails
+
+contract_checks:`
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.future-runtime.healthz.method',
+          message:
+            'Runtime smoke target `targets.future-runtime.healthz` must use `GET`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.future-runtime.healthz.timeout_seconds',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must declare `timeout_seconds` as a positive integer.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'contracts/smoke-targets.yaml',
+          path: 'targets.future-runtime.blocked_production_when',
+          message:
+            'Runtime contract `contracts/smoke-targets.yaml` must declare every `blocked_production_when` item as a `{ condition, enforced_by }` object.'
         });
       }
     );
@@ -1195,6 +1289,47 @@ test('smoke runner placeholder', () => {});
           path: 'source',
           message:
             'Runtime smoke runner source must include test case `fails closed when run mode has no base URL`.'
+        });
+      }
+    );
+  });
+
+  test('fails when smoke plan or run scripts are no-ops', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidRuntimeFiles(),
+        'package.json': `
+{
+  "scripts": {
+    "check": "tsc --noEmit && bun test",
+    "test": "bun test",
+    "smoke:plan": "echo plan",
+    "smoke:run": "echo run"
+  }
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryRuntimeContract({
+          repositoryRoot,
+          repositoryServiceContract: createRuntimeServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.smoke:plan',
+          message:
+            'Runtime package `smoke:plan` script must run `bun scripts/smoke-runner.ts plan`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-RUNTIME-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.smoke:run',
+          message:
+            'Runtime package `smoke:run` script must run `bun scripts/smoke-runner.ts run`.'
         });
       }
     );
@@ -1377,6 +1512,7 @@ function createValidRuntimeFiles(): Record<string, string> {
     'contracts/healthcheck.yaml': `
 healthcheck:
   liveness:
+    purpose: process restart signal
     method: GET
     default_path: /healthz
     timeout_seconds: 2
@@ -1387,6 +1523,7 @@ healthcheck:
         ok: true
         service: string
   readiness:
+    purpose: traffic admission signal
     method: GET
     default_path: /readyz
     timeout_seconds: 3
@@ -1397,6 +1534,11 @@ healthcheck:
         ready: boolean
         checks: string_array
   smoke:
+    required_before_production: true
+    must_not_require_real_payment: true
+    must_not_require_user_data: true
+    must_not_require_real_customer_account: true
+    must_not_perform_state_changes: true
     targets_ref: smoke-targets.yaml
 headers:
   required:
@@ -1423,6 +1565,7 @@ deployment_template:
     - database_migration_body
 process_model:
   web_process_required: true
+  worker_process_optional: true
   state_in_process_memory_allowed: false
   graceful_shutdown_required: true
 `,
@@ -1436,6 +1579,10 @@ rollback:
     - actor
     - reason
     - trace_id
+  blocked_when:
+    - destructive migration has no rollback note
+    - previous revision is missing
+    - secret schema changed without compatibility note
 `,
     'package.json': `
 {
@@ -1453,15 +1600,43 @@ await runSmokeRunnerCli([]);
 `,
     'src/smoke-runner/contract.ts': `
 const smokeTargetsFile = 'contracts/smoke-targets.yaml';
+const healthcheckFile = 'contracts/healthcheck.yaml';
+const deploymentTemplateFile = 'contracts/deployment-template.yaml';
+const rollbackFile = 'contracts/rollback.yaml';
+const smokeMetadata = 'smoke_targets';
+const rollbackBlockers = 'blocked_when';
+const workerPolicy = 'worker_process_optional';
+export function parseRuntimeContracts(source: string): unknown {
+  parseHealthcheckContract(healthcheckFile);
+  parseDeploymentTemplateContract(deploymentTemplateFile);
+  parseRollbackContract(rollbackFile);
+  parseSmokeTargetsMetadata(source);
+  return parseSmokeTargetsContract(source);
+}
 export function parseSmokeTargetsContract(source: string): unknown {
   Bun.YAML.parse(source);
   parseTarget({});
   parseContractCheck({});
   requiredBlockedProductionConditionList({}, 'blocked_production_when', smokeTargetsFile);
-  if (!source.includes('targets') || !source.includes('blocked_production_when') || !source.includes('enforced_by')) {
+  if (!source.includes('targets') || !source.includes('blocked_production_when') || !source.includes('enforced_by') || !source.includes(smokeMetadata) || !source.includes(rollbackBlockers) || !source.includes(workerPolicy) || !source.includes(healthcheckFile) || !source.includes(deploymentTemplateFile) || !source.includes(rollbackFile)) {
     throw new Error('contracts/smoke-targets.yaml must declare targets');
   }
   return {};
+}
+export function parseHealthcheckContract(value: unknown): unknown {
+  requiredBoolean({}, 'required_before_production', healthcheckFile);
+  return value;
+}
+export function parseDeploymentTemplateContract(value: unknown): unknown {
+  assertStringListContains(['worker_process_optional'], ['worker_process_optional'], deploymentTemplateFile);
+  return value;
+}
+export function parseRollbackContract(value: unknown): unknown {
+  assertStringListContains(['blocked_when'], ['blocked_when'], rollbackFile);
+  return value;
+}
+function parseSmokeTargetsMetadata(value: unknown): unknown {
+  return value;
 }
 function parseTarget(value: unknown): unknown {
   return value;
@@ -1477,6 +1652,12 @@ function parseBlockedProductionCondition(value: unknown): unknown {
 }
 function isRuntimeContractEnforcement(value: string): boolean {
   return value === 'smoke_runner';
+}
+function assertStringListContains(actual: readonly string[], expected: readonly string[], context: string): unknown {
+  return [actual, expected, context];
+}
+function requiredBoolean(value: unknown, key: string, context: string): unknown {
+  return [value, key, context];
 }
 `,
     'src/smoke-runner/runner.ts': `
@@ -1505,8 +1686,20 @@ function validateJsonExpectation(value: unknown): unknown {
 `,
     'tests/smoke-runner.test.ts': `
 import { expect, test } from 'bun:test';
-import { parseSmokeTargetsContract } from '../src/smoke-runner/contract';
+import { parseRuntimeContracts, parseSmokeTargetsContract } from '../src/smoke-runner/contract';
 import { createSmokePlan, runSmokeTargets } from '../src/smoke-runner/runner';
+test('parses the committed runtime contract set before plan or run mode', () => {
+  const metadata = 'smoke_targets.production_promotion_requires';
+  const worker = 'worker_process_optional';
+  const rollback = 'blocked_when';
+  expect([parseRuntimeContracts, metadata, worker, rollback]).toHaveLength(4);
+});
+test('rejects runtime contract sets with missing smoke metadata', () => {
+  expect(parseRuntimeContracts).toBeDefined();
+});
+test('rejects deployment and rollback contract drift before smoke execution', () => {
+  expect(parseRuntimeContracts).toBeDefined();
+});
 test('fails closed when run mode has no base URL', () => {
   const reason = 'base_url_not_provided';
   const securityTarget = 'platform-security-contracts';
@@ -1729,10 +1922,21 @@ contract_checks:
 `;
 
   return `
+smoke_targets:
+  version: 1
+  stage: early-origin-runtime
+  production_promotion_requires:
+    - target health endpoint returns the declared service id
+    - target readiness endpoint returns the declared readiness contract
+    - platform contract checker targets pass before dependent runtime promotion
+    - smoke check does not require real payment, customer data, or user mutation
+    - runtime operator can reproduce the check from repository contracts
+
 targets:
   - id: core-api
     repo: zdp-core-platform
     service_id: core-api
+    process: web
     required_before:
       - hello-origin
       - production-runtime-template
@@ -1752,11 +1956,16 @@ targets:
         checks:
           - contracts
     blocked_production_when:
+      - condition: healthz service id does not match core-api
+        enforced_by: smoke_runner
       - condition: readyz checks omit contracts
         enforced_by: smoke_runner
+      - condition: readiness depends on a database before the core migration slice exists
+        enforced_by: architecture_linter
   - id: app-console
     repo: zdp-web-apps
     service_id: app-console
+    process: web
     required_before:
       - first-console-preview
       - production-runtime-template

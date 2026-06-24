@@ -34,6 +34,7 @@ const AUTH_AUDIT_EVENT_PERSISTENCE_FILE =
   'contracts/auth-audit-event-persistence.yaml';
 const AUTH_AUDIT_STORAGE_ADAPTER_FILE =
   'contracts/auth-audit-storage-adapter.yaml';
+const CORE_EVENT_OUTBOX_FILE = 'contracts/core-event-outbox.yaml';
 const AUTH_IDEMPOTENCY_STORAGE_FILE = 'contracts/auth-idempotency-storage.yaml';
 
 const AUTH_SESSION_RUNTIME_STATUS = 'contracted_no_live_handler';
@@ -56,7 +57,7 @@ const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS =
   'contract_only_no_transaction_manager';
 const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS =
   'typed_transaction_outbox_boundary_no_adapter';
-const IDENTITY_SESSION_STORE_STATUS = 'contract_only_no_migration';
+const IDENTITY_SESSION_STORE_STATUS = 'migration_shape_declared_no_adapter';
 const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
   'contract_only_no_capability_client';
 const AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS =
@@ -72,6 +73,7 @@ const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
 const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
 const AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
+const CORE_EVENT_OUTBOX_STATUS = 'migration_shape_declared_no_dispatcher';
 const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
 const IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
@@ -775,7 +777,10 @@ const REQUIRED_IDENTITY_SESSION_STORE_FIELDS = [
   'refresh_token_hash',
   'rotation_counter',
   'created_by_command_id',
-  'trace_id'
+  'command_id',
+  'idempotency_key',
+  'trace_id',
+  'audit_event_ref'
 ] as const;
 
 const REQUIRED_IDENTITY_SESSION_STORE_STATES = [
@@ -1243,6 +1248,90 @@ const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES = [
   'raw_error_payload'
 ] as const;
 
+const REQUIRED_CORE_EVENT_OUTBOX_PRODUCED_EVENTS = [
+  'core.account.restricted',
+  'core.account.restriction_cleared',
+  'core.identity.email_verified',
+  'core.identity.security_pin_changed',
+  'core.identity.human_readiness_changed',
+  'core.permission.role_assignment_changed',
+  'core.access.api_key_changed',
+  'core.consent.withdrawn'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_MONEY_RELEVANT_EVENTS = [
+  'core.account.restricted',
+  'core.account.restriction_cleared',
+  'core.identity.email_verified',
+  'core.identity.security_pin_changed',
+  'core.identity.human_readiness_changed'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_FIELDS = [
+  'cloud_event_id',
+  'cloud_event_source',
+  'cloud_event_type',
+  'schema_version',
+  'aggregate_type',
+  'aggregate_id',
+  'tenant_id',
+  'actor_id',
+  'subject_ref',
+  'payload_ref',
+  'redacted_summary',
+  'causation_command_id',
+  'idempotency_key',
+  'audit_event_ref',
+  'trace_id',
+  'occurred_at',
+  'available_at'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_DELIVERY_ATTEMPT_FIELDS = [
+  'core_event_outbox_id',
+  'consumer_service_id',
+  'attempt_number',
+  'delivery_state',
+  'dispatcher_ref',
+  'attempted_at',
+  'audit_event_ref',
+  'trace_id'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_CONTROLS = [
+  'outbox_rows_are_append_only',
+  'delivery_attempt_rows_are_append_only',
+  'cloud_event_id_unique',
+  'event_type_aggregate_command_unique',
+  'payload_reference_only',
+  'redacted_summary_only',
+  'audit_event_reference_required',
+  'command_idempotency_reference_required',
+  'trace_reference_required',
+  'dispatcher_ref_required_for_delivery_attempts',
+  'no_dispatcher_claim_until_worker_exists'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_VALUES = [
+  'raw_password',
+  'password_plaintext',
+  'security_pin_plaintext',
+  'raw_email',
+  'phone_number',
+  'authorization_header',
+  'cookie_header',
+  'refresh_token_plaintext',
+  'provider_secret',
+  'raw_personal_payload'
+] as const;
+
+const REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_CLAIMS = [
+  'event_dispatcher_ready',
+  'event_replay_ready',
+  'money_platform_realtime_sync_ready',
+  'product_route_unblocked'
+] as const;
+
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS = [
   'idempotency_key',
   'command_id',
@@ -1356,6 +1445,7 @@ export async function validateRepositoryCoreContract(input: {
     authOauthCallbackState,
     authAuditEventPersistence,
     authAuditStorageAdapter,
+    coreEventOutbox,
     authIdempotencyStorage
   ] = await Promise.all([
       readRequiredTextFile(input.repositoryRoot, CORE_CI_WORKFLOW_FILE),
@@ -1382,6 +1472,7 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_OAUTH_CALLBACK_STATE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_EVENT_PERSISTENCE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_STORAGE_ADAPTER_FILE),
+      readRequiredYamlContract(input.repositoryRoot, CORE_EVENT_OUTBOX_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE)
     ]);
 
@@ -1404,6 +1495,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authOauthCallbackState.diagnostics,
     ...authAuditEventPersistence.diagnostics,
     ...authAuditStorageAdapter.diagnostics,
+    ...coreEventOutbox.diagnostics,
     ...authIdempotencyStorage.diagnostics,
     ...(ciWorkflow.value === null ? [] : validateCoreCiWorkflow(ciWorkflow.value)),
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
@@ -1477,6 +1569,9 @@ export async function validateRepositoryCoreContract(input: {
     ...(authAuditStorageAdapter.value === null
       ? []
       : validateAuthAuditStorageAdapterContract(authAuditStorageAdapter.value)),
+    ...(coreEventOutbox.value === null
+      ? []
+      : validateCoreEventOutboxContract(coreEventOutbox.value)),
     ...(authIdempotencyStorage.value === null
       ? []
       : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value))
@@ -2381,7 +2476,7 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
       createCoreDiagnostic(
         IDENTITY_SESSION_STORE_FILE,
         'contract.status',
-        `Core platform identity session store contract must stay \`${IDENTITY_SESSION_STORE_STATUS}\` until migrations exist.`
+        `Core platform identity session store contract must stay \`${IDENTITY_SESSION_STORE_STATUS}\` until a migration-backed adapter exists.`
       )
     );
   }
@@ -2405,19 +2500,6 @@ function validateIdentitySessionStoreContract(value: unknown): readonly Diagnost
         IDENTITY_SESSION_STORE_FILE,
         'adapter_contract.status',
         `Core platform identity session store adapter boundary must stay \`${IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
-      )
-    );
-  }
-
-  if (
-    readPath(value, 'adapter_contract.status') !==
-    AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS
-  ) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_PASSKEY_CHALLENGE_STORE_FILE,
-        'adapter_contract.status',
-        `Core platform auth passkey challenge store adapter boundary must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
       )
     );
   }
@@ -2982,6 +3064,193 @@ function validateAuthAuditStorageAdapterContract(
   return diagnostics;
 }
 
+function validateCoreEventOutboxContract(value: unknown): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  if (readPath(value, 'contract.status') !== CORE_EVENT_OUTBOX_STATUS) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        CORE_EVENT_OUTBOX_FILE,
+        'contract.status',
+        `Core platform event outbox contract must stay \`${CORE_EVENT_OUTBOX_STATUS}\` until dispatcher and replay workers exist.`
+      )
+    );
+  }
+
+  if (readPath(value, 'contract.owner') !== CORE_REPOSITORY_NAME) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        CORE_EVENT_OUTBOX_FILE,
+        'contract.owner',
+        `Core platform event outbox contract must keep owner \`${CORE_REPOSITORY_NAME}\`.`
+      )
+    );
+  }
+
+  diagnostics.push(
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.live_dispatcher_implemented',
+      field: 'runtime.live_dispatcher_implemented',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep live_dispatcher_implemented false until dispatcher proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.consumer_inbox_implemented',
+      field: 'runtime.consumer_inbox_implemented',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep consumer_inbox_implemented false until consumer inbox proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.replay_worker_implemented',
+      field: 'runtime.replay_worker_implemented',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep replay_worker_implemented false until replay worker proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.production_route_unblocked',
+      field: 'runtime.production_route_unblocked',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep production_route_unblocked false until dispatcher and consumer proof exist.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.cloud_events_required',
+      field: 'events.cloud_events_required',
+      expected: true,
+      message:
+        'Core platform event outbox contract must require CloudEvents-compatible records.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.source',
+      field: 'events.source',
+      expected: CORE_REPOSITORY_NAME,
+      message:
+        `Core platform event outbox contract must keep events.source \`${CORE_REPOSITORY_NAME}\`.`
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.produced',
+      field: 'events.produced',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_PRODUCED_EVENTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.money_relevant',
+      field: 'events.money_relevant',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_MONEY_RELEVANT_EVENTS
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.outbox_table',
+      field: 'storage.outbox_table',
+      expected: 'audit.core_event_outbox',
+      message:
+        'Core platform event outbox contract must keep storage.outbox_table `audit.core_event_outbox`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.delivery_attempt_table',
+      field: 'storage.delivery_attempt_table',
+      expected: 'audit.core_event_delivery_attempts',
+      message:
+        'Core platform event outbox contract must keep storage.delivery_attempt_table `audit.core_event_delivery_attempts`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.append_only_tables',
+      field: 'storage.append_only_tables',
+      requiredEntries: [
+        'audit.core_event_outbox',
+        'audit.core_event_delivery_attempts'
+      ]
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.payload_ref_only',
+      field: 'storage.payload_ref_only',
+      expected: true,
+      message:
+        'Core platform event outbox contract must keep payload_ref_only true.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.inline_personal_payload_allowed',
+      field: 'storage.inline_personal_payload_allowed',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep inline_personal_payload_allowed false.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'storage.inline_secret_payload_allowed',
+      field: 'storage.inline_secret_payload_allowed',
+      expected: false,
+      message:
+        'Core platform event outbox contract must keep inline_secret_payload_allowed false.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'required_outbox_fields',
+      field: 'required_outbox_fields',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'required_delivery_attempt_fields',
+      field: 'required_delivery_attempt_fields',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_DELIVERY_ATTEMPT_FIELDS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'controls',
+      field: 'controls',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'forbidden_values',
+      field: 'forbidden_values',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_VALUES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'forbidden_claims',
+      field: 'forbidden_claims',
+      requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_CLAIMS
+    })
+  );
+
+  return diagnostics;
+}
+
 function validateAuthIdempotencyStorageContract(
   value: unknown
 ): readonly Diagnostic[] {
@@ -3230,6 +3499,23 @@ function validateRequiredStringArrayEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateExactValue(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field?: string;
+  readonly expected: unknown;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const actual = readPath(input.value, input.field ?? input.path);
+
+  if (actual === input.expected) {
+    return [];
+  }
+
+  return [createCoreDiagnostic(input.file, input.path, input.message)];
 }
 
 function validateAuthRuntimeReadinessGateStates(

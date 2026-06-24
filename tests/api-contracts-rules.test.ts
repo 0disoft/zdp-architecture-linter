@@ -403,7 +403,7 @@ routes:
           file: 'contracts/apis/catalog.yaml',
           path: 'api_catalog.status',
           message:
-            'API catalog must stay active once core auth/session routes are declared.'
+            'API catalog must stay contract-only until live core auth/session handlers exist.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-AUTH-ROUTE-001',
@@ -678,12 +678,16 @@ route_contract:
     - credential_policy
     - error_codes
   forbidden_shapes:
+    - raw_customer_payload
+    - raw_provider_error
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
     - screen_component_payload
     - provider_specific_id_as_primary_id
     - raw_storage_url
-    - authorization_header_payload
-    - cookie_header_payload
-    - refresh_token_plaintext
 `,
     'contracts/error-envelope.yaml': `
 error_envelope:
@@ -698,10 +702,14 @@ error_envelope:
     - retry_after_seconds
     - documentation_url
   forbidden_fields:
-    - stack_trace
-    - provider_secret
+    - raw_customer_payload
     - raw_provider_error
-    - customer_private_payload
+    - provider_secret
+    - authorization_header
+    - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
+    - screen_component_payload
 `,
     'contracts/webhook-contract.yaml': `
 webhook_contract:
@@ -728,6 +736,7 @@ sdk_generation_input:
     - contracts/webhook-contract.yaml
     - contracts/sdk-generation-input.yaml
     - contracts/apis/catalog.yaml
+    - contracts/apis/core-api/auth-session.yaml
   generation_targets:
     - typescript
     - dart
@@ -780,11 +789,13 @@ sdk_generation_input:
     - provider_secret
     - authorization_header
     - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
     - screen_component_payload
 `,
     'contracts/apis/catalog.yaml': `
 api_catalog:
-  status: route-catalog-active
+  status: route-catalog-contract-only
   route_definition_required_fields:
     - operation_id
     - service_id
@@ -812,6 +823,8 @@ api_catalog:
     - provider_secret
     - authorization_header
     - cookie_header
+    - refresh_token_plaintext
+    - stack_trace
     - screen_component_payload
 routes:
 ${createAuthSessionRouteCatalogFixture()}
@@ -835,7 +848,9 @@ schema_bundle:
       - refresh_token_plaintext
       - provider_secret
       - raw_provider_error
-      - customer_private_payload
+      - raw_customer_payload
+      - stack_trace
+      - screen_component_payload
 `
   };
 }
@@ -923,7 +938,8 @@ const files = [
   'contracts/error-envelope.yaml',
   'contracts/webhook-contract.yaml',
   'contracts/sdk-generation-input.yaml',
-  'contracts/apis/catalog.yaml'
+  'contracts/apis/catalog.yaml',
+  'contracts/apis/core-api/auth-session.yaml'
 ];
 export { files };
 `,
@@ -954,6 +970,8 @@ const API_CATALOG_ROUTE_FIELD_MISSING = 'API_CATALOG_ROUTE_FIELD_MISSING';
 const API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE = 'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE';
 const API_ERROR_FORBIDDEN_FIELD_MISSING = 'API_ERROR_FORBIDDEN_FIELD_MISSING';
 const API_WEBHOOK_REQUIRED_CONTROL_MISSING = 'API_WEBHOOK_REQUIRED_CONTROL_MISSING';
+const API_SDK_GENERATION_SOURCE_CONTRACT_MISSING = 'API_SDK_GENERATION_SOURCE_CONTRACT_MISSING';
+const API_SDK_GENERATION_SCHEMA_BUNDLE_SOURCE_MISSING = 'API_SDK_GENERATION_SCHEMA_BUNDLE_SOURCE_MISSING';
 const API_SDK_GENERATION_TARGET_MISSING = 'API_SDK_GENERATION_TARGET_MISSING';
 const API_SDK_FORBIDDEN_OWNERSHIP_MISSING = 'API_SDK_FORBIDDEN_OWNERSHIP_MISSING';
 const API_SDK_FORBIDDEN_VALUE_MISSING = 'API_SDK_FORBIDDEN_VALUE_MISSING';
@@ -979,6 +997,8 @@ export {
   API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE,
   API_ERROR_FORBIDDEN_FIELD_MISSING,
   API_WEBHOOK_REQUIRED_CONTROL_MISSING,
+  API_SDK_GENERATION_SOURCE_CONTRACT_MISSING,
+  API_SDK_GENERATION_SCHEMA_BUNDLE_SOURCE_MISSING,
   API_SDK_GENERATION_TARGET_MISSING,
   API_SDK_FORBIDDEN_OWNERSHIP_MISSING,
   API_SDK_FORBIDDEN_VALUE_MISSING

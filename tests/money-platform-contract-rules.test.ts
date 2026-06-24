@@ -329,7 +329,7 @@ ledger_entry:
   required_fields:
     - ledger_entry_id
   amount:
-    integer_minor_units_required: false
+    integer_credit_units_required: false
     floating_point_allowed: true
 double_entry:
   required: false
@@ -391,7 +391,7 @@ tables:
     required_columns:
       - ledger_entry_id
     amount:
-      integer_minor_units_required: false
+      integer_credit_units_required: false
       floating_point_allowed: true
 double_entry:
   required: false
@@ -1325,12 +1325,20 @@ required_fields:
 allowed_command_types:
   - billing.create_invoice_intent
   - payments.record_provider_attempt
+  - payments.record_provider_refund_attempt
   - payments.record_provider_webhook
   - payments.request_refund
   - ledger.append_entry
   - ledger.create_credit_hold
   - ledger.capture_credit_hold
   - ledger.release_credit_hold
+  - ledger.record_daily_activity_reward_claim
+  - billing.record_ship_pass_grant
+  - billing.record_workspace_quota_grant
+  - billing.record_workspace_billing_fallback
+  - billing.record_captain_card_slot_event
+  - billing.record_captain_card_evaluation
+  - risk.record_operator_adjustment_request
   - risk.open_review
   - risk.close_review
 idempotency:
@@ -1365,7 +1373,7 @@ ledger_entry:
     - ledger_account_id
     - tenant_id
     - currency
-    - amount_minor
+    - amount_credit_unit
     - debit_or_credit
     - entry_type
     - occurred_at
@@ -1374,7 +1382,7 @@ ledger_entry:
     - causation_ref
     - reason
   amount:
-    integer_minor_units_required: true
+    integer_credit_units_required: true
     floating_point_allowed: false
 double_entry:
   required: true
@@ -1408,7 +1416,7 @@ tables:
       - ledger_account_id
       - tenant_id
       - currency
-      - amount_minor
+      - amount_credit_unit
       - debit_or_credit
       - entry_type
       - occurred_at
@@ -1420,7 +1428,7 @@ tables:
       - reason
       - created_at
     amount:
-      integer_minor_units_required: true
+      integer_credit_units_required: true
       floating_point_allowed: false
 double_entry:
   required: true

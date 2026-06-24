@@ -171,6 +171,45 @@ capabilities:
     );
   });
 
+  test('fails when an added credential class weakens vault policy', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/credential-boundary.yaml': files[
+          'contracts/credential-boundary.yaml'
+        ].replace(
+          '    storage_scope: vault_only\nforbidden_consumers:',
+          [
+            '    storage_scope: vault_only',
+            '  - id: temporary_provider_secret',
+            '    plaintext_export_allowed: true',
+            '    encryption_required: true',
+            '    audit_required: true',
+            '    rotation_supported: true',
+            '    storage_scope: vault_only',
+            'forbidden_consumers:'
+          ].join('\n')
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/credential-boundary.yaml',
+          path: 'credential_classes.temporary_provider_secret.plaintext_export_allowed',
+          message:
+            'Credential class `temporary_provider_secret` must set plaintext export to false.'
+        });
+      }
+    );
+  });
+
   test('fails when capability issuance allows persistence or delegation', async () => {
     await withRepositoryRoot(
       {
@@ -233,6 +272,127 @@ audit:
           file: 'contracts/capability-issuance.yaml',
           path: 'delegation.persist_in_connector_repo_allowed',
           message: 'Connector repositories must not persist credential capabilities.'
+        });
+      }
+    );
+  });
+
+  test('fails when capability renewal or load shedding drifts open', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/capability-issuance.yaml': files[
+          'contracts/capability-issuance.yaml'
+        ]
+          .replace('renewal:\n  supported: true\n', 'renewal:\n  supported: false\n')
+          .replace('  renew_before_expiry_seconds: 60\n', '  renew_before_expiry_seconds: 0\n')
+          .replace('  max_renewal_chain_seconds: 900\n', '  max_renewal_chain_seconds: 901\n')
+          .replace('  requires_fresh_audit_reason: true\n', '  requires_fresh_audit_reason: false\n')
+          .replace('    secret_material_allowed: false\n', '    secret_material_allowed: true\n')
+          .replace('    allowed_by_default: false\n', '    allowed_by_default: true\n')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'renewal.supported',
+          message: 'Credential capability renewal must stay supported.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'renewal.renew_before_expiry_seconds',
+          message: 'Credential capability renewal lead time must be a positive integer.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'renewal.max_renewal_chain_seconds',
+          message:
+            'Credential capability renewal chains must stay short enough for revocation to matter.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'load_shedding.edge_validation_cache.secret_material_allowed',
+          message: 'Credential edge validation cache must not allow secret material.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'load_shedding.stateless_capability.allowed_by_default',
+          message: 'Credential stateless capabilities must not be allowed by default.'
+        });
+      }
+    );
+  });
+
+  test('fails when capability issuance adds unapproved operations', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/capability-issuance.yaml': files[
+          'contracts/capability-issuance.yaml'
+        ].replace(
+          '  - credential_revoke\n',
+          '  - credential_revoke\n  - plaintext_secret_return\n'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'allowed_operations',
+          message:
+            'Credential vault contract `contracts/capability-issuance.yaml` must not include unapproved `plaintext_secret_return` in `allowed_operations`.'
+        });
+      }
+    );
+  });
+
+  test('fails when capability issuance duplicates approved operations', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/capability-issuance.yaml': files[
+          'contracts/capability-issuance.yaml'
+        ].replace(
+          '  - credential_revoke\n',
+          '  - credential_revoke\n  - credential_proxy_use\n'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/capability-issuance.yaml',
+          path: 'allowed_operations',
+          message:
+            'Credential vault contract `contracts/capability-issuance.yaml` must not duplicate `credential_proxy_use` in `allowed_operations`.'
         });
       }
     );
@@ -319,6 +479,66 @@ restore:
     );
   });
 
+  test('fails when storage boundary adds unapproved interfaces', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/storage-boundary.yaml': files[
+          'contracts/storage-boundary.yaml'
+        ].replace(
+          '  - credential_revoke\n',
+          '  - credential_revoke\n  - plaintext_secret_export\n'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/storage-boundary.yaml',
+          path: 'allowed_interfaces',
+          message:
+            'Credential vault contract `contracts/storage-boundary.yaml` must not include unapproved `plaintext_secret_export` in `allowed_interfaces`.'
+        });
+      }
+    );
+  });
+
+  test('fails when storage boundary duplicates approved interfaces', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/storage-boundary.yaml': files[
+          'contracts/storage-boundary.yaml'
+        ].replace(
+          '  - credential_revoke\n',
+          '  - credential_revoke\n  - capability_issue\n'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'contracts/storage-boundary.yaml',
+          path: 'allowed_interfaces',
+          message:
+            'Credential vault contract `contracts/storage-boundary.yaml` must not duplicate `capability_issue` in `allowed_interfaces`.'
+        });
+      }
+    );
+  });
+
   test('fails when service contract does not require the credential gate', async () => {
     await withRepositoryRoot(createValidCredentialVaultFiles(), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryCredentialVaultContract({
@@ -396,7 +616,15 @@ test('placeholder', () => {});
           file: 'src/credential-vault-contracts/validator.ts',
           path: 'source',
           message:
-            'Credential vault checker source must include `CRED_RESTORE_SECRET_VALUES_ALLOWED`.'
+            'Credential vault checker source must include function `validateStorageBoundary`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/credential-vault-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Credential vault checker source must include `requirePositiveSafeInteger`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CREDENTIAL-001',
@@ -525,6 +753,63 @@ export { fakeProof };
     );
   });
 
+  test('fails when credential vault diagnostic proof sits outside validation functions', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'src/credential-vault-contracts/validator.ts': files[
+          'src/credential-vault-contracts/validator.ts'
+        ].replace(
+          `
+function validateCapabilityIssuance(): void {
+  const codes = [
+    'CRED_CAPABILITY_TTL_TOO_HIGH',
+    'CRED_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_RENEWAL_LEAD_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_RENEWAL_CHAIN_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_EDGE_CACHE_TTL_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+    'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED'
+  ];
+  void codes;
+}
+`,
+          `
+const misplacedCapabilityCodes = [
+  'CRED_CAPABILITY_TTL_TOO_HIGH',
+  'CRED_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
+  'CRED_CAPABILITY_RENEWAL_LEAD_NOT_POSITIVE_INTEGER',
+  'CRED_CAPABILITY_RENEWAL_CHAIN_NOT_POSITIVE_INTEGER',
+  'CRED_CAPABILITY_EDGE_CACHE_TTL_NOT_POSITIVE_INTEGER',
+  'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
+  'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED'
+];
+
+function validateCapabilityIssuance(): void {
+  void misplacedCapabilityCodes;
+}
+`
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/credential-vault-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Credential vault checker function `validateCapabilityIssuance` must use `CRED_CAPABILITY_TTL_TOO_HIGH`.'
+        });
+      }
+    );
+  });
+
   test('fails when credential vault test proof is only a string list plus placeholder test', async () => {
     await withRepositoryRoot(
       {
@@ -567,6 +852,50 @@ test('credential vault placeholder', () => {
           path: 'source',
           message:
             'Credential vault checker source must include test case `validates the committed credential vault contracts`.'
+        });
+      }
+    );
+  });
+
+  test('fails when Rust boundary markers semantically drift from YAML contracts', async () => {
+    const files = createValidCredentialVaultFiles();
+    await withRepositoryRoot(
+      {
+        ...files,
+        'src/boundaries/credential_boundary.rs': files[
+          'src/boundaries/credential_boundary.rs'
+        ].replace(
+          '    "provider_api_credential",\n];',
+          '    "provider_api_credential",\n    "temporary_provider_secret",\n];'
+        ),
+        'src/boundaries/capability_issuance.rs': files[
+          'src/boundaries/capability_issuance.rs'
+        ].replace(
+          'pub const MAX_CAPABILITY_TTL_SECONDS: u16 = 300;',
+          'pub const MAX_CAPABILITY_TTL_SECONDS: u16 = 3600; // = 300'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCredentialVaultContract({
+          repositoryRoot,
+          repositoryServiceContract: createCredentialVaultServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/boundaries/credential_boundary.rs',
+          path: 'credential_classes',
+          message:
+            'Rust marker `REQUIRED_CREDENTIAL_CLASSES` must not include unapproved `temporary_provider_secret` outside the YAML contract.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CREDENTIAL-001',
+          severity: 'error',
+          file: 'src/boundaries/capability_issuance.rs',
+          path: 'MAX_CAPABILITY_TTL_SECONDS',
+          message:
+            'Credential vault Rust capability TTL marker must match credential-boundary.yaml and capability-issuance.yaml.'
         });
       }
     );
@@ -712,6 +1041,11 @@ export function validateCredentialVaultContracts(): void {
 }
 
 function validateCredentialBoundary(): void {
+  const code = 'CRED_BOUNDARY_TTL_NOT_POSITIVE_INTEGER';
+  void code;
+}
+
+function validateCredentialClass(): void {
   const code = 'CRED_CLASS_PLAINTEXT_EXPORT_ALLOWED';
   void code;
 }
@@ -719,6 +1053,10 @@ function validateCredentialBoundary(): void {
 function validateCapabilityIssuance(): void {
   const codes = [
     'CRED_CAPABILITY_TTL_TOO_HIGH',
+    'CRED_CAPABILITY_TTL_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_RENEWAL_LEAD_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_RENEWAL_CHAIN_NOT_POSITIVE_INTEGER',
+    'CRED_CAPABILITY_EDGE_CACHE_TTL_NOT_POSITIVE_INTEGER',
     'CRED_CAPABILITY_CONNECTOR_PERSISTENCE_ALLOWED',
     'CRED_CAPABILITY_STATELESS_DEFAULT_ALLOWED'
   ];
@@ -746,6 +1084,11 @@ function validateRustSecurityPatterns(): void {
   void RUST_SECRET_LOGGING_PATTERN;
   void code;
 }
+
+function requirePositiveSafeInteger(): void {
+  const code = 'CRED_BOUNDARY_TTL_NOT_POSITIVE_INTEGER';
+  void code;
+}
 `,
     'tests/credential-vault-contracts.test.ts': `
 import { expect, it } from 'bun:test';
@@ -763,6 +1106,9 @@ it('fails when a credential class allows plaintext export', () => {
   expect(validateCredentialVaultContracts).toBeDefined();
 });
 it('fails when capability ttl is longer than five minutes', () => {
+  expect(validateCredentialVaultContracts).toBeDefined();
+});
+it('fails when capability ttl and renewal windows are not positive integers', () => {
   expect(validateCredentialVaultContracts).toBeDefined();
 });
 it('fails when connector repositories can persist capabilities', () => {
@@ -919,7 +1265,10 @@ pub const REQUIRED_CAPABILITY_REQUEST_FIELDS: &[&str] = &[
 
 pub const FORBIDDEN_CAPABILITY_VALUES: &[&str] = &[
     "plaintext_secret_return",
+    "bearer_token_logging",
+    "product_repo_persistence",
     "connector_local_cache",
+    "ai_prompt_injection",
     "analytics_event_export",
 ];
 `,
@@ -966,8 +1315,10 @@ pub const ALLOWED_INTERFACES: &[&str] = &[
 pub const FORBIDDEN_STORAGE_LOCATIONS: &[&str] = &[
     "product_repository",
     "connector_repository",
+    "ai_repository",
     "analytics_event",
     "logs",
+    "llms_txt",
     "public_discovery",
 ];
 `,
@@ -1054,6 +1405,24 @@ revocation:
   supported: true
 audit:
   reason_required: true
+renewal:
+  supported: true
+  renew_before_expiry_seconds: 60
+  max_renewal_chain_seconds: 900
+  requires_fresh_audit_reason: true
+load_shedding:
+  edge_validation_cache:
+    allowed: true
+    scope: revocation_metadata_only
+    max_ttl_seconds: 30
+    secret_material_allowed: false
+  stateless_capability:
+    allowed_by_default: false
+    exception_requires:
+      - architecture_decision
+      - revocation_plan
+      - audit_correlation
+      - no_secret_material_claims
 `,
     'contracts/access-audit.yaml': `
 contract:

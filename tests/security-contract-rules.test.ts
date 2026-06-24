@@ -148,6 +148,38 @@ references:
           ruleId: 'ZDP-SECURITY-001',
           severity: 'error',
           file: 'contracts/security-baseline.yaml',
+          path: 'required_finding_fields',
+          message:
+            'Security contract `contracts/security-baseline.yaml` must include `owner` in `required_finding_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/security-baseline.yaml',
+          path: 'severity_levels',
+          message:
+            'Security contract `contracts/security-baseline.yaml` must include `critical` in `severity_levels`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/security-baseline.yaml',
+          path: 'verification_statuses',
+          message:
+            'Security contract `contracts/security-baseline.yaml` must include `accepted_risk` in `verification_statuses`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/security-baseline.yaml',
+          path: 'promotion_blocking',
+          message:
+            'Security contract `contracts/security-baseline.yaml` must include `critical finding without mitigation` in `promotion_blocking`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/security-baseline.yaml',
           path: 'forbidden',
           message:
             'Security contract `contracts/security-baseline.yaml` must include `private_incident_evidence` in `forbidden`.'
@@ -169,6 +201,8 @@ references:
       {
         ...createValidSecurityFiles(),
         'contracts/threat-model-template.yaml': `
+contract:
+  owner: platform-security
 template:
   required_fields:
     - system
@@ -184,6 +218,8 @@ forbidden:
   - raw_secret
 `,
         'contracts/secret-handling.yaml': `
+contract:
+  owner: platform-security
 secret_handling:
   source_of_truth: repository
   repository_policy: allow-secret-values
@@ -202,14 +238,21 @@ promotion_blocking:
   - secret value appears in repository
 `,
         'contracts/dependency-review.yaml': `
+contract:
+  owner: platform-security
 dependency_review:
   applies_to:
     - authentication
   required_fields:
     - package_name
+  maintainer_risk_levels:
+    - low
+    - medium
+    - high
   critical_path_policy:
     allow_single_maintainer_dependency: true
     require_replacement_plan: false
+    require_version_pin_reason: true
 forbidden:
   - scanner output containing raw secret values
 promotion_blocking:
@@ -241,6 +284,14 @@ promotion_blocking:
           ruleId: 'ZDP-SECURITY-001',
           severity: 'error',
           file: 'contracts/threat-model-template.yaml',
+          path: 'template.required_boundary_types',
+          message:
+            'Security contract `contracts/threat-model-template.yaml` must include `access` in `template.required_boundary_types`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
           path: 'template.review_statuses',
           message:
             'Security contract `contracts/threat-model-template.yaml` must include `accepted_risk` in `template.review_statuses`.'
@@ -248,9 +299,73 @@ promotion_blocking:
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
           severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
+          path: 'controls.required_for_sensitive_boundaries',
+          message:
+            'Security contract `contracts/threat-model-template.yaml` must include `server_side_authorization` in `controls.required_for_sensitive_boundaries`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
+          path: 'controls.evidence_refs_must_be_repository_paths',
+          message:
+            'Security threat model template must require repository-path evidence refs.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
+          path: 'forbidden',
+          message:
+            'Security contract `contracts/threat-model-template.yaml` must include `private_incident_detail` in `forbidden`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'secret_handling.source_of_truth',
+          message:
+            'Security secret handling must keep credential vault or provider secret store as source of truth.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
           file: 'contracts/secret-handling.yaml',
           path: 'secret_handling.repository_policy',
           message: 'Security secret handling must declare `no-secret-values` policy.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'secret_handling.allowed_repository_values',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `placeholder` in `secret_handling.allowed_repository_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'secret_handling.required_for_secret_owner',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `rotation_policy` in `secret_handling.required_for_secret_owner`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'secret_handling.forbidden_repository_values',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `database_url_with_credentials` in `secret_handling.forbidden_repository_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'logging.forbidden_fields',
+          message:
+            'Security contract `contracts/secret-handling.yaml` must include `authorization` in `logging.forbidden_fields`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
@@ -280,10 +395,160 @@ promotion_blocking:
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-SECURITY-001',
           severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'dependency_review.applies_to',
+          message:
+            'Security contract `contracts/dependency-review.yaml` must include `cryptography` in `dependency_review.applies_to`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'dependency_review.required_fields',
+          message:
+            'Security contract `contracts/dependency-review.yaml` must include `vulnerability_policy` in `dependency_review.required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'dependency_review.critical_path_policy.require_replacement_plan',
+          message:
+            'Security dependency review must require replacement plans for critical paths.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'forbidden',
+          message:
+            'Security contract `contracts/dependency-review.yaml` must include `unpinned executable installer on critical path` in `forbidden`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'promotion_blocking',
+          message:
+            'Security contract `contracts/dependency-review.yaml` must include `critical path dependency has no replacement plan` in `promotion_blocking`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
           file: 'service.yaml',
           path: 'policy_gates.required_linter_rules',
           message:
             'Security contract `service.yaml` must include `ZDP-SECURITY-001` in `policy_gates.required_linter_rules`.'
+        });
+      }
+    );
+  });
+
+  test('fails when non-baseline security contract owners drift', async () => {
+    const files = createValidSecurityFiles();
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/threat-model-template.yaml': files[
+          'contracts/threat-model-template.yaml'
+        ].replace('owner: platform-security', 'owner: other'),
+        'contracts/secret-handling.yaml': files[
+          'contracts/secret-handling.yaml'
+        ].replace('owner: platform-security', 'owner: other'),
+        'contracts/dependency-review.yaml': files[
+          'contracts/dependency-review.yaml'
+        ].replace('owner: platform-security', 'owner: other')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositorySecurityContract({
+          repositoryRoot,
+          repositoryServiceContract: createSecurityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/threat-model-template.yaml',
+          path: 'contract.owner',
+          message:
+            'Security threat model template contract must declare owner `platform-security`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/secret-handling.yaml',
+          path: 'contract.owner',
+          message:
+            'Security secret handling contract must declare owner `platform-security`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'contract.owner',
+          message:
+            'Security dependency review contract must declare owner `platform-security`.'
+        });
+      }
+    );
+  });
+
+  test('fails when dependency maintainer risk levels are incomplete', async () => {
+    const files = createValidSecurityFiles();
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/dependency-review.yaml': files[
+          'contracts/dependency-review.yaml'
+        ].replace('    - medium\n', '')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositorySecurityContract({
+          repositoryRoot,
+          repositoryServiceContract: createSecurityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path: 'dependency_review.maintainer_risk_levels',
+          message:
+            'Security contract `contracts/dependency-review.yaml` must include `medium` in `dependency_review.maintainer_risk_levels`.'
+        });
+      }
+    );
+  });
+
+  test('fails when critical path dependencies no longer require a version pin reason', async () => {
+    const files = createValidSecurityFiles();
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/dependency-review.yaml': files[
+          'contracts/dependency-review.yaml'
+        ].replace(
+          '    require_version_pin_reason: true',
+          '    require_version_pin_reason: false'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositorySecurityContract({
+          repositoryRoot,
+          repositoryServiceContract: createSecurityServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-SECURITY-001',
+          severity: 'error',
+          file: 'contracts/dependency-review.yaml',
+          path:
+            'dependency_review.critical_path_policy.require_version_pin_reason',
+          message:
+            'Security dependency review must require version pin reasons for critical paths.'
         });
       }
     );
@@ -456,6 +721,8 @@ references:
   dependency_review: dependency-review.yaml
 `,
     'contracts/threat-model-template.yaml': `
+contract:
+  owner: platform-security
 template:
   required_fields:
     - system
@@ -500,6 +767,8 @@ forbidden:
   - provider_account_identifier
 `,
     'contracts/secret-handling.yaml': `
+contract:
+  owner: platform-security
 secret_handling:
   source_of_truth: credential-vault-or-provider-secret-store
   repository_policy: no-secret-values
@@ -544,6 +813,8 @@ promotion_blocking:
   - break-glass path lacks audit evidence
 `,
     'contracts/dependency-review.yaml': `
+contract:
+  owner: platform-security
 dependency_review:
   applies_to:
     - authentication
@@ -564,9 +835,14 @@ dependency_review:
     - replacement_plan
     - update_policy
     - vulnerability_policy
+  maintainer_risk_levels:
+    - low
+    - medium
+    - high
   critical_path_policy:
     allow_single_maintainer_dependency: false
     require_replacement_plan: true
+    require_version_pin_reason: true
 forbidden:
   - dependency with unknown license on critical path
   - unpinned executable installer on critical path
@@ -620,7 +896,13 @@ const files = [
   'contracts/secret-handling.yaml',
   'contracts/dependency-review.yaml'
 ];
-const yamlFields = ['review_statuses', 'allowed_evidence', 'promotion_blocking'];
+const yamlFields = [
+  'review_statuses',
+  'maintainer_risk_levels',
+  'require_version_pin_reason',
+  'allowed_evidence',
+  'promotion_blocking'
+];
 export { files };
 `,
     'src/security-contracts/types.ts': `
@@ -629,6 +911,10 @@ export interface SecurityDiagnostic {
 }
 export interface ThreatModelTemplateContract {
   readonly reviewStatuses: readonly string[];
+}
+export interface DependencyReviewContract {
+  readonly maintainerRiskLevels: readonly string[];
+  readonly requireVersionPinReason: boolean;
 }
 export interface SecretHandlingContract {
   readonly loggingAllowedEvidence: readonly string[];
@@ -643,8 +929,12 @@ const REQUIRED_SECRET_FORBIDDEN_VALUES = [];
 const REQUIRED_LOGGING_ALLOWED_EVIDENCE = [];
 const REQUIRED_SECRET_PROMOTION_BLOCKERS = [];
 const REQUIRED_DEPENDENCY_FIELDS = [];
+const REQUIRED_MAINTAINER_RISK_LEVELS = [];
+const SECURITY_CONTRACT_OWNER_INVALID = 'SECURITY_CONTRACT_OWNER_INVALID';
 const SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED =
   'SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED';
+const SECURITY_DEPENDENCY_VERSION_PIN_REASON_MISSING =
+  'SECURITY_DEPENDENCY_VERSION_PIN_REASON_MISSING';
 export {
   REQUIRED_REVIEWS,
   REQUIRED_THREAT_MODEL_FIELDS,
@@ -653,7 +943,10 @@ export {
   REQUIRED_LOGGING_ALLOWED_EVIDENCE,
   REQUIRED_SECRET_PROMOTION_BLOCKERS,
   REQUIRED_DEPENDENCY_FIELDS,
-  SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED
+  REQUIRED_MAINTAINER_RISK_LEVELS,
+  SECURITY_CONTRACT_OWNER_INVALID,
+  SECURITY_DEPENDENCY_SINGLE_MAINTAINER_ALLOWED,
+  SECURITY_DEPENDENCY_VERSION_PIN_REASON_MISSING
 };
 `,
     'tests/security-contracts.test.ts': `
@@ -664,8 +957,11 @@ const cases = [
   'fails when the repository can store secret values',
   'fails when logging evidence no longer requires audit event ids',
   'fails when secret handling no longer blocks unaudited break-glass paths',
+  'fails when a non-baseline security contract owner drifts',
+  'fails when dependency maintainer risk levels are incomplete',
   'fails when critical path dependencies can be single-maintainer by default',
-  'fails when critical path dependencies no longer require a replacement plan'
+  'fails when critical path dependencies no longer require a replacement plan',
+  'fails when critical path dependencies no longer require a version pin reason'
 ];
 export { cases };
 `

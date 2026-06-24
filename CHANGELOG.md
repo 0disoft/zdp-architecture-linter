@@ -1,5 +1,64 @@
 # 변경 내역
 
+## 0.39.63
+
+- `ZDP-API-CONTRACTS-001`과 `ZDP-AUTH-ROUTE-001`을 최신 API 계약의 forbidden value, SDK source contract, auth/session catalog status 기준으로 동기화했다.
+- API checker source proof가 auth/session schema bundle source와 SDK source-contract/schema-bundle diagnostic도 유지하는지 검사하도록 보강했다.
+
+## 0.39.62
+
+- `ZDP-CORE-001`이 identity session store의 migration-shape status와 command/idempotency/audit 필드 drift를 최신 core 계약 기준으로 검사하도록 동기화했다.
+- `ZDP-CORE-001`에 `core-event-outbox.yaml` 필수 파일과 event/field/control/forbidden claim 검증을 추가했다.
+- `ZDP-RUNTIME-001`이 `core-api` smoke target의 healthz service id와 DB readiness production blocker도 검사하도록 강화했다.
+
+## 0.39.61
+
+- `ZDP-MONEY-PLATFORM-001`의 money ledger 금액 필드와 integer unit 검증을 `amount_credit_unit` / `integer_credit_units_required` 계약으로 동기화했다.
+- money command type allowlist를 최신 money platform command envelope와 맞추고, 중앙 linter 테스트 fixture를 credit-unit 계약 기준으로 갱신했다.
+
+## 0.39.60
+
+- `ZDP-CREDENTIAL-001`이 credential-vault capability renewal/load shedding 계약과 positive integer TTL drift를 중앙 linter에서도 검사하도록 강화했다.
+- credential-vault Rust boundary marker를 raw source fragment가 아니라 YAML 계약과 semantic set/TTL 비교로 검증하도록 보강했다.
+- credential-vault checker source proof가 diagnostic code 문자열 배열만으로 통과하지 않도록 함수 body 단위 검증을 추가했다.
+
+## 0.39.59
+
+- `ZDP-PRIVACY-001`이 privacy-access-broker의 `allowed_callers`, `break_glass.allowed`, AI/connector purpose limit, retention, policy input logging, implementation guard 계약을 중앙 linter에서도 검사하도록 강화했다.
+- privacy access broker checker source proof가 새 parser/type/validator/test 표면을 요구하도록 보강해 repo-local checker와 중앙 gate drift를 줄였다.
+
+## 0.39.58
+
+- `ZDP-CREDENTIAL-001`이 credential-vault checker source proof에서 positive safe integer TTL 검증 함수와 diagnostic code, 회귀 테스트 이름까지 요구하도록 강화했다.
+
+## 0.39.57
+
+- `ZDP-RUNTIME-001`이 smoke target metadata, generic smoke target schema, deployment worker optional 정책, rollback blocker, smoke runner script command를 중앙 linter에서도 검사하도록 강화했다.
+- runtime smoke runner source proof와 fixture를 healthcheck/deployment/rollback 전체 계약 파서 기준으로 맞췄다.
+
+## 0.39.56
+
+- `ZDP-INFRA-001`이 pricing review date/max-age, forbidden source value, restore drill status/target을 중앙 linter에서도 검사하도록 강화했다.
+- infra restore drill id 하드코딩을 제거하고 모든 restore drill의 required evidence를 검사하도록 repo-local checker와 맞췄다.
+- `zdp-platform-infra` checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 code fragment와 실제 test case name 검사를 추가했다.
+- infra package `check` script가 typecheck, test, contract check, infra plan을 함께 실행하는지 검사한다.
+
+## 0.39.55
+
+- `ZDP-SECURITY-001`이 threat model, secret handling, dependency review 계약의 `contract.owner`를 중앙 linter에서도 검사하도록 강화했다.
+- dependency review의 `maintainer_risk_levels`와 `critical_path_policy.require_version_pin_reason`을 repo-local checker와 같은 기준으로 검증하도록 맞췄다.
+- `zdp-platform-security` repo-local checker source proof와 중앙 security rule 테스트가 새 dependency/owner drift 회귀 케이스를 요구하도록 보강했다.
+
+## 0.39.54
+
+- `ZDP-PRIVACY-001`이 privacy-access-broker `allowed_operations`, `allowed_output_shapes`, `purpose_limits.growth_or_analytics.allowed_shapes`에 승인되지 않은 항목이나 중복 항목이 섞이면 실패하도록 강화했다.
+- privacy access broker 중앙 linter gate를 repo-local contract checker의 exact allowed-surface 정책과 맞췄다.
+
+## 0.39.53
+
+- `ZDP-CREDENTIAL-001`이 credential-vault `allowed_operations`와 `allowed_interfaces`에 승인되지 않은 항목이나 중복 항목이 섞이면 실패하도록 강화했다.
+- credential vault 중앙 linter gate를 repo-local contract checker의 exact allowed-surface 정책과 맞췄다.
+
 ## 0.39.52
 
 - `ZDP-CONNECTORS-001`이 provider registry의 credential capability, privacy scope, sync-state policy, webhook replay policy를 검사하도록 강화했다.
