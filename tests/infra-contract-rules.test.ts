@@ -658,7 +658,7 @@ dns_policy:
   provider_mutation_allowed: false
   secret_values_allowed: false
   actual_record_values_allowed: false
-api_token: sk_live_1234567890abcdef
+api_token: contract_test_forbidden_provider_token
 records: []
 `
       },

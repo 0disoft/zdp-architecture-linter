@@ -4,6 +4,12 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 
 정책의 원천은 `zdp-architecture` 문서 저장소다. 이 저장소는 그 원천을 읽어 검증 가능한 규칙으로 실행한다.
 
+## 공개 저장소 경계
+
+- 이 저장소를 GitHub public visibility로 전환하더라도 npm 공개 배포를 의미하지 않는다. `package.json`의 `private: true`는 유지한다.
+- 현재 `LICENSE` 파일이 없으므로, 공개 visibility는 소스 열람 가능 상태일 뿐 오픈소스 라이선스 부여가 아니다. 재사용 권리를 열려면 별도 라이선스 결정을 먼저 해야 한다.
+- 이 저장소에는 운영 secret, 고객 데이터, 실제 provider payload, private incident evidence를 두지 않는다. 테스트 fixture는 금지 필드 이름과 명시적인 가짜 값만 사용한다.
+
 ## 목표
 
 - `service.yaml`이 `schemas/service.schema.json`을 따르는지 검사한다.

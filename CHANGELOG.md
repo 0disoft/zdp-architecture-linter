@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.66
+
+- 공개 visibility 전환 경계를 README와 SECURITY에 명시하고, 실제 토큰 형식처럼 보이는 infra 테스트 fixture 값을 명시적 가짜 값으로 바꿨다.
+
 ## 0.39.65
 
 - source proof 검사에서 정규식 literal 안의 가짜 code fragment를 코드 증거로 인정하지 않도록 보강했다.
