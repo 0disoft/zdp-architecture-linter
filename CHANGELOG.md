@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.67
+
+- `ZDP-MONEY-004`를 추가해 `zdp-money-platform`의 `contracts/money-db-schema.yaml` payment webhook processing/outbox 계약을 중앙 linter에서도 검사한다.
+- README의 구현 순서 상태 라벨을 현재 CLI와 rule coverage 기준으로 정리했다.
+
 ## 0.39.66
 
 - 공개 visibility 전환 경계를 README와 SECURITY에 명시하고, 실제 토큰 형식처럼 보이는 infra 테스트 fixture 값을 명시적 가짜 값으로 바꿨다.

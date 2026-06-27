@@ -5,12 +5,14 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const MONEY_REPOSITORY_NAME = 'zdp-money-platform';
 const MONEY_PLATFORM_CONTRACT_RULE_ID = 'ZDP-MONEY-PLATFORM-001';
+const MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID = 'ZDP-MONEY-004';
 
 const MONEY_BOUNDARIES_FILE = 'contracts/money-boundaries.yaml';
 const MONEY_COMMAND_ENVELOPE_FILE = 'contracts/money-command-envelope.yaml';
 const LEDGER_ENTRY_FILE = 'contracts/ledger-entry.yaml';
 const LEDGER_STORAGE_FILE = 'contracts/ledger-storage.yaml';
 const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
+const MONEY_DB_SCHEMA_FILE = 'contracts/money-db-schema.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const PACKAGE_FILE = 'package.json';
 const CARGO_TOML_FILE = 'Cargo.toml';
@@ -213,6 +215,42 @@ const REQUIRED_WEBHOOK_FORBIDDEN_ITEMS = [
   'product_repo_webhook_handler',
   'direct_balance_change_before_idempotency_check'
 ] as const;
+const REQUIRED_MONEY_DB_PAYMENT_TABLES = [
+  'money_payments.provider_webhook_events',
+  'money_payments.payment_webhook_processing',
+  'money_payments.payment_webhook_processing_history',
+  'money_payments.payment_outbox'
+] as const;
+const REQUIRED_PAYMENT_OUTBOX_FIELDS = [
+  'outbox_id',
+  'cloud_event_source',
+  'event_type',
+  'schema_version',
+  'aggregate_id',
+  'causation_command_id',
+  'audit_event_ref',
+  'idempotency_key',
+  'request_id',
+  'trace_id',
+  'payload_ref_kind',
+  'payload_ref',
+  'payload_hash',
+  'available_at',
+  'delivery_status',
+  'delivery_attempt_count',
+  'max_delivery_attempts'
+] as const;
+const REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES = [
+  'pending',
+  'claimed',
+  'delivered',
+  'dead_lettered'
+] as const;
+const REQUIRED_PAYMENT_OUTBOX_IDEMPOTENCY_SCOPE = [
+  'aggregate_id',
+  'event_type',
+  'idempotency_key'
+] as const;
 const REQUIRED_ENTITLEMENT_FORBIDDEN_ITEMS = [
   'entitlement_without_money_or_manual_adjustment_ref',
   'credit_balance_direct_set',
@@ -246,6 +284,7 @@ export async function validateRepositoryMoneyPlatformContract(input: {
     ledgerEntry,
     ledgerStorage,
     paymentWebhook,
+    moneyDbSchema,
     entitlementCredit
   ] = await Promise.all([
     readRequiredYamlContract(input.repositoryRoot, MONEY_BOUNDARIES_FILE),
@@ -253,6 +292,11 @@ export async function validateRepositoryMoneyPlatformContract(input: {
     readRequiredYamlContract(input.repositoryRoot, LEDGER_ENTRY_FILE),
     readRequiredYamlContract(input.repositoryRoot, LEDGER_STORAGE_FILE),
     readRequiredYamlContract(input.repositoryRoot, PAYMENT_WEBHOOK_FILE),
+    readRequiredYamlContract(
+      input.repositoryRoot,
+      MONEY_DB_SCHEMA_FILE,
+      MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    ),
     readRequiredYamlContract(input.repositoryRoot, ENTITLEMENT_CREDIT_FILE)
   ]);
   const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
@@ -263,6 +307,7 @@ export async function validateRepositoryMoneyPlatformContract(input: {
     ...ledgerEntry.diagnostics,
     ...ledgerStorage.diagnostics,
     ...paymentWebhook.diagnostics,
+    ...moneyDbSchema.diagnostics,
     ...entitlementCredit.diagnostics,
     ...packageJson.diagnostics,
     ...(moneyBoundaries.value === null
@@ -280,6 +325,9 @@ export async function validateRepositoryMoneyPlatformContract(input: {
     ...(paymentWebhook.value === null
       ? []
       : validatePaymentWebhookContract(paymentWebhook.value)),
+    ...(moneyDbSchema.value === null
+      ? []
+      : validateMoneyDbSchemaContract(moneyDbSchema.value)),
     ...(entitlementCredit.value === null
       ? []
       : validateEntitlementCreditContract(entitlementCredit.value)),
@@ -293,7 +341,8 @@ export async function validateRepositoryMoneyPlatformContract(input: {
 
 async function readRequiredYamlContract(
   repositoryRoot: string,
-  file: string
+  file: string,
+  ruleId = MONEY_PLATFORM_CONTRACT_RULE_ID
 ): Promise<{
   readonly value: unknown | null;
   readonly diagnostics: readonly Diagnostic[];
@@ -310,7 +359,8 @@ async function readRequiredYamlContract(
           createMoneyDiagnostic(
             file,
             'repository.root',
-            `Money platform repository must include \`${file}\`.`
+            `Money platform repository must include \`${file}\`.`,
+            ruleId
           )
         ]
       };
@@ -333,7 +383,8 @@ async function readRequiredYamlContract(
           'yaml',
           `Money platform contract \`${file}\` must be valid YAML: ${formatError(
             error
-          )}`
+          )}`,
+          ruleId
         )
       ]
     };
@@ -922,6 +973,99 @@ function validatePaymentWebhookContract(value: unknown): readonly Diagnostic[] {
   ];
 }
 
+function validateMoneyDbSchemaContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'tables.payments_required',
+      field: 'tables.payments_required',
+      requiredEntries: REQUIRED_MONEY_DB_PAYMENT_TABLES,
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.raw_provider_payload_storage_allowed',
+      expected: false,
+      message: 'Money DB schema must not allow raw provider payload storage.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payload_hash_required',
+      expected: true,
+      message: 'Money DB schema must require payload hashes for payment records.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_method_secret_storage_allowed',
+      expected: false,
+      message: 'Money DB schema must not allow payment method secret storage.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.provider_webhook_events_append_only',
+      expected: true,
+      message: 'Provider webhook events must remain append-only.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.webhook_processing_history_append_only',
+      expected: true,
+      message: 'Payment webhook processing history must remain append-only.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_dispatch_contract_required',
+      expected: true,
+      message: 'Payment outbox dispatch contract must remain required.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_required_fields',
+      field: 'payments.payment_outbox_required_fields',
+      requiredEntries: REQUIRED_PAYMENT_OUTBOX_FIELDS,
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_delivery_statuses',
+      field: 'payments.payment_outbox_delivery_statuses',
+      requiredEntries: REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES,
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_delivery_attempts_required',
+      expected: true,
+      message: 'Payment outbox delivery attempts must remain required.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_idempotency_scope',
+      field: 'payments.payment_outbox_idempotency_scope',
+      requiredEntries: REQUIRED_PAYMENT_OUTBOX_IDEMPOTENCY_SCOPE,
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    })
+  ];
+}
+
 function validateEntitlementCreditContract(value: unknown): readonly Diagnostic[] {
   return [
     ...validateExactValue({
@@ -1154,16 +1298,20 @@ async function validateCheckerSurface(
             'LEDGER_ENTRY_FILE',
             'LEDGER_STORAGE_FILE',
             'PAYMENT_WEBHOOK_FILE',
+            'MONEY_DB_SCHEMA_FILE',
             'ENTITLEMENT_CREDIT_FILE',
             'SERVICE_FILE',
             'MONEY_FORBIDDEN',
             'LEDGER_STORAGE_FORBIDDEN',
             'QUEUE_ENVELOPE_REQUIRED_FIELDS',
+            'PAYMENT_OUTBOX_REQUIRED_FIELDS',
+            'PAYMENT_OUTBOX_DELIVERY_STATUSES',
             MONEY_BOUNDARIES_FILE,
             MONEY_COMMAND_ENVELOPE_FILE,
             LEDGER_ENTRY_FILE,
             LEDGER_STORAGE_FILE,
             PAYMENT_WEBHOOK_FILE,
+            MONEY_DB_SCHEMA_FILE,
             ENTITLEMENT_CREDIT_FILE,
             'service.yaml',
             'ZDP-MONEY-PLATFORM-001'
@@ -1179,6 +1327,7 @@ async function validateCheckerSurface(
             'fails when ledger append-only rules drift',
             'fails when ledger storage treats projections as truth',
             'fails when webhook processing can bypass edge, signature, or queue rules',
+            'fails when payment webhook outbox DB contract drifts',
             'fails when entitlement and credit truth boundaries drift',
             'fails when service.yaml stops declaring the money risk boundary'
           ]
@@ -1662,6 +1811,7 @@ function validateRequiredStringArrayEntries(input: {
   readonly path: string;
   readonly field: string;
   readonly requiredEntries: readonly string[];
+  readonly ruleId?: string;
 }): readonly Diagnostic[] {
   const entries = readStringArrayPath(input.value, input.field);
   const diagnostics: Diagnostic[] = [];
@@ -1675,7 +1825,8 @@ function validateRequiredStringArrayEntries(input: {
       createMoneyDiagnostic(
         input.file,
         input.path,
-        `Money platform contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`
+        `Money platform contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`,
+        input.ruleId
       )
     );
   }
@@ -1689,6 +1840,7 @@ function validateExactValue(input: {
   readonly path: string;
   readonly expected: unknown;
   readonly message: string;
+  readonly ruleId?: string;
 }): readonly Diagnostic[] {
   const actual = readPath(input.value, input.path);
 
@@ -1696,7 +1848,9 @@ function validateExactValue(input: {
     return [];
   }
 
-  return [createMoneyDiagnostic(input.file, input.path, input.message)];
+  return [
+    createMoneyDiagnostic(input.file, input.path, input.message, input.ruleId)
+  ];
 }
 
 function readRepositoryName(value: unknown): string | null {
@@ -1747,10 +1901,11 @@ function readStringField(
 function createMoneyDiagnostic(
   file: string,
   path: string,
-  message: string
+  message: string,
+  ruleId = MONEY_PLATFORM_CONTRACT_RULE_ID
 ): Diagnostic {
   return {
-    ruleId: MONEY_PLATFORM_CONTRACT_RULE_ID,
+    ruleId,
     severity: 'error',
     file,
     path,

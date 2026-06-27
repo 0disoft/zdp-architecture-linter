@@ -79,6 +79,14 @@ describe('money platform contract rules', () => {
           'Money platform repository must include `contracts/payment-webhook.yaml`.'
       });
       expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-004',
+        severity: 'error',
+        file: 'contracts/money-db-schema.yaml',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `contracts/money-db-schema.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
         file: 'contracts/entitlement-credit.yaml',
@@ -502,6 +510,90 @@ forbidden:
           file: 'contracts/payment-webhook.yaml',
           path: 'handoff.queue_required_before_processing',
           message: 'Payment webhooks must use queue handoff before processing.'
+        });
+      }
+    );
+  });
+
+  test('fails when payment webhook outbox DB contract drifts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidMoneyFiles(),
+        'contracts/money-db-schema.yaml': `
+contract:
+  version: 1
+tables:
+  payments_required:
+    - money_payments.provider_webhook_events
+    - money_payments.payment_webhook_processing
+payments:
+  raw_provider_payload_storage_allowed: true
+  payload_hash_required: false
+  payment_method_secret_storage_allowed: true
+  provider_webhook_events_append_only: false
+  webhook_processing_history_append_only: false
+  payment_outbox_dispatch_contract_required: false
+  payment_outbox_required_fields:
+    - outbox_id
+  payment_outbox_delivery_statuses:
+    - pending
+    - delivered
+  payment_outbox_delivery_attempts_required: false
+  payment_outbox_idempotency_scope:
+    - idempotency_key
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryMoneyPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: createMoneyServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'tables.payments_required',
+          message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `money_payments.payment_webhook_processing_history` in `tables.payments_required`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.raw_provider_payload_storage_allowed',
+          message: 'Money DB schema must not allow raw provider payload storage.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.provider_webhook_events_append_only',
+          message: 'Provider webhook events must remain append-only.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_required_fields',
+          message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `audit_event_ref` in `payments.payment_outbox_required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_delivery_statuses',
+          message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `claimed` in `payments.payment_outbox_delivery_statuses`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_idempotency_scope',
+          message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `aggregate_id` in `payments.payment_outbox_idempotency_scope`.'
         });
       }
     );
@@ -1499,6 +1591,57 @@ forbidden:
   - product_repo_webhook_handler
   - direct_balance_change_before_idempotency_check
 `,
+    'contracts/money-db-schema.yaml': `
+contract:
+  version: 1
+tables:
+  payments_required:
+    - money_payments.payment_provider_capabilities
+    - money_payments.provider_status_rank
+    - money_payments.provider_payment_attempts
+    - money_payments.refund_intents
+    - money_payments.provider_refund_attempts
+    - money_payments.provider_webhook_events
+    - money_payments.payment_webhook_processing
+    - money_payments.payment_webhook_processing_history
+    - money_payments.payment_outbox
+    - money_payments.payment_method_references
+payments:
+  raw_provider_payload_storage_allowed: false
+  payload_hash_required: true
+  payment_method_secret_storage_allowed: false
+  provider_webhook_events_append_only: true
+  webhook_processing_history_append_only: true
+  payment_outbox_dispatch_contract_required: true
+  payment_outbox_required_fields:
+    - outbox_id
+    - cloud_event_source
+    - event_type
+    - schema_version
+    - aggregate_id
+    - causation_command_id
+    - audit_event_ref
+    - idempotency_key
+    - request_id
+    - trace_id
+    - payload_ref_kind
+    - payload_ref
+    - payload_hash
+    - available_at
+    - delivery_status
+    - delivery_attempt_count
+    - max_delivery_attempts
+  payment_outbox_delivery_statuses:
+    - pending
+    - claimed
+    - delivered
+    - dead_lettered
+  payment_outbox_delivery_attempts_required: true
+  payment_outbox_idempotency_scope:
+    - aggregate_id
+    - event_type
+    - idempotency_key
+`,
     'contracts/entitlement-credit.yaml': `
 contract:
   version: 1
@@ -1602,11 +1745,14 @@ const MONEY_COMMAND_ENVELOPE_FILE = 'contracts/money-command-envelope.yaml';
 const LEDGER_ENTRY_FILE = 'contracts/ledger-entry.yaml';
 const LEDGER_STORAGE_FILE = 'contracts/ledger-storage.yaml';
 const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
+const MONEY_DB_SCHEMA_FILE = 'contracts/money-db-schema.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const SERVICE_FILE = 'service.yaml';
 const MONEY_FORBIDDEN = [];
 const LEDGER_STORAGE_FORBIDDEN = [];
 const QUEUE_ENVELOPE_REQUIRED_FIELDS = [];
+const PAYMENT_OUTBOX_REQUIRED_FIELDS = [];
+const PAYMENT_OUTBOX_DELIVERY_STATUSES = [];
 const REQUIRED_RULE = 'ZDP-MONEY-PLATFORM-001';
 export async function checkMoneyContracts(): Promise<void> {
   void MONEY_BOUNDARIES_FILE;
@@ -1614,11 +1760,14 @@ export async function checkMoneyContracts(): Promise<void> {
   void LEDGER_ENTRY_FILE;
   void LEDGER_STORAGE_FILE;
   void PAYMENT_WEBHOOK_FILE;
+  void MONEY_DB_SCHEMA_FILE;
   void ENTITLEMENT_CREDIT_FILE;
   void SERVICE_FILE;
   void MONEY_FORBIDDEN;
   void LEDGER_STORAGE_FORBIDDEN;
   void QUEUE_ENVELOPE_REQUIRED_FIELDS;
+  void PAYMENT_OUTBOX_REQUIRED_FIELDS;
+  void PAYMENT_OUTBOX_DELIVERY_STATUSES;
   void REQUIRED_RULE;
 }
 `,
@@ -1628,6 +1777,7 @@ const cases = [
   'fails when ledger append-only rules drift',
   'fails when ledger storage treats projections as truth',
   'fails when webhook processing can bypass edge, signature, or queue rules',
+  'fails when payment webhook outbox DB contract drifts',
   'fails when entitlement and credit truth boundaries drift',
   'fails when service.yaml stops declaring the money risk boundary'
 ];
