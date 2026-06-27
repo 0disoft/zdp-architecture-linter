@@ -1,5 +1,8 @@
 import type { Diagnostic } from './diagnostics.ts';
-import type { RepositoryIndex } from './repository-rules.ts';
+import type {
+  RepositoryCatalogRecord,
+  RepositoryIndex
+} from './repository-rules.ts';
 
 const DATASTORES_FILE = 'catalogs/datastores.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
@@ -11,6 +14,8 @@ const ALLOWED_DATASTORE_KINDS = new Set([
   'object-storage',
   'vector-database'
 ]);
+const DEPLOY_UNIT_KIND = 'deploy_unit';
+const LOGICAL_BOUNDARY_KIND = 'logical_boundary';
 
 export interface DatastoreCatalogRecord {
   readonly id: string;
@@ -127,46 +132,210 @@ function validateDatastoreRecord(
   const datastorePath = getDatastoreDiagnosticPath(value, index);
   const kind = readStringField(value, 'kind');
   const ownerRepo = readStringField(value, 'owner_repo');
+  const diagnostics: Diagnostic[] = [];
 
   if (kind === null) {
-    return [
+    diagnostics.push(
       createDatastoreDiagnostic(
         `${datastorePath}.kind`,
         'Datastore entry is missing required field `kind`.'
       )
-    ];
-  }
-
-  if (!ALLOWED_DATASTORE_KINDS.has(kind)) {
-    return [
+    );
+  } else if (!ALLOWED_DATASTORE_KINDS.has(kind)) {
+    diagnostics.push(
       createDatastoreDiagnostic(
         `${datastorePath}.kind`,
         `Datastore kind must be one of: ${[...ALLOWED_DATASTORE_KINDS]
           .map((allowedKind) => `\`${allowedKind}\``)
           .join(', ')}.`
       )
-    ];
+    );
   }
 
   if (ownerRepo === null) {
-    return [
+    diagnostics.push(
       createDatastoreDiagnostic(
         `${datastorePath}.owner_repo`,
         'Datastore entry is missing required field `owner_repo`.'
       )
-    ];
+    );
+  } else {
+    diagnostics.push(
+      ...validateRepositoryReference({
+        repositoryId: ownerRepo,
+        fieldPath: `${datastorePath}.owner_repo`,
+        fieldName: 'owner repository',
+        repositoryIndex
+      })
+    );
   }
 
-  if (!repositoryIndex.byName.has(ownerRepo)) {
+  diagnostics.push(
+    ...validateDeployOwnerReference(value, datastorePath, repositoryIndex),
+    ...validateLogicalOwnerReferences(value, datastorePath, repositoryIndex)
+  );
+
+  return diagnostics;
+}
+
+function validateDeployOwnerReference(
+  value: Record<string, unknown>,
+  datastorePath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  const deployOwnerRepo = readStringField(value, 'deploy_owner_repo');
+
+  if (deployOwnerRepo === null) {
+    return [];
+  }
+
+  return validateRepositoryReference({
+    repositoryId: deployOwnerRepo,
+    fieldPath: `${datastorePath}.deploy_owner_repo`,
+    fieldName: 'deploy owner repository',
+    repositoryIndex,
+    expectedKind: DEPLOY_UNIT_KIND
+  });
+}
+
+function validateLogicalOwnerReferences(
+  value: Record<string, unknown>,
+  datastorePath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  return [
+    ...validateLogicalOwnerComponentReference(value, datastorePath, repositoryIndex),
+    ...validateLogicalOwnerComponentsReference(value, datastorePath, repositoryIndex)
+  ];
+}
+
+function validateLogicalOwnerComponentReference(
+  value: Record<string, unknown>,
+  datastorePath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  const logicalOwnerComponent = readStringField(value, 'logical_owner_component');
+
+  if (logicalOwnerComponent === null) {
+    return [];
+  }
+
+  return validateRepositoryReference({
+    repositoryId: logicalOwnerComponent,
+    fieldPath: `${datastorePath}.logical_owner_component`,
+    fieldName: 'logical owner component',
+    repositoryIndex,
+    expectedKind: LOGICAL_BOUNDARY_KIND,
+    requireDbBoundary: true
+  });
+}
+
+function validateLogicalOwnerComponentsReference(
+  value: Record<string, unknown>,
+  datastorePath: string,
+  repositoryIndex: RepositoryIndex
+): readonly Diagnostic[] {
+  const logicalOwnerComponents = value.logical_owner_components;
+
+  if (logicalOwnerComponents === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(logicalOwnerComponents)) {
     return [
       createDatastoreDiagnostic(
-        `${datastorePath}.owner_repo`,
-        `Datastore references unknown owner repository \`${ownerRepo}\`.`
+        `${datastorePath}.logical_owner_components`,
+        '`logical_owner_components` must be a YAML array when present.'
       )
     ];
   }
 
-  return [];
+  return logicalOwnerComponents.flatMap((logicalOwnerComponent, componentIndex) => {
+    const path = `${datastorePath}.logical_owner_components[${componentIndex}]`;
+
+    if (
+      typeof logicalOwnerComponent !== 'string' ||
+      logicalOwnerComponent.trim().length === 0
+    ) {
+      return [
+        createDatastoreDiagnostic(
+          path,
+          'Logical owner component entry must be a non-empty repository id.'
+        )
+      ];
+    }
+
+    return validateRepositoryReference({
+      repositoryId: logicalOwnerComponent.trim(),
+      fieldPath: path,
+      fieldName: 'logical owner component',
+      repositoryIndex,
+      expectedKind: LOGICAL_BOUNDARY_KIND,
+      requireDbBoundary: true
+    });
+  });
+}
+
+function validateRepositoryReference(input: {
+  readonly repositoryId: string;
+  readonly fieldPath: string;
+  readonly fieldName: string;
+  readonly repositoryIndex: RepositoryIndex;
+  readonly expectedKind?: string;
+  readonly requireDbBoundary?: boolean;
+}): readonly Diagnostic[] {
+  const repository = input.repositoryIndex.byName.get(input.repositoryId);
+
+  if (repository === undefined) {
+    return [
+      createDatastoreDiagnostic(
+        input.fieldPath,
+        `Datastore references unknown ${input.fieldName} \`${input.repositoryId}\`.`
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  if (
+    input.expectedKind !== undefined &&
+    repository.kind !== input.expectedKind
+  ) {
+    diagnostics.push(
+      createDatastoreDiagnostic(
+        input.fieldPath,
+        `Datastore ${input.fieldName} \`${input.repositoryId}\` must have repository kind \`${input.expectedKind}\`, found \`${repository.kind ?? 'missing'}\`.`
+      )
+    );
+  }
+
+  if (input.requireDbBoundary === true) {
+    diagnostics.push(...validateRepositoryDbBoundary(repository, input.fieldPath));
+  }
+
+  return diagnostics;
+}
+
+function validateRepositoryDbBoundary(
+  repository: RepositoryCatalogRecord,
+  fieldPath: string
+): readonly Diagnostic[] {
+  const securityBoundary = repository.securityBoundary;
+
+  if (
+    securityBoundary !== null &&
+    securityBoundary.dbSchema !== null &&
+    securityBoundary.dbRole !== null
+  ) {
+    return [];
+  }
+
+  return [
+    createDatastoreDiagnostic(
+      fieldPath,
+      `Datastore logical owner component \`${repository.name}\` must declare security_boundary.db_schema and security_boundary.db_role.`
+    )
+  ];
 }
 
 function validateServiceDatastoreRecord(

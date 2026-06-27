@@ -56,11 +56,17 @@ export interface RepositoryCatalogRecord {
   readonly riskLevel: string | null;
   readonly ownsData: readonly string[];
   readonly splitTargets: readonly string[];
+  readonly securityBoundary: RepositorySecurityBoundary | null;
   readonly path: string;
 }
 
 export interface RepositoryIndex {
   readonly byName: ReadonlyMap<string, RepositoryCatalogRecord>;
+}
+
+export interface RepositorySecurityBoundary {
+  readonly dbSchema: string | null;
+  readonly dbRole: string | null;
 }
 
 export interface RepositoryAreaPrefixRule {
@@ -115,12 +121,28 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
         riskLevel: readStringField(repository, 'risk_level'),
         ownsData: readStringArray(repository.owns_data),
         splitTargets: readStringArray(repository.split_targets),
+        securityBoundary: readRepositorySecurityBoundary(repository),
         path: getRepositoryDiagnosticPath(repository, index)
       }
     ]);
   }
 
   return { byName: new Map(entries) };
+}
+
+function readRepositorySecurityBoundary(
+  value: Record<string, unknown>
+): RepositorySecurityBoundary | null {
+  const securityBoundary = value.security_boundary;
+
+  if (!isRecord(securityBoundary)) {
+    return null;
+  }
+
+  return {
+    dbSchema: readStringField(securityBoundary, 'db_schema'),
+    dbRole: readStringField(securityBoundary, 'db_role')
+  };
 }
 
 export function buildRepositoryAreaRules(value: unknown): RepositoryAreaRules {

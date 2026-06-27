@@ -466,6 +466,7 @@ function createRepositoryIndex(repository: {
           riskLevel: repository.riskLevel ?? null,
           ownsData: repository.ownsData ?? [],
           splitTargets: repository.splitTargets ?? [],
+          securityBoundary: null,
           path: `repositories[0:${repository.name}]`
         }
       ]
