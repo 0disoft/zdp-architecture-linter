@@ -180,6 +180,41 @@ service:
       }
     );
   });
+
+  test('reports omitted service schema error count', async () => {
+    const verboseSchemaSource = JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      required: ['service'],
+      properties: {
+        service: {
+          type: 'object',
+          required: ['a', 'b', 'c', 'd', 'e', 'f'],
+          properties: {}
+        }
+      }
+    });
+
+    await withSchemaFixtureRoot(
+      {
+        'schemas/service.schema.json': verboseSchemaSource,
+        'repo/service.yaml': `
+service: {}
+`
+      },
+      async (architectureRoot) => {
+        const diagnostics = await validateRepositoryServiceContract({
+          architectureRoot,
+          repositoryRoot: join(architectureRoot, 'repo')
+        });
+
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0]?.message).toContain(
+          'and 1 more schema error'
+        );
+      }
+    );
+  });
 });
 
 async function withSchemaFixtureRoot(

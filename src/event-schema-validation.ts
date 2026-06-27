@@ -11,6 +11,7 @@ const EVENT_SCHEMA_REF_RULE_ID = 'ZDP-EVENT-002';
 const EVENT_SCHEMA_TARGET_RULE_ID = 'ZDP-EVENT-003';
 const EVENT_SCHEMA_REF_PREFIX = 'schemas/events/';
 const EVENT_SCHEMA_ID_PREFIX = 'https://zdp.zerodi.dev/';
+const SCHEMA_ERROR_DISPLAY_LIMIT = 5;
 
 export async function validateEventCatalogSchema(input: {
   readonly architectureRoot: string;
@@ -200,10 +201,15 @@ function formatCompileError(error: unknown): string {
 }
 
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {
-  return errors
-    .slice(0, 5)
+  const summary = errors
+    .slice(0, SCHEMA_ERROR_DISPLAY_LIMIT)
     .map((error) => `${toDiagnosticPath(error)} ${error.message ?? 'is invalid'}`)
     .join('; ');
+  const remaining = errors.length - SCHEMA_ERROR_DISPLAY_LIMIT;
+
+  return remaining > 0
+    ? `${summary}; and ${remaining} more schema error${remaining === 1 ? '' : 's'}`
+    : summary;
 }
 
 function toDiagnosticPath(error: ErrorObject | undefined): string {

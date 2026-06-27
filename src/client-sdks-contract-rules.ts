@@ -138,6 +138,8 @@ const REQUIRED_WEBHOOK_METADATA = [
 const REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP = [
   'API contract source',
   'generated SDK source truth',
+  'SDK runtime implementation',
+  'product-specific business rules',
   'refresh token storage',
   'final authorization decisions',
   'provider credential storage'
@@ -150,7 +152,12 @@ const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [
   'cookie_header',
   'refresh_token_plaintext',
   'stack_trace',
-  'screen_component_payload'
+  'screen_component_payload',
+  'provider_specific_id_as_primary_id',
+  'raw_storage_url',
+  'unversioned_payload',
+  'provider_secret_in_schema',
+  'ledger_mutation_without_money_contract'
 ] as const;
 
 const REQUIRED_LIBS_EXPORT_SOURCE_REPO = 'zdp-libs-ts';
@@ -218,6 +225,12 @@ const REQUIRED_UPLOAD_CLIENT_FORBIDDEN_OWNERSHIP = [
   'object storage bucket names',
   'raw provider URLs as public contract',
   'file ownership decisions'
+] as const;
+
+const ALLOWED_CONTRACT_STATUSES = [
+  'skeleton',
+  'draft',
+  'reviewed'
 ] as const;
 
 export async function validateRepositoryClientSdksContract(input: {
@@ -440,13 +453,12 @@ function validateSdkGenerationSourceContract(
   value: unknown
 ): readonly Diagnostic[] {
   return [
-    ...validateExactValue({
+    ...validateAllowedStatus({
       value,
       file: SDK_GENERATION_SOURCE_FILE,
       path: 'sdk_generation_source.status',
-      expected: 'skeleton',
       message:
-        'Client SDKs generation source must stay skeleton until generated SDK packages exist.'
+        `Client SDKs generation source status must be one of ${formatAllowedStatuses()}.`
     }),
     ...validateExactValue({
       value,
@@ -511,13 +523,12 @@ function validateSdkGenerationSourceContract(
 
 function validateLibsExportSourceContract(value: unknown): readonly Diagnostic[] {
   return [
-    ...validateExactValue({
+    ...validateAllowedStatus({
       value,
       file: LIBS_EXPORT_SOURCE_FILE,
       path: 'libs_export_source.status',
-      expected: 'skeleton',
       message:
-        'Client SDKs libs export source must stay skeleton until generated SDK packages exist.'
+        `Client SDKs libs export source status must be one of ${formatAllowedStatuses()}.`
     }),
     ...validateExactValue({
       value,
@@ -575,13 +586,12 @@ function validateLibsExportSourceContract(value: unknown): readonly Diagnostic[]
 
 function validateAuthHelperContract(value: unknown): readonly Diagnostic[] {
   return [
-    ...validateExactValue({
+    ...validateAllowedStatus({
       value,
       file: AUTH_HELPER_FILE,
       path: 'auth_helper.status',
-      expected: 'skeleton',
       message:
-        'Client SDKs auth helper must stay skeleton until generated SDK packages exist.'
+        `Client SDKs auth helper status must be one of ${formatAllowedStatuses()}.`
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -602,13 +612,12 @@ function validateAuthHelperContract(value: unknown): readonly Diagnostic[] {
 
 function validateUploadClientContract(value: unknown): readonly Diagnostic[] {
   return [
-    ...validateExactValue({
+    ...validateAllowedStatus({
       value,
       file: UPLOAD_CLIENT_FILE,
       path: 'upload_client.status',
-      expected: 'skeleton',
       message:
-        'Client SDKs upload client must stay skeleton until generated SDK packages exist.'
+        `Client SDKs upload client status must be one of ${formatAllowedStatuses()}.`
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -744,6 +753,7 @@ async function validateCheckerSurface(
               'REQUIRED_ROUTE_METADATA',
               'REQUIRED_ERROR_METADATA',
               'REQUIRED_WEBHOOK_METADATA',
+              'REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP',
               'REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES',
               'REQUIRED_LIBS_EXPORT_SOURCE_REPO',
               'REQUIRED_LIBS_SOURCE_EXPORTS',
@@ -759,6 +769,7 @@ async function validateCheckerSurface(
               'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT',
               'CLIENT_SDK_ROUTE_METADATA_MISSING',
               'CLIENT_SDK_ERROR_METADATA_MISSING',
+              'CLIENT_SDK_GENERATION_FORBIDDEN_OWNERSHIP_MISSING',
               'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING',
               'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT',
               'CLIENT_SDK_LIBS_EXPORT_MISSING',
@@ -1116,6 +1127,31 @@ function validateExactValue(input: {
   return [
     createClientSdksDiagnostic(input.file, input.path, input.message)
   ];
+}
+
+function validateAllowedStatus(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.path);
+
+  if (
+    ALLOWED_CONTRACT_STATUSES.includes(
+      candidate as (typeof ALLOWED_CONTRACT_STATUSES)[number]
+    )
+  ) {
+    return [];
+  }
+
+  return [
+    createClientSdksDiagnostic(input.file, input.path, input.message)
+  ];
+}
+
+function formatAllowedStatuses(): string {
+  return ALLOWED_CONTRACT_STATUSES.map((status) => `\`${status}\``).join(', ');
 }
 
 function readRepositoryName(value: unknown): string | null {

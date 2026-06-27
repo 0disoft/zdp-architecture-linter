@@ -33,6 +33,23 @@ test('removes string and comment proof fragments without removing code', () => {
   expect(stripped).toContain('export function realProof');
 });
 
+test('removes regex literal proof fragments without removing division code', () => {
+  const source = [
+    'const fakePattern = /function hiddenInRegex\\(\\)|validateConnectorsContracts/;',
+    'const ratio = total / count;',
+    'export function realProof(): number {',
+    '  return ratio;',
+    '}'
+  ].join('\n');
+
+  const stripped = stripCommentsAndStringLiterals(source);
+
+  expect(stripped).not.toContain('hiddenInRegex');
+  expect(stripped).not.toContain('validateConnectorsContracts');
+  expect(stripped).toContain('total / count');
+  expect(stripped).toContain('export function realProof');
+});
+
 test('extracts test and it call names while ignoring literal lists', () => {
   const source = [
     "const fakeProof = ['real case', 'other case'];",

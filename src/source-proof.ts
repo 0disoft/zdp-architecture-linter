@@ -29,6 +29,17 @@ export function stripCommentsAndStringLiterals(source: string): string {
         continue;
       }
 
+      if (char === '/' && canStartRegexLiteral(source, index)) {
+        const regexEnd = readRegexLiteralEnd(source, index);
+
+        if (regexEnd !== null) {
+          result += maskSourceSlice(source.slice(index, regexEnd));
+          index = regexEnd;
+          state = 'code';
+          continue;
+        }
+      }
+
       if (char === "'") {
         result += ' ';
         index += 1;
@@ -150,6 +161,97 @@ export function stripCommentsAndStringLiterals(source: string): string {
   }
 
   return result;
+}
+
+function canStartRegexLiteral(source: string, startIndex: number): boolean {
+  let index = startIndex - 1;
+
+  while (index >= 0 && /\s/.test(source[index] ?? '')) {
+    index -= 1;
+  }
+
+  if (index < 0) {
+    return true;
+  }
+
+  const previous = source[index];
+  if (previous !== undefined && '([{=,:;!&|?+-*~^<>'.includes(previous)) {
+    return true;
+  }
+
+  if (!isIdentifierPart(previous)) {
+    return false;
+  }
+
+  let wordStart = index;
+  while (wordStart > 0 && isIdentifierPart(source[wordStart - 1])) {
+    wordStart -= 1;
+  }
+
+  return [
+    'await',
+    'case',
+    'delete',
+    'in',
+    'instanceof',
+    'return',
+    'throw',
+    'typeof',
+    'void',
+    'yield'
+  ].includes(source.slice(wordStart, index + 1));
+}
+
+function readRegexLiteralEnd(source: string, startIndex: number): number | null {
+  let index = startIndex + 1;
+  let inCharacterClass = false;
+
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (char === '\n' || char === '\r') {
+      return null;
+    }
+
+    if (char === '\\') {
+      index += next === undefined ? 1 : 2;
+      continue;
+    }
+
+    if (inCharacterClass) {
+      if (char === ']') {
+        inCharacterClass = false;
+      }
+
+      index += 1;
+      continue;
+    }
+
+    if (char === '[') {
+      inCharacterClass = true;
+      index += 1;
+      continue;
+    }
+
+    if (char === '/') {
+      index += 1;
+
+      while (isIdentifierPart(source[index])) {
+        index += 1;
+      }
+
+      return index;
+    }
+
+    index += 1;
+  }
+
+  return null;
+}
+
+function maskSourceSlice(source: string): string {
+  return source.replace(/[^\n]/g, ' ');
 }
 
 export function extractTestCallNames(source: string): readonly string[] {

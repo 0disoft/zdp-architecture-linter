@@ -286,7 +286,7 @@ sdk_generation_source:
           file: 'contracts/sdk-generation-source.yaml',
           path: 'sdk_generation_source.status',
           message:
-            'Client SDKs generation source must stay skeleton until generated SDK packages exist.'
+            'Client SDKs generation source status must be one of `skeleton`, `draft`, `reviewed`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -356,6 +356,14 @@ sdk_generation_source:
           ruleId: 'ZDP-CLIENT-SDKS-001',
           severity: 'error',
           file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.must_not_own',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `SDK runtime implementation` in `sdk_generation_source.must_not_own`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
           path: 'sdk_generation_source.forbidden_values',
           message:
             'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `authorization_header` in `sdk_generation_source.forbidden_values`.'
@@ -368,8 +376,46 @@ sdk_generation_source:
           message:
             'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `stack_trace` in `sdk_generation_source.forbidden_values`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CLIENT-SDKS-001',
+          severity: 'error',
+          file: 'contracts/sdk-generation-source.yaml',
+          path: 'sdk_generation_source.forbidden_values',
+          message:
+            'Client SDKs contract `contracts/sdk-generation-source.yaml` must include `raw_storage_url` in `sdk_generation_source.forbidden_values`.'
+        });
       }
     );
+  });
+
+  test('allows pre-release client SDK contract statuses', async () => {
+    const files = createValidClientSdkContractFiles();
+
+    files['contracts/sdk-generation-source.yaml'] =
+      files['contracts/sdk-generation-source.yaml'].replace(
+        'status: skeleton',
+        'status: draft'
+      );
+    files['contracts/libs-export-source.yaml'] =
+      files['contracts/libs-export-source.yaml'].replace(
+        'status: skeleton',
+        'status: reviewed'
+      );
+    files['contracts/auth-helper.yaml'] = files[
+      'contracts/auth-helper.yaml'
+    ].replace('status: skeleton', 'status: draft');
+    files['contracts/upload-client.yaml'] = files[
+      'contracts/upload-client.yaml'
+    ].replace('status: skeleton', 'status: reviewed');
+
+    await withRepositoryRoot(files, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryClientSdksContract({
+        repositoryRoot,
+        repositoryServiceContract: createClientSdksServiceContract()
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
   });
 
   test('fails when libs export source handoff drifts', async () => {
@@ -405,7 +451,7 @@ libs_export_source:
           file: 'contracts/libs-export-source.yaml',
           path: 'libs_export_source.status',
           message:
-            'Client SDKs libs export source must stay skeleton until generated SDK packages exist.'
+            'Client SDKs libs export source status must be one of `skeleton`, `draft`, `reviewed`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -500,7 +546,7 @@ auth_helper:
           file: 'contracts/auth-helper.yaml',
           path: 'auth_helper.status',
           message:
-            'Client SDKs auth helper must stay skeleton until generated SDK packages exist.'
+            'Client SDKs auth helper status must be one of `skeleton`, `draft`, `reviewed`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -555,7 +601,7 @@ upload_client:
           file: 'contracts/upload-client.yaml',
           path: 'upload_client.status',
           message:
-            'Client SDKs upload client must stay skeleton until generated SDK packages exist.'
+            'Client SDKs upload client status must be one of `skeleton`, `draft`, `reviewed`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CLIENT-SDKS-001',
@@ -1152,6 +1198,8 @@ sdk_generation_source:
   must_not_own:
     - API contract source
     - generated SDK source truth
+    - SDK runtime implementation
+    - product-specific business rules
     - refresh token storage
     - final authorization decisions
     - provider credential storage
@@ -1164,6 +1212,11 @@ sdk_generation_source:
     - refresh_token_plaintext
     - stack_trace
     - screen_component_payload
+    - provider_specific_id_as_primary_id
+    - raw_storage_url
+    - unversioned_payload
+    - provider_secret_in_schema
+    - ledger_mutation_without_money_contract
 `,
     'contracts/libs-export-source.yaml': `
 libs_export_source:
@@ -1308,6 +1361,7 @@ const REQUIRED_SDK_GENERATION_SOURCE_CONTRACT = 'contracts/sdk-generation-input.
 const REQUIRED_ROUTE_METADATA = [];
 const REQUIRED_ERROR_METADATA = [];
 const REQUIRED_WEBHOOK_METADATA = [];
+const REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP = [];
 const REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES = [];
 const REQUIRED_LIBS_EXPORT_SOURCE_REPO = 'zdp-libs-ts';
 const REQUIRED_LIBS_SOURCE_EXPORTS = [];
@@ -1323,6 +1377,7 @@ const CLIENT_SDK_CROSS_LANGUAGE_REQUIREMENT_MISSING = 'CLIENT_SDK_CROSS_LANGUAGE
 const CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT = 'CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT';
 const CLIENT_SDK_ROUTE_METADATA_MISSING = 'CLIENT_SDK_ROUTE_METADATA_MISSING';
 const CLIENT_SDK_ERROR_METADATA_MISSING = 'CLIENT_SDK_ERROR_METADATA_MISSING';
+const CLIENT_SDK_GENERATION_FORBIDDEN_OWNERSHIP_MISSING = 'CLIENT_SDK_GENERATION_FORBIDDEN_OWNERSHIP_MISSING';
 const CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING = 'CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING';
 const CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT = 'CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT';
 const CLIENT_SDK_LIBS_EXPORT_MISSING = 'CLIENT_SDK_LIBS_EXPORT_MISSING';
@@ -1357,6 +1412,7 @@ export {
   REQUIRED_ROUTE_METADATA,
   REQUIRED_ERROR_METADATA,
   REQUIRED_WEBHOOK_METADATA,
+  REQUIRED_SDK_GENERATION_FORBIDDEN_OWNERSHIP,
   REQUIRED_SDK_GENERATION_FORBIDDEN_VALUES,
   REQUIRED_LIBS_EXPORT_SOURCE_REPO,
   REQUIRED_LIBS_SOURCE_EXPORTS,
@@ -1372,6 +1428,7 @@ export {
   CLIENT_SDK_GENERATION_SOURCE_REPO_DRIFT,
   CLIENT_SDK_ROUTE_METADATA_MISSING,
   CLIENT_SDK_ERROR_METADATA_MISSING,
+  CLIENT_SDK_GENERATION_FORBIDDEN_OWNERSHIP_MISSING,
   CLIENT_SDK_GENERATION_FORBIDDEN_VALUE_MISSING,
   CLIENT_SDK_LIBS_EXPORT_SOURCE_REPO_DRIFT,
   CLIENT_SDK_LIBS_EXPORT_MISSING,

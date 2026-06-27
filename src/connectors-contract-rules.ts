@@ -2,6 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import {
+  extractTestCallNames,
+  stripCommentsAndStringLiterals
+} from './source-proof.ts';
 
 const CONNECTORS_REPOSITORY_NAME = 'zdp-connectors-platform';
 const CONNECTORS_RULE_ID = 'ZDP-CONNECTORS-001';
@@ -112,6 +116,7 @@ const REQUIRED_SYNC_FORBIDDEN_VALUES = [
   'raw_provider_payload',
   'oauth_refresh_token_plaintext',
   'provider_api_credential_plaintext',
+  'provider_api_key_plaintext',
   'authorization_header',
   'cookie',
   'raw_mail_body',
@@ -169,6 +174,7 @@ const REQUIRED_FORBIDDEN_OWNERSHIP = [
 const REQUIRED_BOUNDARY_FORBIDDEN_VALUES = [
   'oauth_refresh_token_plaintext',
   'provider_api_credential_plaintext',
+  'provider_api_key_plaintext',
   'authorization_header',
   'cookie',
   'raw_mail_body',
@@ -963,37 +969,59 @@ async function validateCheckerSurface(
         })),
     ...(validatorSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_VALIDATOR_FILE,
-          source: validatorSource.source,
-          requiredFragments: [
-            'REQUIRED_PROVIDERS',
-            'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
-            'CON_PROVIDER_CREDENTIAL_CAPABILITY_NOT_REQUIRED',
-            'CON_PROVIDER_PRIVACY_SCOPE_NOT_REQUIRED',
-            'CON_PROVIDER_SYNC_STATE_POLICY_INVALID',
-            'CON_PROVIDER_WEBHOOK_REPLAY_POLICY_INVALID',
-            'CON_SYNC_RAW_PAYLOAD_ALLOWED',
-            'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
-            'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
-            'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING'
-          ]
-        })),
+      : [
+          ...validateSourceIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'REQUIRED_PROVIDERS',
+              'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+              'CON_PROVIDER_CREDENTIAL_CAPABILITY_NOT_REQUIRED',
+              'CON_PROVIDER_PRIVACY_SCOPE_NOT_REQUIRED',
+              'CON_PROVIDER_SYNC_STATE_POLICY_INVALID',
+              'CON_PROVIDER_WEBHOOK_REPLAY_POLICY_INVALID',
+              'CON_SYNC_RAW_PAYLOAD_ALLOWED',
+              'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
+              'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
+              'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_VALIDATOR_FILE,
+            source: validatorSource.source,
+            requiredFragments: [
+              'export function validateConnectorsContracts',
+              'function validateForbiddenValues',
+              'function validateProviderRegistry',
+              'function validateSyncState',
+              'function validateWebhookReplay',
+              'function validateProviderBoundaries',
+              'function requireListMatches'
+            ]
+          })
+        ]),
     ...(testSource.source === null
       ? []
-      : validateSourceIncludes({
-          file: CHECKER_TEST_FILE,
-          source: testSource.source,
-          requiredFragments: [
-            'fails when a required provider is missing',
-            'fails when a provider bypasses credential vault capability',
-            'fails when a provider skips credential capability and replay policies',
-            'fails when sync-state allows raw provider payload storage',
-            'fails when webhook replay drops signature verification',
-            'fails when webhook replay stores raw payloads instead of payload references',
-            'fails when provider boundaries allow final authorization ownership'
-          ]
-        }))
+      : [
+          ...validateSourceTestNames({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredTestNames: [
+              'fails when a required provider is missing',
+              'fails when a provider bypasses credential vault capability',
+              'fails when a provider skips credential capability and replay policies',
+              'fails when sync-state allows raw provider payload storage',
+              'fails when webhook replay drops signature verification',
+              'fails when webhook replay stores raw payloads instead of payload references',
+              'fails when provider boundaries allow final authorization ownership'
+            ]
+          }),
+          ...validateSourceCodeIncludes({
+            file: CHECKER_TEST_FILE,
+            source: testSource.source,
+            requiredFragments: ['expect(', 'validateConnectorsContracts']
+          })
+        ])
   ];
 }
 
@@ -1127,6 +1155,7 @@ async function validateRuntimeSurface(
             'raw_message_body',
             'raw_file_body',
             'raw_contact_body',
+            'provider_api_key_plaintext',
             'raw_provider_payload',
             'credential_plaintext'
           ]
@@ -1176,7 +1205,8 @@ async function validateRuntimeSurface(
             'final_authorization',
             'entitlement',
             'ledger_or_credit_mutation',
-            'privacy_data_access_policy'
+            'privacy_data_access_policy',
+            'provider_api_key_plaintext'
           ]
         }))
   ];
@@ -1199,6 +1229,58 @@ function validateSourceIncludes(input: {
         input.file,
         'source',
         `Connectors checker source must include \`${fragment}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceTestNames(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredTestNames: readonly string[];
+}): readonly Diagnostic[] {
+  const testNames = new Set(extractTestCallNames(input.source));
+  const diagnostics: Diagnostic[] = [];
+
+  for (const testName of input.requiredTestNames) {
+    if (testNames.has(testName)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createConnectorsDiagnostic(
+        input.file,
+        'source',
+        `Connectors checker source must include test case \`${testName}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateSourceCodeIncludes(input: {
+  readonly file: string;
+  readonly source: string;
+  readonly requiredFragments: readonly string[];
+}): readonly Diagnostic[] {
+  const sourceWithoutCommentsOrStrings = stripCommentsAndStringLiterals(
+    input.source
+  );
+  const diagnostics: Diagnostic[] = [];
+
+  for (const fragment of input.requiredFragments) {
+    if (sourceWithoutCommentsOrStrings.includes(fragment)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createConnectorsDiagnostic(
+        input.file,
+        'source',
+        `Connectors checker source must include code fragment \`${fragment}\`.`
       )
     );
   }

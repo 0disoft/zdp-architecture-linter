@@ -13,6 +13,7 @@ const SERVICE_SCHEMA_PASS_RULE_ID = 'ZDP-SERVICE-SCHEMA-001';
 const SERVICE_SCHEMA_FAIL_RULE_ID = 'ZDP-SERVICE-SCHEMA-002';
 const SERVICE_CONTRACT_MISSING_RULE_ID = 'ZDP-SERVICE-SCHEMA-003';
 const SERVICE_CONTRACT_INVALID_RULE_ID = 'ZDP-SERVICE-SCHEMA-004';
+const SCHEMA_ERROR_DISPLAY_LIMIT = 5;
 
 interface ServiceSchemaFixture {
   readonly file: string;
@@ -205,10 +206,15 @@ function createServiceSchemaDiagnostic(
 }
 
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {
-  return errors
-    .slice(0, 5)
+  const summary = errors
+    .slice(0, SCHEMA_ERROR_DISPLAY_LIMIT)
     .map((error) => `${toDiagnosticPath(error)} ${error.message ?? 'is invalid'}`)
     .join('; ');
+  const remaining = errors.length - SCHEMA_ERROR_DISPLAY_LIMIT;
+
+  return remaining > 0
+    ? `${summary}; and ${remaining} more schema error${remaining === 1 ? '' : 's'}`
+    : summary;
 }
 
 function toDiagnosticPath(error: ErrorObject | undefined): string {

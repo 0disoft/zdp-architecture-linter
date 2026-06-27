@@ -108,6 +108,23 @@ describe('event catalog schema validation', () => {
       ]);
     });
   });
+
+  test('reports omitted event schema error count', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateEventCatalogSchema({
+        architectureRoot,
+        value: {
+          schema_version: '0.1',
+          events: [{}]
+        }
+      });
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.message).toContain(
+        'and 3 more schema errors'
+      );
+    });
+  });
 });
 
 describe('event schema references', () => {

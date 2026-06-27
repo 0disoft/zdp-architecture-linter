@@ -243,6 +243,14 @@ forbidden_values:
           path: 'payload_storage.raw_payload_allowed',
           message: 'Webhook replay must not allow raw payload storage.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'contracts/sync-state.yaml',
+          path: 'forbidden_values',
+          message:
+            'Connectors contract `contracts/sync-state.yaml` must include `provider_api_key_plaintext` in `forbidden_values`.'
+        });
       }
     );
   });
@@ -288,6 +296,14 @@ forbidden_values:
           path: 'forbidden_ownership',
           message:
             'Connectors contract `contracts/provider-boundaries.yaml` must include `final_authorization` in `forbidden_ownership`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'contracts/provider-boundaries.yaml',
+          path: 'forbidden_values',
+          message:
+            'Connectors contract `contracts/provider-boundaries.yaml` must include `provider_api_key_plaintext` in `forbidden_values`.'
         });
       }
     );
@@ -366,10 +382,93 @@ test('placeholder', () => {});
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CONNECTORS-001',
           severity: 'error',
+          file: 'src/connectors-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include code fragment `export function validateConnectorsContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
           file: 'tests/connectors-contracts.test.ts',
           path: 'source',
           message:
-            'Connectors checker source must include `fails when webhook replay drops signature verification`.'
+            'Connectors checker source must include test case `fails when webhook replay drops signature verification`.'
+        });
+      }
+    );
+  });
+
+  test('fails when connectors checker proof is only string literal stubs', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidConnectorsFiles(),
+        'src/connectors-contracts/validator.ts': `
+const requiredFragments = [
+  'REQUIRED_PROVIDERS',
+  'CON_PROVIDER_CREDENTIAL_SOURCE_INVALID',
+  'CON_PROVIDER_CREDENTIAL_CAPABILITY_NOT_REQUIRED',
+  'CON_PROVIDER_PRIVACY_SCOPE_NOT_REQUIRED',
+  'CON_PROVIDER_SYNC_STATE_POLICY_INVALID',
+  'CON_PROVIDER_WEBHOOK_REPLAY_POLICY_INVALID',
+  'CON_SYNC_RAW_PAYLOAD_ALLOWED',
+  'CON_WEBHOOK_SIGNATURE_NOT_REQUIRED',
+  'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
+  'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING',
+  'export function validateConnectorsContracts',
+  'function validateForbiddenValues',
+  'function validateProviderRegistry',
+  'function validateSyncState',
+  'function validateWebhookReplay',
+  'function validateProviderBoundaries',
+  'function requireListMatches'
+];
+export const placeholder = requiredFragments;
+`,
+        'tests/connectors-contracts.test.ts': `
+const cases = [
+  'fails when a required provider is missing',
+  'fails when a provider bypasses credential vault capability',
+  'fails when a provider skips credential capability and replay policies',
+  'fails when sync-state allows raw provider payload storage',
+  'fails when webhook replay drops signature verification',
+  'fails when webhook replay stores raw payloads instead of payload references',
+  'fails when provider boundaries allow final authorization ownership',
+  'expect(',
+  'validateConnectorsContracts'
+];
+export const placeholder = cases;
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryConnectorsContract({
+          repositoryRoot,
+          repositoryServiceContract: createConnectorsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'src/connectors-contracts/validator.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include code fragment `export function validateConnectorsContracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'tests/connectors-contracts.test.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include test case `fails when webhook replay drops signature verification`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CONNECTORS-001',
+          severity: 'error',
+          file: 'tests/connectors-contracts.test.ts',
+          path: 'source',
+          message:
+            'Connectors checker source must include code fragment `expect(`.'
         });
       }
     );
@@ -529,17 +628,46 @@ const codes = [
   'CON_WEBHOOK_RAW_PAYLOAD_ALLOWED',
   'CON_BOUNDARY_FORBIDDEN_OWNERSHIP_MISSING'
 ];
+export function validateConnectorsContracts(): unknown {
+  validateForbiddenValues();
+  validateProviderRegistry();
+  validateSyncState();
+  validateWebhookReplay();
+  validateProviderBoundaries();
+  return requireListMatches();
+}
+function validateForbiddenValues(): void {}
+function validateProviderRegistry(): void {}
+function validateSyncState(): void {}
+function validateWebhookReplay(): void {}
+function validateProviderBoundaries(): void {}
+function requireListMatches(): void {}
 `,
     'tests/connectors-contracts.test.ts': `
-const cases = [
-  'fails when a required provider is missing',
-  'fails when a provider bypasses credential vault capability',
-  'fails when a provider skips credential capability and replay policies',
-  'fails when sync-state allows raw provider payload storage',
-  'fails when webhook replay drops signature verification',
-  'fails when webhook replay stores raw payloads instead of payload references',
-  'fails when provider boundaries allow final authorization ownership'
-];
+import { expect, test } from 'bun:test';
+import { validateConnectorsContracts } from '../src/connectors-contracts/validator';
+
+test('fails when a required provider is missing', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when a provider bypasses credential vault capability', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when a provider skips credential capability and replay policies', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when sync-state allows raw provider payload storage', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when webhook replay drops signature verification', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when webhook replay stores raw payloads instead of payload references', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
+test('fails when provider boundaries allow final authorization ownership', () => {
+  expect(validateConnectorsContracts).toBeDefined();
+});
 `,
     'Cargo.toml': `
 [package]
@@ -682,6 +810,7 @@ pub const FORBIDDEN_SYNC_STATE_VALUES: &[&str] = &[
     "raw_message_body",
     "raw_file_body",
     "raw_contact_body",
+    "provider_api_key_plaintext",
     "raw_provider_payload",
     "credential_plaintext",
 ];
@@ -733,6 +862,10 @@ pub const DELEGATED_DECISIONS: &[&str] = &[
     "entitlement",
     "ledger_or_credit_mutation",
     "privacy_data_access_policy",
+];
+
+pub const FORBIDDEN_BOUNDARY_VALUES: &[&str] = &[
+    "provider_api_key_plaintext",
 ];
 `,
     'contracts/provider-registry.yaml': `
@@ -840,6 +973,7 @@ forbidden_values:
   - raw_provider_payload
   - oauth_refresh_token_plaintext
   - provider_api_credential_plaintext
+  - provider_api_key_plaintext
   - authorization_header
   - cookie
   - raw_mail_body
@@ -921,6 +1055,7 @@ forbidden_ownership:
 forbidden_values:
   - oauth_refresh_token_plaintext
   - provider_api_credential_plaintext
+  - provider_api_key_plaintext
   - authorization_header
   - cookie
   - raw_mail_body

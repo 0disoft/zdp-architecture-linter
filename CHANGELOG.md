@@ -1,5 +1,15 @@
 # 변경 내역
 
+## 0.39.65
+
+- source proof 검사에서 정규식 literal 안의 가짜 code fragment를 코드 증거로 인정하지 않도록 보강했다.
+
+## 0.39.64
+
+- `ZDP-CLIENT-SDKS-001`의 SDK generation 금지 ownership/value와 contract status allowlist를 repo-local client SDK checker 기준으로 동기화했다.
+- `ZDP-CONNECTORS-001`이 sync-state/provider-boundary의 `provider_api_key_plaintext` 금지값을 중앙 linter에서도 요구하도록 맞췄다.
+- connectors checker source proof가 문자열 literal stub이나 placeholder test로 통과하지 않도록 함수 code fragment와 실제 test case name 검사를 추가했다.
+
 ## 0.39.63
 
 - `ZDP-API-CONTRACTS-001`과 `ZDP-AUTH-ROUTE-001`을 최신 API 계약의 forbidden value, SDK source contract, auth/session catalog status 기준으로 동기화했다.
