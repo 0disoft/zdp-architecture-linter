@@ -260,8 +260,9 @@ const REQUIRED_MONEY_DB_PAYMENT_TABLES = [
 ] as const;
 const REQUIRED_PAYMENT_OUTBOX_FIELDS = [
   'outbox_id',
+  'cloud_event_id',
   'cloud_event_source',
-  'event_type',
+  'cloud_event_type',
   'schema_version',
   'aggregate_id',
   'causation_command_id',
@@ -289,7 +290,7 @@ const REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES = [
 ] as const;
 const REQUIRED_PAYMENT_OUTBOX_IDEMPOTENCY_SCOPE = [
   'aggregate_id',
-  'event_type',
+  'cloud_event_type',
   'idempotency_key'
 ] as const;
 const REQUIRED_ENTITLEMENT_FORBIDDEN_ITEMS = [

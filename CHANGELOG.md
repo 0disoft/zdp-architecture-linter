@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.69
+
+- `ZDP-MONEY-004`가 payment outbox의 `outbox_id`와 `cloud_event_id` 분리, `cloud_event_type`, aggregate/cloud-event-type/idempotency scope를 검사하도록 맞췄다.
+
 ## 0.39.68
 
 - `ZDP-MONEY-004`가 payment outbox claim lock 계약도 검사하도록 강화했다.

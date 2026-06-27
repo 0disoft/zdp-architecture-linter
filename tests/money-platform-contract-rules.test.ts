@@ -597,6 +597,22 @@ payments:
           file: 'contracts/money-db-schema.yaml',
           path: 'payments.payment_outbox_required_fields',
           message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `cloud_event_id` in `payments.payment_outbox_required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_required_fields',
+          message:
+            'Money platform contract `contracts/money-db-schema.yaml` must include `cloud_event_type` in `payments.payment_outbox_required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_required_fields',
+          message:
             'Money platform contract `contracts/money-db-schema.yaml` must include `audit_event_ref` in `payments.payment_outbox_required_fields`.'
         });
         expect(diagnostics).toContainEqual({
@@ -1762,8 +1778,9 @@ payments:
   payment_outbox_dispatch_contract_required: true
   payment_outbox_required_fields:
     - outbox_id
+    - cloud_event_id
     - cloud_event_source
-    - event_type
+    - cloud_event_type
     - schema_version
     - aggregate_id
     - causation_command_id
@@ -1794,7 +1811,7 @@ payments:
   payment_outbox_compare_and_swap_required: true
   payment_outbox_idempotency_scope:
     - aggregate_id
-    - event_type
+    - cloud_event_type
     - idempotency_key
 `,
     'contracts/entitlement-credit.yaml': `
