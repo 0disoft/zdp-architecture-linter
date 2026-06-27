@@ -1,5 +1,11 @@
 # 변경 내역
 
+## 0.39.68
+
+- `ZDP-MONEY-004`가 payment outbox claim lock 계약도 검사하도록 강화했다.
+- payment outbox의 `claimed_by`, `claim_token`, `claim_expires_at`, `row_version`, claim token/lease, claim token uniqueness, row-version compare-and-swap 기준이 사라지면 실패한다.
+- `zdp-money-platform`의 payment outbox delivery command/storage skeleton과 repo-local checker source proof를 중앙 linter fixture와 동기화했다.
+
 ## 0.39.67
 
 - `ZDP-MONEY-004`를 추가해 `zdp-money-platform`의 `contracts/money-db-schema.yaml` payment webhook processing/outbox 계약을 중앙 linter에서도 검사한다.

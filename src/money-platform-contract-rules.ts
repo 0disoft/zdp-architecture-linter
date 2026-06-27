@@ -37,10 +37,14 @@ const RUNTIME_COMMAND_LEDGER_FILE = 'src/commands/ledger.rs';
 const RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE = 'src/commands/payment_webhook.rs';
 const RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE =
   'src/commands/payment_webhook_processing.rs';
+const RUNTIME_COMMAND_PAYMENT_OUTBOX_DELIVERY_FILE =
+  'src/commands/payment_outbox_delivery.rs';
 const RUNTIME_LEDGER_CORE_FILE = 'src/ledger/mod.rs';
 const RUNTIME_STORAGE_MOD_FILE = 'src/storage/mod.rs';
 const RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE =
   'src/storage/payment_webhook_processing.rs';
+const RUNTIME_STORAGE_PAYMENT_OUTBOX_DELIVERY_FILE =
+  'src/storage/payment_outbox_delivery.rs';
 
 const REQUIRED_MONEY_CHECKER_FILES = [
   BUN_LOCK_FILE,
@@ -66,12 +70,45 @@ const REQUIRED_MONEY_RUNTIME_FILES = [
   RUNTIME_COMMAND_LEDGER_FILE,
   RUNTIME_COMMAND_PAYMENT_WEBHOOK_FILE,
   RUNTIME_COMMAND_PAYMENT_WEBHOOK_PROCESSING_FILE,
+  RUNTIME_COMMAND_PAYMENT_OUTBOX_DELIVERY_FILE,
   RUNTIME_LEDGER_CORE_FILE,
   RUNTIME_STORAGE_MOD_FILE,
-  RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE
+  RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE,
+  RUNTIME_STORAGE_PAYMENT_OUTBOX_DELIVERY_FILE
 ] as const;
 
 const REQUIRED_BOUNDARIES = ['billing', 'payments', 'ledger', 'risk'] as const;
+const REQUIRED_SERVICE_DATA_CLASSES = [
+  'billing',
+  'payments',
+  'webhook-logs',
+  'ledger',
+  'credit-ledger',
+  'risk',
+  'kyc-status',
+  'chargeback-cases'
+] as const;
+const REQUIRED_SERVICE_DATASTORES = [
+  'billing_postgres',
+  'payments_postgres',
+  'ledger_postgres',
+  'risk_postgres'
+] as const;
+const REQUIRED_SERVICE_DELETION_EVENTS = [
+  'deletion.step.completed',
+  'deletion.step.failed'
+] as const;
+const REQUIRED_SERVICE_PRODUCED_EVENTS = [
+  'money.ledger.entry-posted',
+  'deletion.step.completed',
+  'deletion.step.failed'
+] as const;
+const REQUIRED_SERVICE_CONSUMED_EVENTS = [
+  'billing.checkout-started',
+  'ai.usage.recorded',
+  'chain.fact.observed',
+  'chain.fact.quarantined'
+] as const;
 const REQUIRED_BOUNDARY_FIELDS = [
   'owns',
   'must_not_own',
@@ -238,7 +275,11 @@ const REQUIRED_PAYMENT_OUTBOX_FIELDS = [
   'available_at',
   'delivery_status',
   'delivery_attempt_count',
-  'max_delivery_attempts'
+  'max_delivery_attempts',
+  'claimed_by',
+  'claim_token',
+  'claim_expires_at',
+  'row_version'
 ] as const;
 const REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES = [
   'pending',
@@ -1055,6 +1096,38 @@ function validateMoneyDbSchemaContract(value: unknown): readonly Diagnostic[] {
       message: 'Payment outbox delivery attempts must remain required.',
       ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
     }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_claim_lock_required',
+      expected: true,
+      message: 'Payment outbox claim lock must remain required.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_claim_requires_token_and_lease',
+      expected: true,
+      message: 'Payment outbox claim must require token and lease fields.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_claim_token_unique_required',
+      expected: true,
+      message: 'Payment outbox claim token uniqueness must remain required.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
+    ...validateExactValue({
+      value,
+      file: MONEY_DB_SCHEMA_FILE,
+      path: 'payments.payment_outbox_compare_and_swap_required',
+      expected: true,
+      message: 'Payment outbox updates must keep row-version compare-and-swap required.',
+      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: MONEY_DB_SCHEMA_FILE,
@@ -1167,6 +1240,34 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       expected: true,
       message: 'Money platform service must require append-only data.'
     }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'data.classes',
+      field: 'data.classes',
+      requiredEntries: REQUIRED_SERVICE_DATA_CLASSES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'data.datastores',
+      field: 'data.datastores',
+      requiredEntries: REQUIRED_SERVICE_DATASTORES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'data.deletion.targets',
+      field: 'data.deletion.targets',
+      requiredEntries: REQUIRED_SERVICE_DATA_CLASSES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'data.deletion.propagation_events',
+      field: 'data.deletion.propagation_events',
+      requiredEntries: REQUIRED_SERVICE_DELETION_EVENTS
+    }),
     ...validateExactValue({
       value,
       file: 'service.yaml',
@@ -1180,6 +1281,43 @@ function validateServiceContract(value: unknown): readonly Diagnostic[] {
       path: 'idempotency.required',
       expected: true,
       message: 'Money platform idempotency must be required.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'dependencies.datastores',
+      field: 'dependencies.datastores',
+      requiredEntries: REQUIRED_SERVICE_DATASTORES
+    }),
+    ...validateExactValue({
+      value,
+      file: 'service.yaml',
+      path: 'events.cloudevents_required',
+      expected: true,
+      message: 'Money platform service must require CloudEvents for catalog events.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'events.produced',
+      field: 'events.produced',
+      readEntries: readEventRefArrayPath,
+      requiredEntries: REQUIRED_SERVICE_PRODUCED_EVENTS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: 'service.yaml',
+      path: 'events.consumed',
+      field: 'events.consumed',
+      readEntries: readEventRefArrayPath,
+      requiredEntries: REQUIRED_SERVICE_CONSUMED_EVENTS
+    }),
+    ...validateExactValue({
+      value,
+      file: 'service.yaml',
+      path: 'events.replay_supported',
+      expected: true,
+      message: 'Money platform service must support replay for catalog event handoff.'
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -1301,11 +1439,20 @@ async function validateCheckerSurface(
             'MONEY_DB_SCHEMA_FILE',
             'ENTITLEMENT_CREDIT_FILE',
             'SERVICE_FILE',
+            'SERVICE_REQUIRED_DATA_CLASSES',
+            'SERVICE_REQUIRED_DATASTORES',
+            'SERVICE_REQUIRED_DELETION_EVENTS',
+            'SERVICE_REQUIRED_PRODUCED_EVENTS',
+            'SERVICE_REQUIRED_CONSUMED_EVENTS',
             'MONEY_FORBIDDEN',
             'LEDGER_STORAGE_FORBIDDEN',
             'QUEUE_ENVELOPE_REQUIRED_FIELDS',
-            'PAYMENT_OUTBOX_REQUIRED_FIELDS',
-            'PAYMENT_OUTBOX_DELIVERY_STATUSES',
+            'payments.payment_outbox_required_fields',
+            'payments.payment_outbox_delivery_statuses',
+            'payment_outbox_claim_lock_required',
+            'payment_outbox_claim_requires_token_and_lease',
+            'payment_outbox_claim_token_unique_required',
+            'payment_outbox_compare_and_swap_required',
             MONEY_BOUNDARIES_FILE,
             MONEY_COMMAND_ENVELOPE_FILE,
             LEDGER_ENTRY_FILE,
@@ -1327,9 +1474,10 @@ async function validateCheckerSurface(
             'fails when ledger append-only rules drift',
             'fails when ledger storage treats projections as truth',
             'fails when webhook processing can bypass edge, signature, or queue rules',
-            'fails when payment webhook outbox DB contract drifts',
+            'fails when money DB schema allows unsafe money storage',
             'fails when entitlement and credit truth boundaries drift',
-            'fails when service.yaml stops declaring the money risk boundary'
+            'fails when service.yaml stops declaring the money risk boundary',
+            'billing.checkout-started'
           ]
         }))
   ];
@@ -1352,9 +1500,11 @@ async function validateRuntimeSurface(
     commandLedgerSource,
     commandPaymentWebhookSource,
     commandPaymentWebhookProcessingSource,
+    commandPaymentOutboxDeliverySource,
     ledgerCoreSource,
     storageModSource,
-    storagePaymentWebhookProcessingSource
+    storagePaymentWebhookProcessingSource,
+    storagePaymentOutboxDeliverySource
   ] = await Promise.all(
     REQUIRED_MONEY_RUNTIME_FILES.map((file) =>
       readOptionalTextFile(repositoryRoot, file)
@@ -1375,9 +1525,11 @@ async function validateRuntimeSurface(
     ...commandLedgerSource.diagnostics,
     ...commandPaymentWebhookSource.diagnostics,
     ...commandPaymentWebhookProcessingSource.diagnostics,
+    ...commandPaymentOutboxDeliverySource.diagnostics,
     ...ledgerCoreSource.diagnostics,
     ...storageModSource.diagnostics,
     ...storagePaymentWebhookProcessingSource.diagnostics,
+    ...storagePaymentOutboxDeliverySource.diagnostics,
     ...(cargoToml.source === null
       ? []
       : validateRuntimeSourceIncludes({
@@ -1464,6 +1616,7 @@ async function validateRuntimeSurface(
             'pub mod ledger;',
             'pub mod payment_webhook;',
             'pub mod payment_webhook_processing;',
+            'pub mod payment_outbox_delivery;',
             'pub enum MoneyCommandType',
             'PaymentsRecordProviderWebhook',
             'LedgerAppendEntry',
@@ -1614,12 +1767,45 @@ async function validateRuntimeSurface(
             'exhausted_or_terminal_work_cannot_continue_silently'
           ]
         })),
+    ...(commandPaymentOutboxDeliverySource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_COMMAND_PAYMENT_OUTBOX_DELIVERY_FILE,
+          source: commandPaymentOutboxDeliverySource.source,
+          requiredFragments: [
+            'pub enum PaymentOutboxDeliveryStatus',
+            'Pending',
+            'Claimed',
+            'Delivered',
+            'DeadLettered',
+            'pub struct PaymentOutboxDeliveryRecord',
+            'pub claimed_by: Option<String>',
+            'pub claim_token: Option<String>',
+            'pub claim_expires_at: Option<String>',
+            'pub row_version: u64',
+            'pub struct PaymentOutboxClaimContext',
+            'pub struct PaymentOutboxDeliveryContext',
+            'pub fn claim_payment_outbox_delivery',
+            'pub fn mark_payment_outbox_delivered',
+            'pub fn release_payment_outbox_for_retry',
+            'pub fn mark_payment_outbox_dead_lettered',
+            'MissingField("claim_expires_at")',
+            'ClaimTokenMismatch',
+            'RetryBudgetExhausted',
+            'allows_expired_claim_to_be_reclaimed_by_next_worker',
+            'rejects_wrong_claim_token_before_completion',
+            'MissingField("row_version")'
+          ]
+        })),
     ...(storageModSource.source === null
       ? []
       : validateRuntimeSourceIncludes({
           file: RUNTIME_STORAGE_MOD_FILE,
           source: storageModSource.source,
-          requiredFragments: ['pub mod payment_webhook_processing;']
+          requiredFragments: [
+            'pub mod payment_webhook_processing;',
+            'pub mod payment_outbox_delivery;'
+          ]
         })),
     ...(storagePaymentWebhookProcessingSource.source === null
       ? []
@@ -1660,6 +1846,30 @@ async function validateRuntimeSurface(
             'rejects_stale_or_cross_record_processing_transition_before_storage',
             'rejects_history_or_outbox_that_does_not_match_processing_record',
             'rejects_forbidden_payment_values_before_storage_port'
+          ]
+        })),
+    ...(storagePaymentOutboxDeliverySource.source === null
+      ? []
+      : validateRuntimeSourceIncludes({
+          file: RUNTIME_STORAGE_PAYMENT_OUTBOX_DELIVERY_FILE,
+          source: storagePaymentOutboxDeliverySource.source,
+          requiredFragments: [
+            'pub struct PaymentOutboxDeliveryPersistencePlan',
+            'pub expected_row_version: u64',
+            'pub fn plan_payment_outbox_delivery_persistence',
+            'PaymentOutboxDeliveryStorageError',
+            'RowVersionMismatch',
+            'ImmutableFieldMismatch',
+            'ForbiddenStorageValue',
+            'reject_forbidden_optional("claimed_by"',
+            'require_some("claim_token"',
+            'require_some("claim_expires_at"',
+            'require_none("claim_token"',
+            'plans_compare_and_swap_for_claim_transition',
+            'plans_compare_and_swap_for_delivery_terminal_transition',
+            'rejects_stale_row_version_or_cross_record_transition',
+            'rejects_invalid_status_shapes_before_storage',
+            'rejects_forbidden_claim_values_before_storage'
           ]
         })),
     ...(ledgerCoreSource.source === null
@@ -1812,8 +2022,9 @@ function validateRequiredStringArrayEntries(input: {
   readonly field: string;
   readonly requiredEntries: readonly string[];
   readonly ruleId?: string;
+  readonly readEntries?: (value: unknown, path: string) => readonly string[];
 }): readonly Diagnostic[] {
-  const entries = readStringArrayPath(input.value, input.field);
+  const entries = (input.readEntries ?? readStringArrayPath)(input.value, input.field);
   const diagnostics: Diagnostic[] = [];
 
   for (const requiredEntry of input.requiredEntries) {
@@ -1871,6 +2082,28 @@ function readStringArrayPath(value: unknown, path: string): readonly string[] {
   return candidate.flatMap((entry) =>
     typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
   );
+}
+
+function readEventRefArrayPath(value: unknown, path: string): readonly string[] {
+  const candidate = readPath(value, path);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.flatMap((entry) => {
+    if (typeof entry === 'string' && entry.trim().length > 0) {
+      return [entry.trim()];
+    }
+
+    if (!isRecord(entry)) {
+      return [];
+    }
+
+    const id = entry.id;
+
+    return typeof id === 'string' && id.trim().length > 0 ? [id.trim()] : [];
+  });
 }
 
 function readPath(value: unknown, path: string): unknown {

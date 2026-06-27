@@ -148,6 +148,14 @@ describe('money platform contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
         severity: 'error',
+        file: 'src/commands/payment_outbox_delivery.rs',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `src/commands/payment_outbox_delivery.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
         file: 'src/storage/mod.rs',
         path: 'repository.root',
         message: 'Money platform repository must include `src/storage/mod.rs`.'
@@ -159,6 +167,14 @@ describe('money platform contract rules', () => {
         path: 'repository.root',
         message:
           'Money platform repository must include `src/storage/payment_webhook_processing.rs`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'src/storage/payment_outbox_delivery.rs',
+        path: 'repository.root',
+        message:
+          'Money platform repository must include `src/storage/payment_outbox_delivery.rs`.'
       });
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-MONEY-PLATFORM-001',
@@ -539,6 +555,10 @@ payments:
     - pending
     - delivered
   payment_outbox_delivery_attempts_required: false
+  payment_outbox_claim_lock_required: false
+  payment_outbox_claim_requires_token_and_lease: false
+  payment_outbox_claim_token_unique_required: false
+  payment_outbox_compare_and_swap_required: false
   payment_outbox_idempotency_scope:
     - idempotency_key
 `
@@ -594,6 +614,21 @@ payments:
           path: 'payments.payment_outbox_idempotency_scope',
           message:
             'Money platform contract `contracts/money-db-schema.yaml` must include `aggregate_id` in `payments.payment_outbox_idempotency_scope`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_claim_lock_required',
+          message: 'Payment outbox claim lock must remain required.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-MONEY-004',
+          severity: 'error',
+          file: 'contracts/money-db-schema.yaml',
+          path: 'payments.payment_outbox_compare_and_swap_required',
+          message:
+            'Payment outbox updates must keep row-version compare-and-swap required.'
         });
       }
     );
@@ -666,6 +701,63 @@ forbidden:
         path: 'policy_gates.required_linter_rules',
         message:
           'Money platform service contract must require `ZDP-MONEY-PLATFORM-001`.'
+      });
+    });
+  });
+
+  test('fails when service contract stops declaring money catalog handoff surfaces', async () => {
+    await withRepositoryRoot(createValidMoneyFiles(), async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryMoneyPlatformContract({
+        repositoryRoot,
+        repositoryServiceContract: {
+          ...createMoneyServiceContract(),
+          data: {
+            append_only_required: true,
+            classes: ['billing'],
+            datastores: []
+          },
+          dependencies: {
+            datastores: []
+          },
+          events: {
+            cloudevents_required: false,
+            produced: [],
+            consumed: [],
+            replay_supported: false
+          }
+        }
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'data.classes',
+        message:
+          'Money platform contract `service.yaml` must include `credit-ledger` in `data.classes`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'dependencies.datastores',
+        message:
+          'Money platform contract `service.yaml` must include `ledger_postgres` in `dependencies.datastores`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.cloudevents_required',
+        message: 'Money platform service must require CloudEvents for catalog events.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'service.yaml',
+        path: 'events.consumed',
+        message:
+          'Money platform contract `service.yaml` must include `billing.checkout-started` in `events.consumed`.'
       });
     });
   });
@@ -1319,13 +1411,68 @@ function createMoneyServiceContract(): Record<string, unknown> {
       money_movement: true
     },
     data: {
-      append_only_required: true
+      append_only_required: true,
+      classes: [
+        'billing',
+        'payments',
+        'webhook-logs',
+        'ledger',
+        'credit-ledger',
+        'risk',
+        'kyc-status',
+        'chargeback-cases'
+      ],
+      datastores: [
+        'billing_postgres',
+        'payments_postgres',
+        'ledger_postgres',
+        'risk_postgres'
+      ],
+      deletion: {
+        targets: [
+          'billing',
+          'payments',
+          'webhook-logs',
+          'ledger',
+          'credit-ledger',
+          'risk',
+          'kyc-status',
+          'chargeback-cases'
+        ],
+        propagation_events: [
+          'deletion.step.completed',
+          'deletion.step.failed'
+        ]
+      }
     },
     audit: {
       immutable: true
     },
     idempotency: {
       required: true
+    },
+    dependencies: {
+      datastores: [
+        'billing_postgres',
+        'payments_postgres',
+        'ledger_postgres',
+        'risk_postgres'
+      ]
+    },
+    events: {
+      cloudevents_required: true,
+      produced: [
+        'money.ledger.entry-posted',
+        'deletion.step.completed',
+        'deletion.step.failed'
+      ],
+      consumed: [
+        'billing.checkout-started',
+        'ai.usage.recorded',
+        'chain.fact.observed',
+        'chain.fact.quarantined'
+      ],
+      replay_supported: true
     },
     policy_gates: {
       required_linter_rules: [
@@ -1631,12 +1778,20 @@ payments:
     - delivery_status
     - delivery_attempt_count
     - max_delivery_attempts
+    - claimed_by
+    - claim_token
+    - claim_expires_at
+    - row_version
   payment_outbox_delivery_statuses:
     - pending
     - claimed
     - delivered
     - dead_lettered
   payment_outbox_delivery_attempts_required: true
+  payment_outbox_claim_lock_required: true
+  payment_outbox_claim_requires_token_and_lease: true
+  payment_outbox_claim_token_unique_required: true
+  payment_outbox_compare_and_swap_required: true
   payment_outbox_idempotency_scope:
     - aggregate_id
     - event_type
@@ -1748,11 +1903,20 @@ const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
 const MONEY_DB_SCHEMA_FILE = 'contracts/money-db-schema.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const SERVICE_FILE = 'service.yaml';
+const SERVICE_REQUIRED_DATA_CLASSES = ['billing', 'credit-ledger'];
+const SERVICE_REQUIRED_DATASTORES = ['billing_postgres', 'ledger_postgres'];
+const SERVICE_REQUIRED_DELETION_EVENTS = ['deletion.step.completed'];
+const SERVICE_REQUIRED_PRODUCED_EVENTS = ['money.ledger.entry-posted'];
+const SERVICE_REQUIRED_CONSUMED_EVENTS = ['billing.checkout-started'];
 const MONEY_FORBIDDEN = [];
 const LEDGER_STORAGE_FORBIDDEN = [];
 const QUEUE_ENVELOPE_REQUIRED_FIELDS = [];
-const PAYMENT_OUTBOX_REQUIRED_FIELDS = [];
-const PAYMENT_OUTBOX_DELIVERY_STATUSES = [];
+const PAYMENT_OUTBOX_REQUIRED_FIELDS_PATH = 'payments.payment_outbox_required_fields';
+const PAYMENT_OUTBOX_DELIVERY_STATUSES_PATH = 'payments.payment_outbox_delivery_statuses';
+const CLAIM_LOCK = 'payment_outbox_claim_lock_required';
+const CLAIM_TOKEN_AND_LEASE = 'payment_outbox_claim_requires_token_and_lease';
+const CLAIM_TOKEN_UNIQUE = 'payment_outbox_claim_token_unique_required';
+const CLAIM_CAS = 'payment_outbox_compare_and_swap_required';
 const REQUIRED_RULE = 'ZDP-MONEY-PLATFORM-001';
 export async function checkMoneyContracts(): Promise<void> {
   void MONEY_BOUNDARIES_FILE;
@@ -1763,11 +1927,20 @@ export async function checkMoneyContracts(): Promise<void> {
   void MONEY_DB_SCHEMA_FILE;
   void ENTITLEMENT_CREDIT_FILE;
   void SERVICE_FILE;
+  void SERVICE_REQUIRED_DATA_CLASSES;
+  void SERVICE_REQUIRED_DATASTORES;
+  void SERVICE_REQUIRED_DELETION_EVENTS;
+  void SERVICE_REQUIRED_PRODUCED_EVENTS;
+  void SERVICE_REQUIRED_CONSUMED_EVENTS;
   void MONEY_FORBIDDEN;
   void LEDGER_STORAGE_FORBIDDEN;
   void QUEUE_ENVELOPE_REQUIRED_FIELDS;
-  void PAYMENT_OUTBOX_REQUIRED_FIELDS;
-  void PAYMENT_OUTBOX_DELIVERY_STATUSES;
+  void PAYMENT_OUTBOX_REQUIRED_FIELDS_PATH;
+  void PAYMENT_OUTBOX_DELIVERY_STATUSES_PATH;
+  void CLAIM_LOCK;
+  void CLAIM_TOKEN_AND_LEASE;
+  void CLAIM_TOKEN_UNIQUE;
+  void CLAIM_CAS;
   void REQUIRED_RULE;
 }
 `,
@@ -1777,9 +1950,10 @@ const cases = [
   'fails when ledger append-only rules drift',
   'fails when ledger storage treats projections as truth',
   'fails when webhook processing can bypass edge, signature, or queue rules',
-  'fails when payment webhook outbox DB contract drifts',
+  'fails when money DB schema allows unsafe money storage',
   'fails when entitlement and credit truth boundaries drift',
-  'fails when service.yaml stops declaring the money risk boundary'
+  'fails when service.yaml stops declaring the money risk boundary',
+  'billing.checkout-started'
 ];
 export { cases };
 `,
@@ -1902,6 +2076,7 @@ pub const MARKER: MoneyBoundaryMarker = MoneyBoundaryMarker {
 pub mod ledger;
 pub mod payment_webhook;
 pub mod payment_webhook_processing;
+pub mod payment_outbox_delivery;
 
 pub enum MoneyCommandType {
     PaymentsRecordProviderWebhook,
@@ -2106,6 +2281,7 @@ fn exhausted_or_terminal_work_cannot_continue_silently() {}
 `,
     'src/storage/mod.rs': `
 pub mod payment_webhook_processing;
+pub mod payment_outbox_delivery;
 `,
     'src/storage/payment_webhook_processing.rs': `
 const FORBIDDEN_STORAGE_VALUE_FRAGMENTS: &[&str] = &[
@@ -2161,6 +2337,72 @@ fn plans_compare_and_swap_update_for_worker_transition_history_and_outbox() {}
 fn rejects_stale_or_cross_record_processing_transition_before_storage() {}
 fn rejects_history_or_outbox_that_does_not_match_processing_record() {}
 fn rejects_forbidden_payment_values_before_storage_port() {}
+`,
+    'src/commands/payment_outbox_delivery.rs': `
+pub enum PaymentOutboxDeliveryStatus {
+    Pending,
+    Claimed,
+    Delivered,
+    DeadLettered,
+}
+
+pub struct PaymentOutboxDeliveryRecord {
+    pub claimed_by: Option<String>,
+    pub claim_token: Option<String>,
+    pub claim_expires_at: Option<String>,
+    pub row_version: u64,
+}
+
+pub struct PaymentOutboxClaimContext;
+pub struct PaymentOutboxDeliveryContext;
+
+pub enum PaymentOutboxDeliveryError {
+    ClaimTokenMismatch,
+    MissingField(&'static str),
+    RetryBudgetExhausted,
+}
+
+pub fn claim_payment_outbox_delivery() {
+    let _ = PaymentOutboxDeliveryStatus::Pending;
+    let _ = PaymentOutboxDeliveryStatus::Claimed;
+    let _ = PaymentOutboxDeliveryStatus::Delivered;
+    let _ = PaymentOutboxDeliveryStatus::DeadLettered;
+    let _ = PaymentOutboxDeliveryError::MissingField("claim_expires_at");
+    let _ = PaymentOutboxDeliveryError::MissingField("row_version");
+}
+
+pub fn mark_payment_outbox_delivered() {}
+pub fn release_payment_outbox_for_retry() {}
+pub fn mark_payment_outbox_dead_lettered() {}
+fn allows_expired_claim_to_be_reclaimed_by_next_worker() {}
+fn rejects_wrong_claim_token_before_completion() {}
+`,
+    'src/storage/payment_outbox_delivery.rs': `
+pub struct PaymentOutboxDeliveryPersistencePlan {
+    pub expected_row_version: u64,
+}
+
+pub enum PaymentOutboxDeliveryStorageError {
+    RowVersionMismatch,
+    ImmutableFieldMismatch,
+    ForbiddenStorageValue,
+}
+
+pub fn plan_payment_outbox_delivery_persistence() {
+    reject_forbidden_optional("claimed_by");
+    require_some("claim_token");
+    require_some("claim_expires_at");
+    require_none("claim_token");
+}
+
+fn reject_forbidden_optional(_field: &str) {}
+fn require_some(_field: &str) {}
+fn require_none(_field: &str) {}
+fn plans_compare_and_swap_for_claim_transition() {}
+fn plans_compare_and_swap_for_delivery_terminal_transition() {}
+fn rejects_stale_row_version_or_cross_record_transition() {}
+fn rejects_invalid_status_shapes_before_storage() {}
+fn rejects_forbidden_claim_values_before_storage() {}
 `,
     'src/ledger/mod.rs': `
 const FORBIDDEN_LEDGER_VALUE_FRAGMENTS: &[&str] = &[
