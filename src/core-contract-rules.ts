@@ -15,6 +15,10 @@ import {
   validateExactValue,
   validateRequiredStringArrayEntries
 } from './rules/core/contract-helpers.ts';
+import {
+  createRequiredAuthRuntimeReadinessGates,
+  validateAuthRuntimeReadinessContract
+} from './rules/core/auth-runtime-readiness.ts';
 
 const CORE_REPOSITORY_NAME = 'zdp-core-platform';
 
@@ -223,201 +227,53 @@ const REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS = [
   'product_authorization_decision'
 ] as const;
 
-const REQUIRED_AUTH_RUNTIME_READINESS_GATES = [
-  {
-    gateId: 'request_id_propagation',
-    contractStatus: 'required_by_auth_runtime_admission_context',
-    typedBoundaryStatus: AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
-    durableImplementationStatus: 'propagation_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_request_id_propagation_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-      AUTH_RUNTIME_COMMAND_PROPAGATION_FILE
-    ]
-  },
-  {
-    gateId: 'trace_id_propagation',
-    contractStatus: 'required_by_auth_runtime_admission_context',
-    typedBoundaryStatus: AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
-    durableImplementationStatus: 'propagation_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_trace_id_propagation_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-      AUTH_RUNTIME_COMMAND_PROPAGATION_FILE
-    ]
-  },
-  {
-    gateId: 'session_store_contract',
-    contractStatus: IDENTITY_SESSION_STORE_STATUS,
-    typedBoundaryStatus: IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_identity_session_store_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      IDENTITY_SESSION_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
+  createRequiredAuthRuntimeReadinessGates({
+    authSessionRuntimeFile: AUTH_SESSION_RUNTIME_FILE,
+    authRuntimeAdmissionContextFile: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+    authRuntimeAdmissionContextBoundaryStatus:
+      AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
+    authRuntimeCommandPropagationFile: AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
+    identitySessionStoreFile: IDENTITY_SESSION_STORE_FILE,
+    identitySessionStoreStatus: IDENTITY_SESSION_STORE_STATUS,
+    identitySessionStoreAdapterBoundaryStatus:
+      IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
+    authDurableStorageAdmissionFile: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
+    authDurableStorageMigrationReadinessFile:
       AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'credential_vault_handoff',
-    contractStatus: AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS,
-    typedBoundaryStatus: AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS,
-    durableImplementationStatus: 'live_capability_client_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker:
-      'no_credential_vault_capability_handoff_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_CREDENTIAL_VAULT_HANDOFF_FILE
-    ]
-  },
-  {
-    gateId: 'passkey_challenge_store_contract',
-    contractStatus: AUTH_PASSKEY_CHALLENGE_STORE_STATUS,
-    typedBoundaryStatus: AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_passkey_challenge_store_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_PASSKEY_CHALLENGE_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'oauth_callback_state_verification',
-    contractStatus: AUTH_OAUTH_CALLBACK_STATE_STATUS,
-    typedBoundaryStatus: AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_oauth_callback_state_storage_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_OAUTH_CALLBACK_STATE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'audit_event_emission',
-    contractStatus: AUTH_AUDIT_EVENT_PERSISTENCE_STATUS,
-    typedBoundaryStatus: 'typed_port_no_durable_store',
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_auth_audit_event_persistence_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'auth_audit_storage_adapter',
-    contractStatus: AUTH_AUDIT_STORAGE_ADAPTER_STATUS,
-    typedBoundaryStatus: AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_auth_audit_storage_adapter_implementation',
-    evidenceContracts: [
-      AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-      AUTH_AUDIT_STORAGE_ADAPTER_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'idempotency_key_scope',
-    contractStatus: AUTH_IDEMPOTENCY_STORAGE_STATUS,
-    typedBoundaryStatus: AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_idempotency_storage_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-      AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
-      AUTH_IDEMPOTENCY_STORAGE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'refresh_token_rotation_without_plaintext_storage',
-    contractStatus: IDENTITY_SESSION_STORE_STATUS,
-    typedBoundaryStatus: IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
-    durableImplementationStatus: 'durable_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_refresh_token_rotation_storage_implementation',
-    evidenceContracts: [
-      AUTH_SESSION_RUNTIME_FILE,
-      IDENTITY_SESSION_STORE_FILE,
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'auth_durable_storage_migration_readiness',
-    contractStatus: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS,
-    typedBoundaryStatus: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS,
-    durableImplementationStatus: 'migration_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_auth_durable_storage_migration_implementation',
-    evidenceContracts: [
-      AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE
-    ]
-  },
-  {
-    gateId: 'auth_durable_storage_transaction_outbox_boundary',
-    contractStatus: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS,
-    typedBoundaryStatus: AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS,
-    durableImplementationStatus: 'transaction_outbox_implementation_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker:
-      'no_auth_durable_storage_transaction_outbox_implementation',
-    evidenceContracts: [
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE
-    ]
-  },
-  {
-    gateId: 'product_reviewer_approval',
-    contractStatus: 'required_by_auth_session_runtime',
-    typedBoundaryStatus: 'no_typed_boundary_needed',
-    durableImplementationStatus: 'review_missing',
-    reviewStatus: 'review_missing',
-    promotionBlocker: 'no_product_reviewer_approval',
-    evidenceContracts: [AUTH_SESSION_RUNTIME_FILE]
-  }
-] as const;
-
-const REQUIRED_AUTH_RUNTIME_READINESS_BLOCKERS =
-  REQUIRED_AUTH_RUNTIME_READINESS_GATES.map((gate) => gate.promotionBlocker);
-
-const REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS = [
-  'production_ready',
-  'live_auth_handler_ready',
-  'durable_storage_ready',
-  'transaction_manager_ready',
-  'outbox_dispatcher_ready',
-  'oauth_provider_exchange_ready',
-  'product_route_unblocked'
-] as const;
+    authDurableStorageMigrationReadinessStatus:
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS,
+    authDurableStorageMigrationReadinessBoundaryStatus:
+      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS,
+    authDurableStorageTransactionOutboxFile:
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
+    authDurableStorageTransactionOutboxStatus:
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS,
+    authDurableStorageTransactionOutboxBoundaryStatus:
+      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS,
+    authCredentialVaultHandoffFile: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+    authCredentialVaultHandoffStatus: AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS,
+    authCredentialVaultCapabilityClientBoundaryStatus:
+      AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS,
+    authPasskeyChallengeStoreFile: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
+    authPasskeyChallengeStoreStatus: AUTH_PASSKEY_CHALLENGE_STORE_STATUS,
+    authPasskeyChallengeStoreAdapterBoundaryStatus:
+      AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS,
+    authOauthCallbackStateFile: AUTH_OAUTH_CALLBACK_STATE_FILE,
+    authOauthCallbackStateStatus: AUTH_OAUTH_CALLBACK_STATE_STATUS,
+    authOauthCallbackStateAdapterBoundaryStatus:
+      AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS,
+    authAuditEventPersistenceFile: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
+    authAuditEventPersistenceStatus: AUTH_AUDIT_EVENT_PERSISTENCE_STATUS,
+    authAuditStorageAdapterFile: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+    authAuditStorageAdapterStatus: AUTH_AUDIT_STORAGE_ADAPTER_STATUS,
+    authAuditStorageAdapterBoundaryStatus:
+      AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS,
+    authIdempotencyStorageFile: AUTH_IDEMPOTENCY_STORAGE_FILE,
+    authIdempotencyStorageStatus: AUTH_IDEMPOTENCY_STORAGE_STATUS,
+    authIdempotencyStorageAdapterBoundaryStatus:
+      AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
+  });
 
 const REQUIRED_AUTH_RUNTIME_ADMISSION_CONTEXT_FIELDS = [
   'operation_id',
@@ -1553,7 +1409,13 @@ export async function validateRepositoryCoreContract(input: {
       : validateAuthSessionRuntimeContract(authSessionRuntime.value)),
     ...(authRuntimeReadiness.value === null
       ? []
-      : validateAuthRuntimeReadinessContract(authRuntimeReadiness.value)),
+      : validateAuthRuntimeReadinessContract({
+          value: authRuntimeReadiness.value,
+          file: AUTH_RUNTIME_READINESS_FILE,
+          status: AUTH_RUNTIME_READINESS_STATUS,
+          runtimeStatus: AUTH_SESSION_RUNTIME_STATUS,
+          requiredGates: REQUIRED_AUTH_RUNTIME_READINESS_GATES
+        })),
     ...(authRuntimeAdmissionContext.value === null
       ? []
       : validateAuthRuntimeAdmissionContextContract(
@@ -1873,95 +1735,6 @@ function validateAuthSessionRuntimeContract(value: unknown): readonly Diagnostic
       path: 'forbidden_runtime_claims',
       field: 'forbidden_runtime_claims',
       requiredEntries: REQUIRED_AUTH_SESSION_FORBIDDEN_RUNTIME_CLAIMS
-    })
-  );
-
-  return diagnostics;
-}
-
-function validateAuthRuntimeReadinessContract(
-  value: unknown
-): readonly Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
-
-  if (readPath(value, 'contract.status') !== AUTH_RUNTIME_READINESS_STATUS) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'contract.status',
-        `Core platform auth runtime readiness summary must stay \`${AUTH_RUNTIME_READINESS_STATUS}\` until durable implementation and review proof exist.`
-      )
-    );
-  }
-
-  if (readPath(value, 'contract.owner_boundary') !== 'identity') {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'contract.owner_boundary',
-        'Core platform auth runtime readiness summary must keep owner_boundary `identity`.'
-      )
-    );
-  }
-
-  if (readPath(value, 'contract.runtime_status') !== AUTH_SESSION_RUNTIME_STATUS) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'contract.runtime_status',
-        `Core platform auth runtime readiness summary must keep runtime_status \`${AUTH_SESSION_RUNTIME_STATUS}\`.`
-      )
-    );
-  }
-
-  if (readPath(value, 'promotion_ready') !== false) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'promotion_ready',
-        'Core platform auth runtime readiness summary must keep `promotion_ready` false until all promotion blockers are removed by durable proof.'
-      )
-    );
-  }
-
-  if (readPath(value, 'production_route_ready') !== false) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'production_route_ready',
-        'Core platform auth runtime readiness summary must keep `production_route_ready` false until product route promotion is reviewed.'
-      )
-    );
-  }
-
-  const gateStates = readPath(value, 'required_gate_states');
-
-  if (!Array.isArray(gateStates)) {
-    diagnostics.push(
-      createCoreDiagnostic(
-        AUTH_RUNTIME_READINESS_FILE,
-        'required_gate_states',
-        'Core platform auth runtime readiness summary must declare `required_gate_states`.'
-      )
-    );
-  } else {
-    diagnostics.push(...validateAuthRuntimeReadinessGateStates(gateStates));
-  }
-
-  diagnostics.push(
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: AUTH_RUNTIME_READINESS_FILE,
-      path: 'blocking_summary',
-      field: 'blocking_summary',
-      requiredEntries: REQUIRED_AUTH_RUNTIME_READINESS_BLOCKERS
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: AUTH_RUNTIME_READINESS_FILE,
-      path: 'forbidden_readiness_claims',
-      field: 'forbidden_readiness_claims',
-      requiredEntries: REQUIRED_AUTH_RUNTIME_READINESS_FORBIDDEN_CLAIMS
     })
   );
 
@@ -3567,89 +3340,4 @@ function validateAuthRuntimeAdmissionOperations(
   }
 
   return diagnostics;
-}
-
-function validateAuthRuntimeReadinessGateStates(
-  gateStates: readonly unknown[]
-): readonly Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
-
-  for (const requiredGate of REQUIRED_AUTH_RUNTIME_READINESS_GATES) {
-    const gate = gateStates.find(
-      (entry) =>
-        isRecord(entry) && readStringField(entry, 'gate_id') === requiredGate.gateId
-    );
-
-    if (!isRecord(gate)) {
-      diagnostics.push(
-        createCoreDiagnostic(
-          AUTH_RUNTIME_READINESS_FILE,
-          'required_gate_states',
-          `Core platform auth runtime readiness summary must include gate \`${requiredGate.gateId}\`.`
-        )
-      );
-      continue;
-    }
-
-    diagnostics.push(
-      ...validateReadinessGateField({
-        gate,
-        gateId: requiredGate.gateId,
-        field: 'contract_status',
-        expectedValue: requiredGate.contractStatus
-      }),
-      ...validateReadinessGateField({
-        gate,
-        gateId: requiredGate.gateId,
-        field: 'typed_boundary_status',
-        expectedValue: requiredGate.typedBoundaryStatus
-      }),
-      ...validateReadinessGateField({
-        gate,
-        gateId: requiredGate.gateId,
-        field: 'durable_implementation_status',
-        expectedValue: requiredGate.durableImplementationStatus
-      }),
-      ...validateReadinessGateField({
-        gate,
-        gateId: requiredGate.gateId,
-        field: 'review_status',
-        expectedValue: requiredGate.reviewStatus
-      }),
-      ...validateReadinessGateField({
-        gate,
-        gateId: requiredGate.gateId,
-        field: 'promotion_blocker',
-        expectedValue: requiredGate.promotionBlocker
-      }),
-      ...validateRequiredStringArrayEntries({
-        value: gate,
-        file: AUTH_RUNTIME_READINESS_FILE,
-        path: `required_gate_states.${requiredGate.gateId}.evidence_contracts`,
-        field: 'evidence_contracts',
-        requiredEntries: requiredGate.evidenceContracts
-      })
-    );
-  }
-
-  return diagnostics;
-}
-
-function validateReadinessGateField(input: {
-  readonly gate: Record<string, unknown>;
-  readonly gateId: string;
-  readonly field: string;
-  readonly expectedValue: string;
-}): readonly Diagnostic[] {
-  if (readStringField(input.gate, input.field) === input.expectedValue) {
-    return [];
-  }
-
-  return [
-    createCoreDiagnostic(
-      AUTH_RUNTIME_READINESS_FILE,
-      `required_gate_states.${input.gateId}.${input.field}`,
-      `Core platform auth runtime readiness gate \`${input.gateId}\` must keep \`${input.field}\` as \`${input.expectedValue}\`.`
-    )
-  ];
 }
