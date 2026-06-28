@@ -7,6 +7,7 @@ import {
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
 import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
+import { validateRepositoryAutomationContract } from './automation-rules.ts';
 import {
   buildPublicApiContractPolicy,
   validatePublicApiContracts
@@ -433,6 +434,13 @@ export async function validateArchitecture(
             publicApiContractPolicy
           )
         ]);
+  const repositoryAutomationDiagnostics =
+    repositoryServiceContract === null
+      ? []
+      : validateRepositoryAutomationContract({
+          repositoryServiceContract: repositoryServiceContract.value,
+          repositoryIndex
+        });
 
   return {
     diagnostics: [
@@ -607,6 +615,7 @@ export async function validateArchitecture(
       ...(repositoryServiceContract === null
         ? []
         : validateRepositoryServiceDomainContract(repositoryServiceContract.value)),
+      ...repositoryAutomationDiagnostics,
       ...repositoryServicePolicyDiagnostics
     ]
   };

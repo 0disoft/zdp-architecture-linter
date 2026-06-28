@@ -90,6 +90,15 @@ runtime:
 data:
   datastores:
     - privacy_credential_vault
+automation:
+  ci:
+    required: true
+    workflow_names:
+      - CI
+    required_status_checks:
+      - CI
+    private_dependency_token_required: false
+    required_secrets: []
 `
       }),
       async ({ architectureRoot, repositoryRoot }) => {
