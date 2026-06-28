@@ -11,6 +11,9 @@ const CORE_BOUNDARIES_FILE = 'contracts/core-boundaries.yaml';
 const COMMAND_ENVELOPE_FILE = 'contracts/command-envelope.yaml';
 const AUDIT_EVENT_FILE = 'contracts/audit-event.yaml';
 const CONSENT_RECORD_FILE = 'contracts/consent-record.yaml';
+const CORE_DB_SCHEMA_FILE = 'contracts/core-db-schema.yaml';
+const CORE_FOUNDATION_MIGRATION_FILE =
+  'migrations/postgresql/0001_core_foundation.sql';
 const AUTH_SESSION_RUNTIME_FILE = 'contracts/auth-session-runtime.yaml';
 const AUTH_RUNTIME_READINESS_FILE = 'contracts/auth-runtime-readiness.yaml';
 const AUTH_RUNTIME_ADMISSION_CONTEXT_FILE =
@@ -83,7 +86,7 @@ const AUTH_SESSION_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
 
 const REQUIRED_CORE_CI_WORKFLOW_SNIPPETS = [
-  'actions/checkout@v6',
+  'actions/checkout@v7',
   'dtolnay/rust-toolchain@stable',
   'components: rustfmt',
   'cargo fmt --check',
@@ -1302,6 +1305,7 @@ const REQUIRED_CORE_EVENT_OUTBOX_CONTROLS = [
   'outbox_rows_are_append_only',
   'delivery_attempt_rows_are_append_only',
   'cloud_event_id_unique',
+  'schema_version_positive_integer',
   'event_type_aggregate_command_unique',
   'payload_reference_only',
   'redacted_summary_only',
@@ -1432,6 +1436,8 @@ export async function validateRepositoryCoreContract(input: {
     commandEnvelope,
     auditEvent,
     consentRecord,
+    coreDbSchema,
+    coreFoundationMigration,
     authSessionRuntime,
     authRuntimeReadiness,
     authRuntimeAdmissionContext,
@@ -1453,6 +1459,8 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, COMMAND_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUDIT_EVENT_FILE),
       readRequiredYamlContract(input.repositoryRoot, CONSENT_RECORD_FILE),
+      readRequiredYamlContract(input.repositoryRoot, CORE_DB_SCHEMA_FILE),
+      readRequiredTextFile(input.repositoryRoot, CORE_FOUNDATION_MIGRATION_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_SESSION_RUNTIME_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_READINESS_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_RUNTIME_ADMISSION_CONTEXT_FILE),
@@ -1482,6 +1490,8 @@ export async function validateRepositoryCoreContract(input: {
     ...commandEnvelope.diagnostics,
     ...auditEvent.diagnostics,
     ...consentRecord.diagnostics,
+    ...coreDbSchema.diagnostics,
+    ...coreFoundationMigration.diagnostics,
     ...authSessionRuntime.diagnostics,
     ...authRuntimeReadiness.diagnostics,
     ...authRuntimeAdmissionContext.diagnostics,
@@ -1520,6 +1530,12 @@ export async function validateRepositoryCoreContract(input: {
     ...(consentRecord.value === null
       ? []
       : validateConsentRecordContract(consentRecord.value)),
+    ...(coreDbSchema.value === null
+      ? []
+      : validateCoreDbSchemaContract(coreDbSchema.value)),
+    ...(coreFoundationMigration.value === null
+      ? []
+      : validateCoreFoundationMigration(coreFoundationMigration.value)),
     ...(authSessionRuntime.value === null
       ? []
       : validateAuthSessionRuntimeContract(authSessionRuntime.value)),
@@ -3060,6 +3076,73 @@ function validateAuthAuditStorageAdapterContract(
       requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES
     })
   );
+
+  return diagnostics;
+}
+
+function validateCoreDbSchemaContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_DB_SCHEMA_FILE,
+      path: 'contract.migration_files',
+      field: 'contract.migration_files',
+      requiredEntries: [CORE_FOUNDATION_MIGRATION_FILE]
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_DB_SCHEMA_FILE,
+      path: 'core_events.schema_version_positive_integer_required',
+      field: 'core_events.schema_version_positive_integer_required',
+      expected: true,
+      message:
+        'Core DB schema contract must require core event outbox schema_version to be a positive integer.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_DB_SCHEMA_FILE,
+      path: 'core_events.outbox_table',
+      field: 'core_events.outbox_table',
+      expected: 'audit.core_event_outbox',
+      message:
+        'Core DB schema contract must keep core_events.outbox_table `audit.core_event_outbox`.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_DB_SCHEMA_FILE,
+      path: 'core_events.delivery_attempt_table',
+      field: 'core_events.delivery_attempt_table',
+      expected: 'audit.core_event_delivery_attempts',
+      message:
+        'Core DB schema contract must keep core_events.delivery_attempt_table `audit.core_event_delivery_attempts`.'
+    })
+  ];
+}
+
+function validateCoreFoundationMigration(source: string): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  for (const snippet of [
+    'CREATE TABLE IF NOT EXISTS audit.core_event_outbox',
+    'cloud_event_id text NOT NULL UNIQUE',
+    'cloud_event_type text NOT NULL CHECK',
+    'schema_version integer NOT NULL CHECK (schema_version > 0)',
+    'payload_ref text NOT NULL',
+    'available_at timestamptz NOT NULL',
+    'CREATE TABLE IF NOT EXISTS audit.core_event_delivery_attempts',
+    'audit.core_event_outbox is append-only',
+    'audit.core_event_delivery_attempts is append-only'
+  ]) {
+    if (!source.includes(snippet)) {
+      diagnostics.push(
+        createCoreDiagnostic(
+          CORE_FOUNDATION_MIGRATION_FILE,
+          'core_event_outbox.migration_shape',
+          `Core foundation migration must include \`${snippet}\` for the core event outbox contract.`
+        )
+      );
+    }
+  }
 
   return diagnostics;
 }

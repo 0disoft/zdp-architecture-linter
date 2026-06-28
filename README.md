@@ -171,11 +171,11 @@ fixtures/service-schema/fail/**
 
 0.39.22부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit event persistence 계약이 audit owner boundary, identity source boundary, auth operation/session effect metadata, append-only audit store, command/idempotency/request/trace reference, redacted summary, privileged evidence ref, auth failure event, audit write failure 차단, raw credential/provider payload 금지 기준을 유지하는지 검사한다.
 
-0.39.62부터 `ZDP-CORE-001`은 `zdp-core-platform` core event outbox 계약이 `migration_shape_declared_no_dispatcher`, dispatcher/replay/consumer 미구현 상태, CloudEvents source, money-relevant event 목록, append-only outbox/delivery attempt table, payload reference only, required outbox/delivery fields, dispatcher-ready claim 금지 기준을 유지하는지 검사한다. 이 상태는 dispatcher, replay worker, consumer inbox, production route unblock이 구현됐다는 뜻이 아니다.
+0.39.62부터 `ZDP-CORE-001`은 `zdp-core-platform` core event outbox 계약이 `migration_shape_declared_no_dispatcher`, dispatcher/replay/consumer 미구현 상태, CloudEvents source, money-relevant event 목록, append-only outbox/delivery attempt table, payload reference only, required outbox/delivery fields, dispatcher-ready claim 금지 기준을 유지하는지 검사한다. 0.39.70부터는 `contracts/core-db-schema.yaml`와 `migrations/postgresql/0001_core_foundation.sql`도 함께 읽어 `schema_version` 양의 정수 제약, outbox/delivery attempt table 이름, append-only evidence를 검사한다. 이 상태는 dispatcher, replay worker, consumer inbox, production route unblock이 구현됐다는 뜻이 아니다.
 
 0.39.24부터 `ZDP-CORE-001`은 auth audit event persistence 상태를 `append_receipt_gate_no_durable_store`로 올리고, `outcome`, `request_id`, `transaction_or_outbox_ref` 필드를 필수로 검사한다. 이 상태는 성공 응답 전 append receipt gate가 있다는 뜻이지 durable append-only adapter나 DB migration이 있다는 뜻은 아니다.
 
-0.39.26부터 `ZDP-CORE-001`은 `zdp-core-platform` GitHub Actions CI workflow가 `actions/checkout@v6`, stable Rust toolchain, `rustfmt`, `cargo fmt --check`, `cargo check --locked --all-targets`, `cargo test --locked` 계약을 유지하는지 검사한다.
+0.39.26부터 `ZDP-CORE-001`은 `zdp-core-platform` GitHub Actions CI workflow가 stable Rust toolchain, `rustfmt`, `cargo fmt --check`, `cargo check --locked --all-targets`, `cargo test --locked` 계약을 유지하는지 검사한다. 0.39.70부터 checkout action 기준은 `actions/checkout@v7`이다.
 
 0.39.25부터 `ZDP-CORE-001`은 `zdp-core-platform` auth audit storage adapter 계약이 `contract_only_no_adapter`, audit owner boundary, `contracts/auth-audit-event-persistence.yaml` source contract, append-only table 또는 transactional outbox adapter kind, storage/transaction/receipt/replay/review reference, append-only/unique-event enforcement, transaction/outbox atomicity, audit write failure 차단, redaction/raw-payload gate, raw credential/provider payload 금지 기준을 유지하는지 검사한다. 이 상태는 durable adapter나 DB migration 구현 완료를 의미하지 않는다.
 

@@ -62,7 +62,23 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `contracts/core-event-outbox.yaml`.'
       });
-      expect(diagnostics).toHaveLength(20);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CORE-001',
+        severity: 'error',
+        file: 'contracts/core-db-schema.yaml',
+        path: 'repository.root',
+        message:
+          'Core platform repository must include `contracts/core-db-schema.yaml`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CORE-001',
+        severity: 'error',
+        file: 'migrations/postgresql/0001_core_foundation.sql',
+        path: 'repository.root',
+        message:
+          'Core platform repository must include `migrations/postgresql/0001_core_foundation.sql`.'
+      });
+      expect(diagnostics).toHaveLength(22);
     });
   });
 
@@ -187,7 +203,7 @@ jobs:
           file: '.github/workflows/ci.yml',
           path: 'ci.workflow',
           message:
-            'Core platform CI workflow must include `actions/checkout@v6`.'
+            'Core platform CI workflow must include `actions/checkout@v7`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1096,6 +1112,14 @@ forbidden_claims:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/core-event-outbox.yaml',
+          path: 'controls',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `schema_version_positive_integer` in `controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
           path: 'forbidden_claims',
           message:
             'Core platform contract `contracts/core-event-outbox.yaml` must include `event_dispatcher_ready` in `forbidden_claims`.'
@@ -1778,7 +1802,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -1860,6 +1884,44 @@ required_fields:
 withdrawal_record:
   required_fields:
     - withdrawal_id
+`,
+    'contracts/core-db-schema.yaml': `
+contract:
+  migration_files:
+    - migrations/postgresql/0001_core_foundation.sql
+core_events:
+  outbox_table: audit.core_event_outbox
+  delivery_attempt_table: audit.core_event_delivery_attempts
+  schema_version_positive_integer_required: true
+`,
+    'migrations/postgresql/0001_core_foundation.sql': `
+CREATE TABLE IF NOT EXISTS audit.core_event_outbox (
+  core_event_outbox_id text PRIMARY KEY,
+  cloud_event_id text NOT NULL UNIQUE,
+  cloud_event_source text NOT NULL,
+  cloud_event_type text NOT NULL CHECK (cloud_event_type IN ('core.account.restricted')),
+  schema_version integer NOT NULL CHECK (schema_version > 0),
+  payload_ref text NOT NULL,
+  available_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit.core_event_delivery_attempts (
+  core_event_delivery_attempt_id text PRIMARY KEY
+);
+
+CREATE OR REPLACE FUNCTION audit.prevent_core_event_outbox_mutation()
+RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'audit.core_event_outbox is append-only';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION audit.prevent_core_event_delivery_attempts_mutation()
+RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'audit.core_event_delivery_attempts is append-only';
+END;
+$$ LANGUAGE plpgsql;
 `,
     'contracts/auth-session-runtime.yaml': `
 contract:
@@ -2662,6 +2724,7 @@ controls:
   - outbox_rows_are_append_only
   - delivery_attempt_rows_are_append_only
   - cloud_event_id_unique
+  - schema_version_positive_integer
   - event_type_aggregate_command_unique
   - payload_reference_only
   - redacted_summary_only
