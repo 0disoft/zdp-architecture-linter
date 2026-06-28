@@ -66,6 +66,7 @@ import {
   type RepositoryRoadmapEvidence,
   validateRepositoriesCatalog
 } from './repository-rules.ts';
+import { validateRepositoryCatalogSchema } from './repository-schema-validation.ts';
 import {
   validateRepositoryBaselineFiles,
   validateRepositoryRootMarkdownFiles
@@ -435,6 +436,10 @@ export async function validateArchitecture(
 
   return {
     diagnostics: [
+      ...(await validateRepositoryCatalogSchema({
+        architectureRoot: input.architectureRoot,
+        value: catalogs.repositories
+      })),
       ...validateRepositoriesCatalog(
         catalogs.repositories,
         repositoryAreaRules,

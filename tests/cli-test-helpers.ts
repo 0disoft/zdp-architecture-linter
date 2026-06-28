@@ -62,6 +62,11 @@ export function createMinimalArchitectureFiles(
       type: 'object',
       additionalProperties: true
     }),
+    'schemas/repository.schema.json': JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: true
+    }),
     'schemas/event.schema.json': JSON.stringify({
       $schema: 'https://json-schema.org/draft/2020-12/schema',
       type: 'object',
