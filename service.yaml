@@ -194,6 +194,49 @@ release:
   canary_policy: null
   feature_flag_required: false
 
+automation:
+  ci:
+    required: true
+    provider: github-actions
+    workflow_names:
+      - CI
+    required_status_checks:
+      - CI / validate
+    missing_reason: null
+    private_dependency_token_required: false
+    required_secrets: []
+  dependency_updates:
+    renovate_enabled: true
+    dependabot_enabled: false
+    conflict_policy: Renovate owns dependency update PRs; Dependabot stays disabled to avoid duplicate update streams.
+  ruleset:
+    required: false
+    required_status_checks: []
+    admin_bypass_policy: null
+  release_helper:
+    enabled: false
+    version_source_of_truth: package.json
+    changelog_policy: manual changelog until release automation is adopted
+  auto_merge:
+    enabled: false
+    required_checks: []
+    owner_review_required: true
+    major_update_allowed: false
+  stale_bot:
+    enabled: false
+    exempt_labels:
+      - security
+      - privacy
+      - money
+    security_issue_auto_close_allowed: false
+  templates:
+    issue_forms_secret_warning: false
+    pr_template_secret_warning: false
+    forbidden_submission_classes:
+      - secrets
+      - payment payloads
+      - customer raw data
+
 reliability:
   rpo: null
   rto: null
