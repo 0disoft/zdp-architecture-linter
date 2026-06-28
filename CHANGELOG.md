@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.71
+
+- `ZDP-APP-001`과 `ZDP-WEBPUB-001`의 GitHub Actions checkout action 계약을 `actions/checkout@v7`로 동기화했다.
+- 공개된 `zdp-design-system` sibling checkout 문구를 private-only 표현에서 public/private token boundary 표현으로 정리했다.
+
 ## 0.39.69
 
 - `ZDP-MONEY-004`가 payment outbox의 `outbox_id`와 `cloud_event_id` 분리, `cloud_event_type`, aggregate/cloud-event-type/idempotency scope를 검사하도록 맞췄다.

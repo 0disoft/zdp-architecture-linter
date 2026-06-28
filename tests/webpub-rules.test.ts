@@ -363,7 +363,7 @@ domain_status = candidate
     });
   });
 
-  test('fails when zdp-web-public CI omits private sibling provider checks', async () => {
+  test('fails when zdp-web-public CI omits sibling provider checks', async () => {
     await withRepositoryRoot(
       {
         ...createValidPublicWebRepositoryFiles(),
@@ -381,7 +381,7 @@ domain_status = candidate
           file: '.github/workflows/ci.yml',
           path: 'github.workflow.ci',
           message:
-            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `public-site:`.'
+            'zdp-web-public CI workflow must install sibling providers and run public site check/build; missing `public-site:`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-WEBPUB-001',
@@ -389,7 +389,7 @@ domain_status = candidate
           file: '.github/workflows/ci.yml',
           path: 'github.workflow.ci',
           message:
-            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `secrets.ZDP_CI_READ_TOKEN || github.token`.'
+            'zdp-web-public CI workflow must install sibling providers and run public site check/build; missing `secrets.ZDP_CI_READ_TOKEN || github.token`.'
         });
       }
     );
@@ -473,25 +473,25 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       'jobs:',
       '  public-site:',
       '    steps:',
-      '      - uses: actions/checkout@v6',
+      '      - uses: actions/checkout@v7',
       '        with:',
       '          path: projects/zdp-platforms/client-surfaces/zdp-web-public',
-      '      - uses: actions/checkout@v6',
+      '      - uses: actions/checkout@v7',
       '        with:',
       '          repository: 0disoft/zdp-design-system',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/client-surfaces/zdp-design-system',
-      '      - uses: actions/checkout@v6',
+      '      - uses: actions/checkout@v7',
       '        with:',
       '          repository: 0disoft/zdp-platform-localization',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-localization',
-      '      - uses: actions/checkout@v6',
+      '      - uses: actions/checkout@v7',
       '        with:',
       '          repository: 0disoft/zdp-platform-devex',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-devex',
-      '      - uses: actions/checkout@v6',
+      '      - uses: actions/checkout@v7',
       '        with:',
       '          repository: 0disoft/zdp-libs-ts',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',

@@ -73,7 +73,7 @@ const REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS = [
 
 const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'public-site:',
-  'uses: actions/checkout@v6',
+  'uses: actions/checkout@v7',
   'path: projects/zdp-platforms/client-surfaces/zdp-web-public',
   'repository: 0disoft/zdp-design-system',
   'path: projects/zdp-platforms/client-surfaces/zdp-design-system',
@@ -486,7 +486,7 @@ async function validateWebPublicOperationalGates(
       path: 'github.workflow.ci',
       snippets: REQUIRED_WEB_PUBLIC_CI_SNIPPETS,
       description:
-        'zdp-web-public CI workflow must install private sibling providers and run public site check/build'
+        'zdp-web-public CI workflow must install sibling providers and run public site check/build'
     }))
   );
 

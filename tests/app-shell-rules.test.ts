@@ -282,7 +282,7 @@ forbidden:
     });
   });
 
-  test('fails when app shell CI workflow loses private provider bootstrap', async () => {
+  test('fails when app shell CI workflow loses provider bootstrap', async () => {
     await withRepositoryRoot(
       {
         ...createValidAppShellFiles(),
@@ -600,11 +600,11 @@ jobs:
       ZDP_CORE_API_BASE_URL: http://127.0.0.1:3001
     steps:
       - name: Checkout web apps
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: projects/zdp-platforms/client-surfaces/zdp-web-apps
       - name: Checkout localization platform
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: 0disoft/zdp-platform-localization
           token: \${{ secrets.ZDP_CI_READ_TOKEN || github.token }}

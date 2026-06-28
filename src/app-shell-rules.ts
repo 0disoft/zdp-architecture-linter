@@ -86,7 +86,7 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
 ] as const;
 
 const REQUIRED_CI_WORKFLOW_SNIPPETS = [
-  'actions/checkout@v6',
+  'actions/checkout@v7',
   '0disoft/zdp-platform-localization',
   'secrets.ZDP_CI_READ_TOKEN || github.token',
   'projects/zdp-platforms/platform/zdp-platform-localization',
