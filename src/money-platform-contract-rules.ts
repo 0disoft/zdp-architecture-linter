@@ -2,17 +2,33 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
-
-const MONEY_REPOSITORY_NAME = 'zdp-money-platform';
-const MONEY_PLATFORM_CONTRACT_RULE_ID = 'ZDP-MONEY-PLATFORM-001';
-const MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID = 'ZDP-MONEY-004';
+import {
+  createMoneyDiagnostic,
+  formatError,
+  isMissingPathError,
+  isRecord,
+  MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID,
+  MONEY_PLATFORM_CONTRACT_RULE_ID,
+  MONEY_REPOSITORY_NAME,
+  readEventRefArrayPath,
+  readPath,
+  readRepositoryName,
+  readStringArrayPath,
+  readStringField,
+  validateExactValue,
+  validateRequiredStringArrayEntries
+} from './rules/money/contract-helpers.ts';
+import {
+  MONEY_DB_SCHEMA_FILE,
+  PAYMENT_WEBHOOK_FILE,
+  validateMoneyDbSchemaContract,
+  validatePaymentWebhookContract
+} from './rules/money/payment-webhook-outbox.ts';
 
 const MONEY_BOUNDARIES_FILE = 'contracts/money-boundaries.yaml';
 const MONEY_COMMAND_ENVELOPE_FILE = 'contracts/money-command-envelope.yaml';
 const LEDGER_ENTRY_FILE = 'contracts/ledger-entry.yaml';
 const LEDGER_STORAGE_FILE = 'contracts/ledger-storage.yaml';
-const PAYMENT_WEBHOOK_FILE = 'contracts/payment-webhook.yaml';
-const MONEY_DB_SCHEMA_FILE = 'contracts/money-db-schema.yaml';
 const ENTITLEMENT_CREDIT_FILE = 'contracts/entitlement-credit.yaml';
 const PACKAGE_FILE = 'package.json';
 const CARGO_TOML_FILE = 'Cargo.toml';
@@ -232,66 +248,6 @@ const REQUIRED_LEDGER_STORAGE_FORBIDDEN_ITEMS = [
   'idempotency_scope_missing',
   'product_repo_storage_access',
   'raw_provider_payload_in_ledger_row'
-] as const;
-const REQUIRED_WEBHOOK_FIELDS = [
-  'provider',
-  'provider_event_id',
-  'event_type',
-  'received_at',
-  'signature_verified',
-  'idempotency_key',
-  'request_id',
-  'trace_id',
-  'payload_hash',
-  'raw_payload_ref'
-] as const;
-const REQUIRED_WEBHOOK_FORBIDDEN_ITEMS = [
-  'logging_raw_payment_payload',
-  'logging_authorization_header',
-  'logging_cookie',
-  'product_repo_webhook_handler',
-  'direct_balance_change_before_idempotency_check'
-] as const;
-const REQUIRED_MONEY_DB_PAYMENT_TABLES = [
-  'money_payments.provider_webhook_events',
-  'money_payments.payment_webhook_processing',
-  'money_payments.payment_webhook_processing_history',
-  'money_payments.payment_outbox'
-] as const;
-const REQUIRED_PAYMENT_OUTBOX_FIELDS = [
-  'outbox_id',
-  'cloud_event_id',
-  'cloud_event_source',
-  'cloud_event_type',
-  'schema_version',
-  'aggregate_id',
-  'causation_command_id',
-  'audit_event_ref',
-  'idempotency_key',
-  'request_id',
-  'trace_id',
-  'payload_ref_kind',
-  'payload_ref',
-  'payload_hash',
-  'available_at',
-  'delivery_status',
-  'delivery_attempt_count',
-  'max_delivery_attempts',
-  'claimed_by',
-  'claim_token',
-  'claim_expires_at',
-  'row_version'
-] as const;
-const REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES = [
-  'pending',
-  'claimed',
-  'delivered',
-  'dead_lettered'
-] as const;
-const REQUIRED_PAYMENT_OUTBOX_IDEMPOTENCY_SCOPE = [
-  'aggregate_id',
-  'cloud_event_type',
-  'idempotency_key'
 ] as const;
 const REQUIRED_ENTITLEMENT_FORBIDDEN_ITEMS = [
   'entitlement_without_money_or_manual_adjustment_ref',
@@ -929,213 +885,6 @@ function validateLedgerStorageContract(value: unknown): readonly Diagnostic[] {
       path: 'forbidden',
       field: 'forbidden',
       requiredEntries: REQUIRED_LEDGER_STORAGE_FORBIDDEN_ITEMS
-    })
-  ];
-}
-
-function validatePaymentWebhookContract(value: unknown): readonly Diagnostic[] {
-  return [
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'ingress.received_by',
-      expected: 'zdp-edge-workers',
-      message: 'Payment webhooks must be received by `zdp-edge-workers`.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'ingress.processed_by',
-      expected: MONEY_REPOSITORY_NAME,
-      message: 'Payment webhooks must be processed by `zdp-money-platform`.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'ingress.received_and_processed_are_separate',
-      expected: true,
-      message: 'Payment webhook receipt and processing must stay separate.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'ingress.product_repo_direct_processing_allowed',
-      expected: false,
-      message: 'Product repositories must not process payment webhooks directly.'
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'required_fields',
-      field: 'required_fields',
-      requiredEntries: REQUIRED_WEBHOOK_FIELDS
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'signature.verification_required_before_processing',
-      expected: true,
-      message: 'Payment webhook signature verification must happen before processing.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'signature.secret_storage_owner',
-      expected: 'zdp-privacy-credential-vault',
-      message: 'Payment webhook secrets must be owned by credential vault.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'idempotency.duplicate_event_must_not_mutate_ledger_twice',
-      expected: true,
-      message: 'Duplicate payment webhook events must not mutate ledger twice.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'handoff.queue_required_before_processing',
-      expected: true,
-      message: 'Payment webhooks must use queue handoff before processing.'
-    }),
-    ...validateExactValue({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'handoff.dead_letter_required',
-      expected: true,
-      message: 'Payment webhook handoff must require a dead-letter path.'
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: PAYMENT_WEBHOOK_FILE,
-      path: 'forbidden',
-      field: 'forbidden',
-      requiredEntries: REQUIRED_WEBHOOK_FORBIDDEN_ITEMS
-    })
-  ];
-}
-
-function validateMoneyDbSchemaContract(value: unknown): readonly Diagnostic[] {
-  return [
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'tables.payments_required',
-      field: 'tables.payments_required',
-      requiredEntries: REQUIRED_MONEY_DB_PAYMENT_TABLES,
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.raw_provider_payload_storage_allowed',
-      expected: false,
-      message: 'Money DB schema must not allow raw provider payload storage.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payload_hash_required',
-      expected: true,
-      message: 'Money DB schema must require payload hashes for payment records.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_method_secret_storage_allowed',
-      expected: false,
-      message: 'Money DB schema must not allow payment method secret storage.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.provider_webhook_events_append_only',
-      expected: true,
-      message: 'Provider webhook events must remain append-only.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.webhook_processing_history_append_only',
-      expected: true,
-      message: 'Payment webhook processing history must remain append-only.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_dispatch_contract_required',
-      expected: true,
-      message: 'Payment outbox dispatch contract must remain required.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_required_fields',
-      field: 'payments.payment_outbox_required_fields',
-      requiredEntries: REQUIRED_PAYMENT_OUTBOX_FIELDS,
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_delivery_statuses',
-      field: 'payments.payment_outbox_delivery_statuses',
-      requiredEntries: REQUIRED_PAYMENT_OUTBOX_DELIVERY_STATUSES,
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_delivery_attempts_required',
-      expected: true,
-      message: 'Payment outbox delivery attempts must remain required.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_claim_lock_required',
-      expected: true,
-      message: 'Payment outbox claim lock must remain required.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_claim_requires_token_and_lease',
-      expected: true,
-      message: 'Payment outbox claim must require token and lease fields.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_claim_token_unique_required',
-      expected: true,
-      message: 'Payment outbox claim token uniqueness must remain required.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateExactValue({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_compare_and_swap_required',
-      expected: true,
-      message: 'Payment outbox updates must keep row-version compare-and-swap required.',
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
-    }),
-    ...validateRequiredStringArrayEntries({
-      value,
-      file: MONEY_DB_SCHEMA_FILE,
-      path: 'payments.payment_outbox_idempotency_scope',
-      field: 'payments.payment_outbox_idempotency_scope',
-      requiredEntries: REQUIRED_PAYMENT_OUTBOX_IDEMPOTENCY_SCOPE,
-      ruleId: MONEY_PAYMENT_WEBHOOK_OUTBOX_RULE_ID
     })
   ];
 }
@@ -2014,151 +1763,4 @@ function validatePackageScriptIncludes(input: {
   }
 
   return diagnostics;
-}
-
-function validateRequiredStringArrayEntries(input: {
-  readonly value: unknown;
-  readonly file: string;
-  readonly path: string;
-  readonly field: string;
-  readonly requiredEntries: readonly string[];
-  readonly ruleId?: string;
-  readonly readEntries?: (value: unknown, path: string) => readonly string[];
-}): readonly Diagnostic[] {
-  const entries = (input.readEntries ?? readStringArrayPath)(input.value, input.field);
-  const diagnostics: Diagnostic[] = [];
-
-  for (const requiredEntry of input.requiredEntries) {
-    if (entries.includes(requiredEntry)) {
-      continue;
-    }
-
-    diagnostics.push(
-      createMoneyDiagnostic(
-        input.file,
-        input.path,
-        `Money platform contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`,
-        input.ruleId
-      )
-    );
-  }
-
-  return diagnostics;
-}
-
-function validateExactValue(input: {
-  readonly value: unknown;
-  readonly file: string;
-  readonly path: string;
-  readonly expected: unknown;
-  readonly message: string;
-  readonly ruleId?: string;
-}): readonly Diagnostic[] {
-  const actual = readPath(input.value, input.path);
-
-  if (actual === input.expected) {
-    return [];
-  }
-
-  return [
-    createMoneyDiagnostic(input.file, input.path, input.message, input.ruleId)
-  ];
-}
-
-function readRepositoryName(value: unknown): string | null {
-  if (!isRecord(value) || !isRecord(value.service)) {
-    return null;
-  }
-
-  return readStringField(value.service, 'repo');
-}
-
-function readStringArrayPath(value: unknown, path: string): readonly string[] {
-  const candidate = readPath(value, path);
-
-  if (!Array.isArray(candidate)) {
-    return [];
-  }
-
-  return candidate.flatMap((entry) =>
-    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
-  );
-}
-
-function readEventRefArrayPath(value: unknown, path: string): readonly string[] {
-  const candidate = readPath(value, path);
-
-  if (!Array.isArray(candidate)) {
-    return [];
-  }
-
-  return candidate.flatMap((entry) => {
-    if (typeof entry === 'string' && entry.trim().length > 0) {
-      return [entry.trim()];
-    }
-
-    if (!isRecord(entry)) {
-      return [];
-    }
-
-    const id = entry.id;
-
-    return typeof id === 'string' && id.trim().length > 0 ? [id.trim()] : [];
-  });
-}
-
-function readPath(value: unknown, path: string): unknown {
-  let current = value;
-
-  for (const segment of path.split('.')) {
-    if (!isRecord(current)) {
-      return undefined;
-    }
-
-    current = current[segment];
-  }
-
-  return current;
-}
-
-function readStringField(
-  value: Record<string, unknown>,
-  field: string
-): string | null {
-  const candidate = value[field];
-
-  return typeof candidate === 'string' && candidate.trim().length > 0
-    ? candidate.trim()
-    : null;
-}
-
-function createMoneyDiagnostic(
-  file: string,
-  path: string,
-  message: string,
-  ruleId = MONEY_PLATFORM_CONTRACT_RULE_ID
-): Diagnostic {
-  return {
-    ruleId,
-    severity: 'error',
-    file,
-    path,
-    message
-  };
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    (error as NodeJS.ErrnoException).code === 'ENOENT'
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
