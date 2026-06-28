@@ -29,7 +29,7 @@ import { buildRepositoryIndex } from '../src/repository-rules.ts';
 import {
   buildRepositoryServiceContractCatalog,
   mapServiceCatalogDiagnosticsToRepositoryServiceContract
-} from '../src/rules/service-contract-policy-rules.ts';
+} from '../src/rules/index.ts';
 import {
   buildTierOperationalContractPolicy,
   validateTierOperationalContracts

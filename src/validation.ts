@@ -7,7 +7,11 @@ import {
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
 import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
-import { validateRepositoryAutomationContract } from './rules/automation-rules.ts';
+import {
+  mapServiceCatalogDiagnosticsToRepositoryServiceContract,
+  validateRepositoryAutomationContract,
+  validateRepositoryServiceDomainContract
+} from './rules/index.ts';
 import {
   buildPublicApiContractPolicy,
   validatePublicApiContracts
@@ -87,10 +91,6 @@ import {
   validateRepositoryServiceContractEventReferences,
   validateRepositoryServiceContractProviderReferences
 } from './service-contract-reference-rules.ts';
-import {
-  mapServiceCatalogDiagnosticsToRepositoryServiceContract
-} from './rules/service-contract-policy-rules.ts';
-import { validateRepositoryServiceDomainContract } from './rules/service-domain-rules.ts';
 import {
   loadRepositoryServiceContract,
   validateRepositoryServiceContract,
