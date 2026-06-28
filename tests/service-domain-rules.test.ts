@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { validateRepositoryServiceDomainContract } from '../src/service-domain-rules.ts';
+import { validateRepositoryServiceDomainContract } from '../src/rules/service-domain-rules.ts';
 
 describe('repository service contract domain rules', () => {
   test('passes for candidate domains that are not public yet', () => {

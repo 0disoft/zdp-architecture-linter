@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { validateRepositoryAutomationContract } from '../src/automation-rules.ts';
+import { validateRepositoryAutomationContract } from '../src/rules/automation-rules.ts';
 import { buildRepositoryIndex } from '../src/repository-rules.ts';
 
 const repositoryIndex = buildRepositoryIndex({

@@ -1,4 +1,4 @@
-import type { Diagnostic } from './diagnostics.ts';
+import type { Diagnostic } from '../diagnostics.ts';
 
 const SERVICE_CONTRACT_FILE = 'service.yaml';
 

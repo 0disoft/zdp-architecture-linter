@@ -30,7 +30,7 @@ import {
 } from './repository-rules.ts';
 import {
   buildRepositoryServiceContractCatalog
-} from './service-contract-policy-rules.ts';
+} from './rules/service-contract-policy-rules.ts';
 import {
   buildServiceIndex,
   type ServiceCatalogRecord,

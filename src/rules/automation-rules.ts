@@ -1,5 +1,5 @@
-import type { Diagnostic } from './diagnostics.ts';
-import type { RepositoryIndex } from './repository-rules.ts';
+import type { Diagnostic } from '../diagnostics.ts';
+import type { RepositoryIndex } from '../repository-rules.ts';
 
 const SERVICE_CONTRACT_FILE = 'service.yaml';
 const DEPLOY_UNIT_STAGE = 'deploy_unit';
