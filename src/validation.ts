@@ -37,7 +37,7 @@ import {
   validateDatastoreOwnerReferences,
   validateServiceDatastoreReferences
 } from './datastore-rules.ts';
-import type { ValidationResult } from './diagnostics.ts';
+import type { Diagnostic, ValidationResult } from './diagnostics.ts';
 import {
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
@@ -130,6 +130,59 @@ import { validateRepositoryTermSheetContract } from './xcut-term-rules.ts';
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+}
+
+interface RepositoryContractValidatorInput {
+  readonly repositoryRoot: string;
+  readonly repositoryServiceContract: unknown;
+}
+
+type RepositoryContractValidator = (
+  input: RepositoryContractValidatorInput
+) => readonly Diagnostic[] | Promise<readonly Diagnostic[]>;
+
+const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
+  validateRepositoryWebpubContract,
+  validateRepositoryTermSheetContract,
+  validateRepositoryCoreContract,
+  validateRepositoryAppShellContract,
+  validateRepositoryRuntimeContract,
+  validateRepositoryApiContractsContract,
+  validateRepositoryLibsContract,
+  validateRepositoryLocalizationContract,
+  validateRepositoryClientSdksContract,
+  validateRepositoryEdgeContract,
+  validateRepositoryObservabilityContract,
+  validateRepositoryInfraContract,
+  validateRepositorySecurityContract,
+  validateRepositoryDataPlatformContract,
+  validateRepositoryGrowthLabContract,
+  validateRepositoryPrivacyContract,
+  validateRepositoryCredentialVaultContract,
+  validateRepositoryConnectorsContract,
+  validateRepositoryMoneyPlatformContract
+] as const;
+
+async function validateRepositoryContractRegistry(input: {
+  readonly repositoryRoot: string | undefined;
+  readonly repositoryServiceContract: unknown;
+}): Promise<readonly Diagnostic[]> {
+  if (input.repositoryRoot === undefined) {
+    return [];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  for (const validateRepositoryContract of REPOSITORY_CONTRACT_VALIDATORS) {
+    diagnostics.push(
+      ...(await validateRepositoryContract({
+        repositoryRoot: input.repositoryRoot,
+        repositoryServiceContract: input.repositoryServiceContract
+      }))
+    );
+  }
+
+  return diagnostics;
 }
 
 export async function validateArchitecture(
@@ -232,139 +285,10 @@ export async function validateArchitecture(
           repositoryServiceContract: repositoryServiceContract?.value ?? null,
           repositoryIndex
         });
-  const repositoryWebpubDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryWebpubContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryTermSheetDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryTermSheetContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryCoreContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryCoreContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryAppShellContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryAppShellContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryRuntimeContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryRuntimeContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryApiContractsContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryApiContractsContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryLibsContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryLibsContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryLocalizationContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryLocalizationContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryClientSdksContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryClientSdksContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryEdgeContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryEdgeContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryObservabilityContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryObservabilityContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryInfraContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryInfraContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositorySecurityContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositorySecurityContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryDataPlatformContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryDataPlatformContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryGrowthLabContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryGrowthLabContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryPrivacyContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryPrivacyContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryCredentialVaultContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryCredentialVaultContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryConnectorsContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryConnectorsContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
-  const repositoryMoneyPlatformContractDiagnostics =
-    input.repositoryRoot === undefined
-      ? []
-      : await validateRepositoryMoneyPlatformContract({
-          repositoryRoot: input.repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null
-        });
+  const repositoryContractDiagnostics = await validateRepositoryContractRegistry({
+    repositoryRoot: input.repositoryRoot,
+    repositoryServiceContract: repositoryServiceContract?.value ?? null
+  });
   const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
   const repositoryServicePolicyDiagnostics =
     repositoryServiceContractCatalog === null
@@ -561,25 +485,7 @@ export async function validateArchitecture(
       ...serviceSchemaDiagnostics,
       ...repositoryBaselineDiagnostics,
       ...repositoryMarkdownDiagnostics,
-      ...repositoryWebpubDiagnostics,
-      ...repositoryTermSheetDiagnostics,
-      ...repositoryCoreContractDiagnostics,
-      ...repositoryAppShellContractDiagnostics,
-      ...repositoryRuntimeContractDiagnostics,
-      ...repositoryApiContractsContractDiagnostics,
-      ...repositoryLibsContractDiagnostics,
-      ...repositoryLocalizationContractDiagnostics,
-      ...repositoryClientSdksContractDiagnostics,
-      ...repositoryEdgeContractDiagnostics,
-      ...repositoryObservabilityContractDiagnostics,
-      ...repositoryInfraContractDiagnostics,
-      ...repositorySecurityContractDiagnostics,
-      ...repositoryDataPlatformContractDiagnostics,
-      ...repositoryGrowthLabContractDiagnostics,
-      ...repositoryPrivacyContractDiagnostics,
-      ...repositoryCredentialVaultContractDiagnostics,
-      ...repositoryConnectorsContractDiagnostics,
-      ...repositoryMoneyPlatformContractDiagnostics,
+      ...repositoryContractDiagnostics,
       ...repositoryServiceDiagnostics,
       ...(repositoryServiceContract === null
         ? []
