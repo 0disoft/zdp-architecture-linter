@@ -23,20 +23,14 @@ import {
   validateCoreCiWorkflow
 } from './rules/core/core-baseline.ts';
 import {
-  AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
   AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-  AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS,
   AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
   AUTH_SESSION_RUNTIME_FILE,
-  AUTH_SESSION_RUNTIME_STATUS,
   validateAuthRuntimeAdmissionContextContract,
   validateAuthRuntimeCommandPropagationContract,
   validateAuthSessionRuntimeContract
 } from './rules/core/auth-runtime-contracts.ts';
-import {
-  createRequiredAuthRuntimeReadinessGates,
-  validateAuthRuntimeReadinessContract
-} from './rules/core/auth-runtime-readiness.ts';
+import { validateAuthRuntimeReadinessContract } from './rules/core/auth-runtime-readiness.ts';
 import {
   CORE_EVENT_OUTBOX_FILE,
   CORE_EVENT_OUTBOX_STATUS,
@@ -49,115 +43,44 @@ import {
   validateCoreFoundationMigration
 } from './rules/core/core-db-schema.ts';
 import {
-  AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS,
   AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-  AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS,
   AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-  AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS,
-  AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS,
   AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
-  AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS,
   validateAuthDurableStorageAdmissionContract,
   validateAuthDurableStorageMigrationReadinessContract,
   validateAuthDurableStorageTransactionOutboxContract
 } from './rules/core/auth-durable-storage.ts';
 import {
-  IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
   IDENTITY_SESSION_STORE_FILE,
-  IDENTITY_SESSION_STORE_STATUS,
   validateIdentitySessionStoreContract
 } from './rules/core/auth-identity-session-store.ts';
 import {
-  AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS,
   AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
-  AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS,
   validateAuthCredentialVaultHandoffContract
 } from './rules/core/auth-credential-vault-handoff.ts';
 import {
-  AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS,
   AUTH_OAUTH_CALLBACK_STATE_FILE,
-  AUTH_OAUTH_CALLBACK_STATE_STATUS,
-  AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS,
   AUTH_PASSKEY_CHALLENGE_STORE_FILE,
-  AUTH_PASSKEY_CHALLENGE_STORE_STATUS,
   validateAuthOauthCallbackStateContract,
   validateAuthPasskeyChallengeStoreContract
 } from './rules/core/auth-challenge-state.ts';
 import {
   AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-  AUTH_AUDIT_EVENT_PERSISTENCE_STATUS,
-  AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS,
   AUTH_AUDIT_STORAGE_ADAPTER_FILE,
-  AUTH_AUDIT_STORAGE_ADAPTER_STATUS,
   validateAuthAuditEventPersistenceContract,
   validateAuthAuditStorageAdapterContract
 } from './rules/core/auth-audit.ts';
 import {
-  AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS,
   AUTH_IDEMPOTENCY_STORAGE_FILE,
-  AUTH_IDEMPOTENCY_STORAGE_STATUS,
   validateAuthIdempotencyStorageContract
 } from './rules/core/auth-idempotency-storage.ts';
-
-const AUTH_RUNTIME_READINESS_FILE = 'contracts/auth-runtime-readiness.yaml';
-
-const AUTH_RUNTIME_READINESS_STATUS =
-  'readiness_summary_no_runtime_promotion';
-
-const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
-  createRequiredAuthRuntimeReadinessGates({
-    authSessionRuntimeFile: AUTH_SESSION_RUNTIME_FILE,
-    authRuntimeAdmissionContextFile: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-    authRuntimeAdmissionContextBoundaryStatus:
-      AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
-    authRuntimeCommandPropagationFile: AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
-    identitySessionStoreFile: IDENTITY_SESSION_STORE_FILE,
-    identitySessionStoreStatus: IDENTITY_SESSION_STORE_STATUS,
-    identitySessionStoreAdapterBoundaryStatus:
-      IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS,
-    authDurableStorageAdmissionFile: AUTH_DURABLE_STORAGE_ADMISSION_FILE,
-    authDurableStorageMigrationReadinessFile:
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
-    authDurableStorageMigrationReadinessStatus:
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS,
-    authDurableStorageMigrationReadinessBoundaryStatus:
-      AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS,
-    authDurableStorageTransactionOutboxFile:
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
-    authDurableStorageTransactionOutboxStatus:
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS,
-    authDurableStorageTransactionOutboxBoundaryStatus:
-      AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS,
-    authCredentialVaultHandoffFile: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
-    authCredentialVaultHandoffStatus: AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS,
-    authCredentialVaultCapabilityClientBoundaryStatus:
-      AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS,
-    authPasskeyChallengeStoreFile: AUTH_PASSKEY_CHALLENGE_STORE_FILE,
-    authPasskeyChallengeStoreStatus: AUTH_PASSKEY_CHALLENGE_STORE_STATUS,
-    authPasskeyChallengeStoreAdapterBoundaryStatus:
-      AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS,
-    authOauthCallbackStateFile: AUTH_OAUTH_CALLBACK_STATE_FILE,
-    authOauthCallbackStateStatus: AUTH_OAUTH_CALLBACK_STATE_STATUS,
-    authOauthCallbackStateAdapterBoundaryStatus:
-      AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS,
-    authAuditEventPersistenceFile: AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
-    authAuditEventPersistenceStatus: AUTH_AUDIT_EVENT_PERSISTENCE_STATUS,
-    authAuditStorageAdapterFile: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
-    authAuditStorageAdapterStatus: AUTH_AUDIT_STORAGE_ADAPTER_STATUS,
-    authAuditStorageAdapterBoundaryStatus:
-      AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS,
-    authIdempotencyStorageFile: AUTH_IDEMPOTENCY_STORAGE_FILE,
-    authIdempotencyStorageStatus: AUTH_IDEMPOTENCY_STORAGE_STATUS,
-    authIdempotencyStorageAdapterBoundaryStatus:
-      AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
-  });
-
-const AUTH_DURABLE_STORAGE_CONTRACT_REFS = {
-  authSessionRuntimeStatus: AUTH_SESSION_RUNTIME_STATUS,
-  authRuntimeReadinessFile: AUTH_RUNTIME_READINESS_FILE,
-  authRuntimeAdmissionContextFile: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-  authRuntimeCommandPropagationFile: AUTH_RUNTIME_COMMAND_PROPAGATION_FILE
-} as const;
+import {
+  AUTH_DURABLE_STORAGE_CONTRACT_REFS,
+  AUTH_RUNTIME_READINESS_FILE,
+  AUTH_RUNTIME_READINESS_RUNTIME_STATUS,
+  AUTH_RUNTIME_READINESS_STATUS,
+  REQUIRED_AUTH_RUNTIME_READINESS_GATES
+} from './rules/core/auth-contract-wiring.ts';
 
 export async function validateRepositoryCoreContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -285,7 +208,7 @@ export async function validateRepositoryCoreContract(input: {
           value: authRuntimeReadiness.value,
           file: AUTH_RUNTIME_READINESS_FILE,
           status: AUTH_RUNTIME_READINESS_STATUS,
-          runtimeStatus: AUTH_SESSION_RUNTIME_STATUS,
+          runtimeStatus: AUTH_RUNTIME_READINESS_RUNTIME_STATUS,
           requiredGates: REQUIRED_AUTH_RUNTIME_READINESS_GATES
         })),
     ...(authRuntimeAdmissionContext.value === null
