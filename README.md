@@ -184,6 +184,8 @@ fixtures/service-schema/fail/**
 
 0.39.95부터 `ZDP-AUTO-006`은 `automation.auto_merge.enabled`가 `true`인 deploy unit 저장소에서 `required_checks`가 비어 있거나, `owner_review_required`가 `true`가 아니거나, `major_update_allowed`가 `false`가 아니면 warning으로 보고한다.
 
+0.39.96부터 `ZDP-AUTO-007`은 `automation.stale_bot.enabled`가 `true`인 deploy unit 저장소에서 `exempt_labels`가 `bug`와 `security`를 포함하지 않거나, `security_issue_auto_close_allowed`가 `false`가 아니면 warning으로 보고한다.
+
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 
 0.39.37부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime command propagation 계약이 `contract_only_no_live_handler`, `typed_propagation_boundary_no_live_handler`, `contracts/auth-runtime-admission-context.yaml` source, request/trace/idempotency/resource/audit metadata, session/passkey/OAuth/audit/idempotency target, raw credential/provider payload 금지선을 유지하는지 검사한다. readiness summary는 이 계약을 evidence로 참조해도 live handler, durable propagation, DB migration, storage adapter, audit persistence, provider token exchange, product route unblock proof로 취급하면 안 된다.

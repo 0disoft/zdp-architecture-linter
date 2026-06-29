@@ -563,6 +563,63 @@ describe('repository automation contracts', () => {
       }
     ]);
   });
+
+  test('passes when stale bot exempts bug and security issues', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          stale_bot: {
+            enabled: true,
+            exempt_labels: ['bug', 'security', 'privacy'],
+            security_issue_auto_close_allowed: false
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('warns when stale bot can close bug or security issues', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          stale_bot: {
+            enabled: true,
+            exempt_labels: ['triage'],
+            security_issue_auto_close_allowed: true
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AUTO-007',
+        severity: 'warning',
+        file: 'service.yaml',
+        path: 'automation.stale_bot',
+        message:
+          'Deploy unit stale bot should exempt bug and security labels, and must not auto-close security issues.'
+      }
+    ]);
+  });
 });
 
 function createServiceContract(

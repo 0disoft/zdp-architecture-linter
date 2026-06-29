@@ -11,6 +11,7 @@ const AUTO_RULESET_STATUS_CHECK_RULE_ID = 'ZDP-AUTO-003';
 const AUTO_RELEASE_HELPER_POLICY_RULE_ID = 'ZDP-AUTO-004';
 const AUTO_TEMPLATE_SECRET_WARNING_RULE_ID = 'ZDP-AUTO-005';
 const AUTO_AUTO_MERGE_GUARD_RULE_ID = 'ZDP-AUTO-006';
+const AUTO_STALE_BOT_SAFETY_RULE_ID = 'ZDP-AUTO-007';
 
 const RENOVATE_CONFIG_PATHS = [
   'renovate.json',
@@ -62,6 +63,8 @@ const REQUIRED_FORBIDDEN_SUBMISSION_CLASSES = [
   'customer raw data'
 ] as const;
 
+const STALE_BOT_REQUIRED_EXEMPT_LABELS = ['bug', 'security'] as const;
+
 export function validateRepositoryAutomationContract(input: {
   readonly repositoryRoot?: string;
   readonly repositoryServiceContract: unknown;
@@ -111,6 +114,10 @@ export function validateRepositoryAutomationContract(input: {
     automation !== null && isRecord(automation.auto_merge)
       ? automation.auto_merge
       : null;
+  const staleBot =
+    automation !== null && isRecord(automation.stale_bot)
+      ? automation.stale_bot
+      : null;
 
   return [
     ...validateCiContract(ci),
@@ -127,7 +134,8 @@ export function validateRepositoryAutomationContract(input: {
       repositoryRoot: input.repositoryRoot,
       templates
     }),
-    ...validateAutoMergeGuards(autoMerge)
+    ...validateAutoMergeGuards(autoMerge),
+    ...validateStaleBotSafety(staleBot)
   ];
 }
 
@@ -327,6 +335,37 @@ function validateAutoMergeGuards(
   ];
 }
 
+function validateStaleBotSafety(
+  staleBot: Record<string, unknown> | null
+): readonly Diagnostic[] {
+  if (staleBot === null || staleBot.enabled !== true) {
+    return [];
+  }
+
+  const exemptLabels = new Set(
+    readStringArray(staleBot.exempt_labels).map((value) =>
+      value.trim().toLowerCase()
+    )
+  );
+  const missingRequiredExemptLabel = STALE_BOT_REQUIRED_EXEMPT_LABELS.some(
+    (label) => !exemptLabels.has(label)
+  );
+  const securityIssueAutoCloseAllowed =
+    staleBot.security_issue_auto_close_allowed === true;
+
+  if (!missingRequiredExemptLabel && !securityIssueAutoCloseAllowed) {
+    return [];
+  }
+
+  return [
+    createAutomationDiagnostic(
+      AUTO_STALE_BOT_SAFETY_RULE_ID,
+      'automation.stale_bot',
+      'Deploy unit stale bot should exempt bug and security labels, and must not auto-close security issues.'
+    )
+  ];
+}
+
 function createAutomationDiagnostic(
   ruleId:
     | typeof AUTO_CI_CONTRACT_RULE_ID
@@ -334,7 +373,8 @@ function createAutomationDiagnostic(
     | typeof AUTO_RULESET_STATUS_CHECK_RULE_ID
     | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID
     | typeof AUTO_TEMPLATE_SECRET_WARNING_RULE_ID
-    | typeof AUTO_AUTO_MERGE_GUARD_RULE_ID,
+    | typeof AUTO_AUTO_MERGE_GUARD_RULE_ID
+    | typeof AUTO_STALE_BOT_SAFETY_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {
