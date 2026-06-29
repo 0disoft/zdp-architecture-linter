@@ -23,6 +23,34 @@ describe('cross-cutting error envelope rules', () => {
     });
   });
 
+  test('skips non-public service notes that mention errors without declaring an error contract', async () => {
+    await withRepositoryRoot(
+      {
+        'service.yaml': `
+domain:
+  public_api: false
+notes:
+  - CLI JSON envelope contract success for implemented commands and expected errors.
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryErrorEnvelopeContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            domain: {
+              public_api: false
+            },
+            api: {
+              exposure: 'none'
+            }
+          }
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('passes standard API error envelope contracts', async () => {
     await withRepositoryRoot(
       {

@@ -41,6 +41,8 @@ const PUBLIC_API_EXPOSURES = new Set(['public', 'partner']);
 
 const ERROR_CONTRACT_MARKER_PATTERN =
   /\b(?:error_envelope|error_response|error response|error schema|error object|standard error|api error|errors)\b/i;
+const ROOT_SERVICE_ERROR_CONTRACT_MARKER_PATTERN =
+  /\b(?:error_envelope|error_response|error response|error schema|error object|standard error|api error)\b/i;
 const OPENAPI_ERROR_RESPONSE_PATTERN =
   /\b(?:responses|components|openapi|swagger)\b[\s\S]*\b(?:default|4\d\d|5\d\d)\b[\s\S]*\berror\b/i;
 const ERROR_PROPERTY_PATTERN = /(^|[{\s,])["']?error["']?\s*:/im;
@@ -185,6 +187,13 @@ function readMissingEnvelopeFields(source: string): readonly string[] {
 }
 
 function declaresPublicApiErrorContract(file: string, source: string): boolean {
+  if (isRootServiceContract(file)) {
+    return (
+      ROOT_SERVICE_ERROR_CONTRACT_MARKER_PATTERN.test(source) ||
+      ERROR_PROPERTY_PATTERN.test(source)
+    );
+  }
+
   if (isErrorContractFileName(file)) {
     return true;
   }
