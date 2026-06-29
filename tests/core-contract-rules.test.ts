@@ -2367,7 +2367,6 @@ required_handoff_controls:
   - oauth_callback_state_verification
   - refresh_token_rotation_without_plaintext_storage
 promotion_blockers:
-  - credential_vault_live_client_integration_review_pending
   - no_product_reviewer_approval
 forbidden_runtime_claims:
   - live_login_handler
@@ -2421,8 +2420,7 @@ required_gate_states:
     contract_status: typed_capability_handoff_declared_no_live_vault_client
     typed_boundary_status: typed_capability_client_boundary_no_vault_client
     durable_implementation_status: typed_capability_client_port_present_no_live_vault_client
-    review_status: integration_review_pending
-    promotion_blocker: credential_vault_live_client_integration_review_pending
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-credential-vault-handoff.yaml
@@ -2531,7 +2529,6 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
 blocking_summary:
-  - credential_vault_live_client_integration_review_pending
   - core_runtime_live_auth_integration_review_pending
   - no_product_reviewer_approval
 forbidden_readiness_claims:
@@ -3564,8 +3561,7 @@ live_vault_client_integration_review_receipt:
   vault_network_call_enabled: false
   secret_decrypt_or_read_enabled: false
   product_route_unblocked: false
-  review_status: integration_review_pending
-  promotion_blocker: credential_vault_live_client_integration_review_pending
+  review_status: typed_integration_review_passed
 `,
     'contracts/auth-audit-event-persistence.yaml': `
 contract:

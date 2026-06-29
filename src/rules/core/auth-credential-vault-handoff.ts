@@ -188,15 +188,9 @@ const REQUIRED_AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_VALUES = [
   },
   {
     path: 'live_vault_client_integration_review_receipt.review_status',
-    expected: 'integration_review_pending',
+    expected: 'typed_integration_review_passed',
     message:
-      'Core platform auth credential vault live client integration review receipt must keep review_status `integration_review_pending`.'
-  },
-  {
-    path: 'live_vault_client_integration_review_receipt.promotion_blocker',
-    expected: 'credential_vault_live_client_integration_review_pending',
-    message:
-      'Core platform auth credential vault live client integration review receipt must keep promotion blocker `credential_vault_live_client_integration_review_pending`.'
+      'Core platform auth credential vault live client integration review receipt must keep review_status `typed_integration_review_passed` after no-live-client capability, metadata, audit, owner, and raw-secret checks pass.'
   }
 ] as const;
 
@@ -321,6 +315,21 @@ export function validateAuthCredentialVaultHandoffContract(
         })
     )
   );
+
+  if (
+    readPath(
+      value,
+      'live_vault_client_integration_review_receipt.promotion_blocker'
+    ) !== undefined
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+        'live_vault_client_integration_review_receipt.promotion_blocker',
+        'Core platform auth credential vault live client integration review receipt must omit `promotion_blocker` after the typed no-live-client review passes.'
+      )
+    );
+  }
 
   return diagnostics;
 }

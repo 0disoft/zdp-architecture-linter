@@ -115,9 +115,7 @@ export function createRequiredAuthRuntimeReadinessGates(
         refs.authCredentialVaultCapabilityClientBoundaryStatus,
       durableImplementationStatus:
         'typed_capability_client_port_present_no_live_vault_client',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker:
-        'credential_vault_live_client_integration_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authCredentialVaultHandoffFile

@@ -71,7 +71,6 @@ const REQUIRED_AUTH_SESSION_HANDOFF_CONTROLS = [
 ] as const;
 
 const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
-  'credential_vault_live_client_integration_review_pending',
   'no_product_reviewer_approval'
 ] as const;
 
