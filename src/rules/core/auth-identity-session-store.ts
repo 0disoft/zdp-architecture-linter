@@ -9,10 +9,10 @@ export const IDENTITY_SESSION_STORE_FILE =
   'contracts/identity-session-store.yaml';
 
 export const IDENTITY_SESSION_STORE_STATUS =
-  'migration_shape_declared_no_adapter';
+  'sqlx_adapter_present_no_live_handler';
 
 export const IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS =
-  'typed_adapter_boundary_no_migration';
+  'sqlx_identity_session_store_adapter_no_auth_promotion';
 
 const REQUIRED_IDENTITY_SESSION_STORE_FIELDS = [
   'session_id',
@@ -125,7 +125,7 @@ export function validateIdentitySessionStoreContract(
       createCoreDiagnostic(
         IDENTITY_SESSION_STORE_FILE,
         'contract.status',
-        `Core platform identity session store contract must stay \`${IDENTITY_SESSION_STORE_STATUS}\` until a migration-backed adapter exists.`
+        `Core platform identity session store contract must stay \`${IDENTITY_SESSION_STORE_STATUS}\` while the SQLx adapter exists without live auth handler promotion.`
       )
     );
   }
@@ -148,7 +148,20 @@ export function validateIdentitySessionStoreContract(
       createCoreDiagnostic(
         IDENTITY_SESSION_STORE_FILE,
         'adapter_contract.status',
-        `Core platform identity session store adapter boundary must stay \`${IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+        `Core platform identity session store adapter boundary must stay \`${IDENTITY_SESSION_STORE_ADAPTER_BOUNDARY_STATUS}\` until auth runtime promotion is reviewed.`
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'adapter_contract.implementation_ref') !==
+    'src/core_postgres_session_store_adapter.rs'
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        IDENTITY_SESSION_STORE_FILE,
+        'adapter_contract.implementation_ref',
+        'Core platform identity session store SQLx adapter contract must point at `src/core_postgres_session_store_adapter.rs`.'
       )
     );
   }

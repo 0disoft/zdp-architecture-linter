@@ -34,6 +34,12 @@ const REQUIRED_CORE_EVENT_OUTBOX_MONEY_RELEVANT_EVENTS = [
 const CORE_EVENT_OUTBOX_DEAD_LETTER_POLICY =
   'audit.core_event_delivery_attempts records failed delivery attempts before live dispatchers, consumer inboxes, replay workers, or money realtime sync exist';
 
+const CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_STATUS =
+  'typed_dispatcher_consumer_replay_review_plan_no_worker';
+
+const CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS =
+  'typed_dispatcher_consumer_replay_review_receipt_no_worker';
+
 const REQUIRED_CORE_EVENT_OUTBOX_FIELDS = [
   'cloud_event_id',
   'cloud_event_source',
@@ -78,8 +84,118 @@ const REQUIRED_CORE_EVENT_OUTBOX_CONTROLS = [
   'trace_reference_required',
   'replay_contract_required',
   'dead_letter_attempt_history_required',
+  'dispatcher_consumer_replay_review_plan_required',
+  'dispatcher_consumer_replay_review_receipt_required',
   'dispatcher_ref_required_for_delivery_attempts',
   'no_dispatcher_claim_until_worker_exists'
+] as const;
+
+const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_PROMOTION_REVIEWS = [
+  'dispatcher_worker_implementation_review',
+  'consumer_inbox_contract_review',
+  'replay_worker_contract_review',
+  'dead_letter_replay_review',
+  'money_realtime_sync_review',
+  'product_route_unblock_review'
+] as const;
+
+const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_CONTROLS = [
+  'dispatcher_not_started',
+  'consumer_inbox_not_started',
+  'replay_worker_not_started',
+  'dispatcher_claims_forbidden',
+  'consumer_inbox_claims_forbidden',
+  'replay_worker_claims_forbidden',
+  'dead_letter_replay_review_required',
+  'money_realtime_sync_review_required',
+  'production_route_unblocked_false'
+] as const;
+
+const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_RECEIPT_VALUES = [
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.boundary_status',
+    expected: CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS,
+    message:
+      `Core platform event outbox dispatcher/consumer/replay review receipt must keep boundary_status \`${CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS}\` until workers exist.`
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.dispatcher_review_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check dispatcher review.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.consumer_inbox_contract_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check consumer inbox contract.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.replay_worker_contract_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check replay worker contract.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.dead_letter_replay_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check dead-letter replay.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.money_realtime_sync_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check money realtime sync.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.product_route_unblock_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check product route unblock.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.dispatcher_worker_started',
+    expected: false,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep dispatcher_worker_started false.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.consumer_inbox_enabled',
+    expected: false,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep consumer_inbox_enabled false.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.replay_worker_enabled',
+    expected: false,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep replay_worker_enabled false.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.money_realtime_sync_enabled',
+    expected: false,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep money_realtime_sync_enabled false.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.product_route_unblocked',
+    expected: false,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep product_route_unblocked false.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.review_status',
+    expected: 'integration_review_pending',
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep review_status `integration_review_pending`.'
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.promotion_blocker',
+    expected: 'transaction_outbox_dispatcher_replay_review_pending',
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep promotion blocker `transaction_outbox_dispatcher_replay_review_pending`.'
+  }
 ] as const;
 
 const REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_VALUES = [
@@ -128,6 +244,15 @@ export function validateCoreEventOutboxContract(
   }
 
   diagnostics.push(
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.dispatcher_consumer_replay_review_plan_implemented',
+      field: 'runtime.dispatcher_consumer_replay_review_plan_implemented',
+      expected: true,
+      message:
+        'Core platform event outbox contract must keep dispatcher_consumer_replay_review_plan_implemented true so dispatcher, consumer inbox, and replay promotion stay review-gated.'
+    }),
     ...validateExactValue({
       value,
       file: CORE_EVENT_OUTBOX_FILE,
@@ -292,6 +417,76 @@ export function validateCoreEventOutboxContract(
       field: 'required_delivery_attempt_fields',
       requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_DELIVERY_ATTEMPT_FIELDS
     }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.boundary_status',
+      field: 'dispatcher_consumer_replay_review.boundary_status',
+      expected: CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_STATUS,
+      message:
+        `Core platform event outbox contract must keep dispatcher_consumer_replay_review.boundary_status \`${CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_STATUS}\` until workers exist.`
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.dispatcher_ref',
+      field: 'dispatcher_consumer_replay_review.dispatcher_ref',
+      expected: 'dispatcher://core/not-implemented',
+      message:
+        'Core platform event outbox contract must keep dispatcher_ref `dispatcher://core/not-implemented` until dispatcher proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.consumer_inbox_ref',
+      field: 'dispatcher_consumer_replay_review.consumer_inbox_ref',
+      expected: 'consumer-inbox://core/not-implemented',
+      message:
+        'Core platform event outbox contract must keep consumer_inbox_ref `consumer-inbox://core/not-implemented` until consumer inbox proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.replay_worker_ref',
+      field: 'dispatcher_consumer_replay_review.replay_worker_ref',
+      expected: 'replay-worker://core/not-implemented',
+      message:
+        'Core platform event outbox contract must keep replay_worker_ref `replay-worker://core/not-implemented` until replay worker proof exists.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.review_ref',
+      field: 'dispatcher_consumer_replay_review.review_ref',
+      expected: 'review://core/event-dispatcher-consumer-replay',
+      message:
+        'Core platform event outbox contract must keep review_ref `review://core/event-dispatcher-consumer-replay` for dispatcher, consumer inbox, and replay promotion review.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.required_before_promotion',
+      field: 'dispatcher_consumer_replay_review.required_before_promotion',
+      requiredEntries:
+        REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_PROMOTION_REVIEWS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'dispatcher_consumer_replay_review.required_controls',
+      field: 'dispatcher_consumer_replay_review.required_controls',
+      requiredEntries: REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_CONTROLS
+    }),
+    ...REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_RECEIPT_VALUES.flatMap(
+      (receiptValue) =>
+        validateExactValue({
+          value,
+          file: CORE_EVENT_OUTBOX_FILE,
+          path: receiptValue.path,
+          expected: receiptValue.expected,
+          message: receiptValue.message
+        })
+    ),
     ...validateRequiredStringArrayEntries({
       value,
       file: CORE_EVENT_OUTBOX_FILE,

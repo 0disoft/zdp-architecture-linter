@@ -2,6 +2,7 @@ import type { Diagnostic } from '../../diagnostics.ts';
 import {
   createCoreDiagnostic,
   readPath,
+  validateExactValue,
   validateRequiredStringArrayEntries
 } from './contract-helpers.ts';
 
@@ -9,10 +10,13 @@ export const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
 
 export const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
-  'migration_shape_declared_no_capability_client';
+  'typed_capability_handoff_declared_no_live_vault_client';
 
 export const AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS =
   'typed_capability_client_boundary_no_vault_client';
+
+const AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_STATUS =
+  'typed_vault_client_integration_review_receipt_no_live_client';
 
 const REQUIRED_AUTH_CREDENTIAL_VAULT_FIELDS = [
   'capability_ref',
@@ -49,7 +53,8 @@ const REQUIRED_AUTH_CREDENTIAL_VAULT_CONTROLS = [
   'command_idempotency_reference',
   'audit_event_reference',
   'no_raw_secret_return',
-  'vault_access_audit_required'
+  'vault_access_audit_required',
+  'live_vault_client_integration_review_receipt_required'
 ] as const;
 
 const REQUIRED_AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_KINDS = [
@@ -100,6 +105,99 @@ const REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES = [
   'authorization_header',
   'cookie_header',
   'raw_provider_payload'
+] as const;
+
+const REQUIRED_AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_VALUES = [
+  {
+    path: 'live_vault_client_integration_review_receipt.boundary_status',
+    expected: AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_STATUS,
+    message:
+      `Core platform auth credential vault live client integration review receipt must keep boundary_status \`${AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_STATUS}\` until a live vault client is reviewed.`
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.capability_handoff_contract_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check the capability handoff contract.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.capability_client_boundary_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check the capability client boundary.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.vault_access_audit_contract_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check the vault access audit contract.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.privacy_vault_owner_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check privacy vault ownership.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.metadata_only_response_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check metadata-only responses.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.capability_ref_only_checked',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must check capability-ref-only handoff.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.raw_secret_material_rejected',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must reject raw secret material.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.provider_payload_storage_rejected',
+    expected: true,
+    message:
+      'Core platform auth credential vault live client integration review receipt must reject provider payload storage.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.live_vault_client_enabled',
+    expected: false,
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep live_vault_client_enabled false.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.vault_network_call_enabled',
+    expected: false,
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep vault_network_call_enabled false.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.secret_decrypt_or_read_enabled',
+    expected: false,
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep secret_decrypt_or_read_enabled false.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.product_route_unblocked',
+    expected: false,
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep product_route_unblocked false.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.review_status',
+    expected: 'integration_review_pending',
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep review_status `integration_review_pending`.'
+  },
+  {
+    path: 'live_vault_client_integration_review_receipt.promotion_blocker',
+    expected: 'credential_vault_live_client_integration_review_pending',
+    message:
+      'Core platform auth credential vault live client integration review receipt must keep promotion blocker `credential_vault_live_client_integration_review_pending`.'
+  }
 ] as const;
 
 export function validateAuthCredentialVaultHandoffContract(
@@ -211,7 +309,17 @@ export function validateAuthCredentialVaultHandoffContract(
       path: 'forbidden_payload_values',
       field: 'forbidden_payload_values',
       requiredEntries: REQUIRED_AUTH_CREDENTIAL_VAULT_FORBIDDEN_VALUES
-    })
+    }),
+    ...REQUIRED_AUTH_CREDENTIAL_VAULT_LIVE_CLIENT_REVIEW_RECEIPT_VALUES.flatMap(
+      (receiptValue) =>
+        validateExactValue({
+          value,
+          file: AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
+          path: receiptValue.path,
+          expected: receiptValue.expected,
+          message: receiptValue.message
+        })
+    )
   );
 
   return diagnostics;

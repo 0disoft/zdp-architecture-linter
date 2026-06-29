@@ -81,6 +81,10 @@ import {
   AUTH_RUNTIME_READINESS_STATUS,
   REQUIRED_AUTH_RUNTIME_READINESS_GATES
 } from './rules/core/auth-contract-wiring.ts';
+import {
+  CORE_RUNTIME_POSTGRES_ADAPTER_FILE,
+  validateCoreRuntimePostgresAdapterContract
+} from './rules/core/core-runtime-postgres-adapter.ts';
 
 export async function validateRepositoryCoreContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -115,7 +119,8 @@ export async function validateRepositoryCoreContract(input: {
     authAuditEventPersistence,
     authAuditStorageAdapter,
     coreEventOutbox,
-    authIdempotencyStorage
+    authIdempotencyStorage,
+    coreRuntimePostgresAdapter
   ] = await Promise.all([
       readRequiredTextFile(input.repositoryRoot, CORE_CI_WORKFLOW_FILE),
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
@@ -144,7 +149,8 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_EVENT_PERSISTENCE_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_STORAGE_ADAPTER_FILE),
       readRequiredYamlContract(input.repositoryRoot, CORE_EVENT_OUTBOX_FILE),
-      readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE)
+      readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE),
+      readRequiredYamlContract(input.repositoryRoot, CORE_RUNTIME_POSTGRES_ADAPTER_FILE)
     ]);
 
   return [
@@ -170,6 +176,7 @@ export async function validateRepositoryCoreContract(input: {
     ...authAuditStorageAdapter.diagnostics,
     ...coreEventOutbox.diagnostics,
     ...authIdempotencyStorage.diagnostics,
+    ...coreRuntimePostgresAdapter.diagnostics,
     ...(ciWorkflow.value === null ? [] : validateCoreCiWorkflow(ciWorkflow.value)),
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
@@ -262,7 +269,12 @@ export async function validateRepositoryCoreContract(input: {
       : validateCoreEventOutboxContract(coreEventOutbox.value)),
     ...(authIdempotencyStorage.value === null
       ? []
-      : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value))
+      : validateAuthIdempotencyStorageContract(authIdempotencyStorage.value)),
+    ...(coreRuntimePostgresAdapter.value === null
+      ? []
+      : validateCoreRuntimePostgresAdapterContract(
+          coreRuntimePostgresAdapter.value
+        ))
   ];
 }
 

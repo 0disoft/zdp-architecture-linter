@@ -2,6 +2,7 @@ import type { Diagnostic } from '../../diagnostics.ts';
 import {
   createCoreDiagnostic,
   readPath,
+  validateExactValue,
   validateRequiredStringArrayEntries
 } from './contract-helpers.ts';
 
@@ -17,9 +18,11 @@ export const AUTH_DURABLE_STORAGE_ADMISSION_STATUS =
 export const AUTH_DURABLE_STORAGE_ADMISSION_BOUNDARY_STATUS =
   'typed_durable_storage_admission_no_migration';
 export const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS =
-  'contract_only_no_migration';
+  'repo_local_migration_preflight_present_no_apply';
 export const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS =
-  'typed_migration_readiness_no_migration';
+  'typed_migration_preflight_plan_check_no_apply';
+export const AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_BOUNDARY_STATUS =
+  'typed_migration_preflight_review_receipt_no_apply';
 export const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS =
   'sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher';
 export const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS =
@@ -116,6 +119,11 @@ const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FIELDS = [
   'schema_owner_ref',
   'rollback_plan_ref',
   'transaction_boundary_ref',
+  'repo_local_migration_cli_ref',
+  'migration_manifest_ref',
+  'schema_history_ref',
+  'migration_preflight_receipt_ref',
+  'operator_approval_ref',
   'review_ref',
   'admission_plan_ref',
   'operation_id',
@@ -140,12 +148,22 @@ const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_CONTROLS = [
   'seed_or_backfill_declared',
   'destructive_migration_rejected',
   'rollback_forward_or_revert_path_required',
+  'repo_local_migration_cli_required',
+  'migration_cli_plan_check_implemented',
+  'migration_manifest_required',
+  'schema_history_check_required',
+  'migration_preflight_receipt_required',
+  'migration_apply_disabled',
+  'startup_migration_apply_disabled',
+  'operator_migration_apply_approval_required',
+  'live_database_connection_disabled_for_plan_check',
+  'applied_migration_claim_rejected',
+  'durable_adapter_promotion_blocked',
+  'integration_review_required',
   'request_trace_idempotency_audit_metadata_required',
   'tenant_actor_scope_required',
   'raw_secret_storage_rejected',
   'raw_provider_payload_rejected',
-  'no_db_migration',
-  'no_durable_adapter',
   'no_live_handler'
 ] as const;
 
@@ -184,6 +202,124 @@ const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS = [
   'oauth_provider_exchange_ready',
   'product_route_unblocked'
 ] as const;
+
+const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_VALUES =
+  [
+    {
+      path: 'migration_preflight_review_receipt.boundary_status',
+      expected:
+        AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_BOUNDARY_STATUS,
+      message: `Core platform auth durable storage migration preflight review receipt must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_BOUNDARY_STATUS}\` and must not claim migration apply.`
+    },
+    {
+      path: 'migration_preflight_review_receipt.checked_migration_files_required',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must require checked migration files.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.pending_migration_ids_required',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must require pending migration id evidence.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.migration_manifest_checked',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must check the migration manifest.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.repo_local_plan_check_checked',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must check the repo-local migration plan/check path.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.schema_history_checked',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must require schema history checking.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.rollback_plan_ref_required',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must require a rollback plan reference.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.rollback_forward_or_revert_path_checked',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must check rollback-forward or revert path evidence.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.destructive_migration_rejected',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must reject destructive migration claims.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.operator_approval_required',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep operator approval required.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.durable_adapter_promotion_blocked',
+      expected: true,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep durable adapter promotion blocked.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.migration_apply_enabled',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep migration_apply_enabled false.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.startup_migration_apply_enabled',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep startup_migration_apply_enabled false.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.live_database_connection_enabled',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep live_database_connection_enabled false for plan/check proof.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.live_migration_applied',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep live_migration_applied false.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.live_auth_handler_enabled',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep live_auth_handler_enabled false.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.product_route_unblocked',
+      expected: false,
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep product_route_unblocked false.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.review_status',
+      expected: 'integration_review_pending',
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep review_status `integration_review_pending`.'
+    },
+    {
+      path: 'migration_preflight_review_receipt.promotion_blocker',
+      expected: 'auth_durable_storage_migration_preflight_review_pending',
+      message:
+        'Core platform auth durable storage migration preflight review receipt must keep promotion blocker `auth_durable_storage_migration_preflight_review_pending`.'
+    }
+  ] as const;
 
 const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FIELDS = [
   'target',
@@ -228,6 +364,9 @@ const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_CONTROLS = [
   'idempotency_state_and_outbox_adapter_implemented',
   'state_and_outbox_committed_atomically',
   'outbox_dispatcher_not_started',
+  'consumer_inbox_not_started',
+  'replay_worker_not_started',
+  'dispatcher_replay_review_required',
   'no_outbox_dispatcher',
   'no_live_handler'
 ] as const;
@@ -262,6 +401,9 @@ const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_CLAIMS = [
   'db_migration_applied',
   'transaction_manager_ready',
   'outbox_dispatcher_ready',
+  'consumer_inbox_ready',
+  'event_replay_ready',
+  'money_realtime_sync_ready',
   'durable_adapter_ready',
   'live_auth_handler_ready',
   'oauth_provider_exchange_ready',
@@ -391,7 +533,7 @@ export function validateAuthDurableStorageMigrationReadinessContract(input: {
       createCoreDiagnostic(
         AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
         'contract.status',
-        `Core platform auth durable storage migration readiness contract must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS}\` until DB migrations are applied by a reviewed migration slice.`
+        `Core platform auth durable storage migration readiness contract must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS}\` while only repo-local migration plan/check preflight exists and migration apply remains disabled.`
       )
     );
   }
@@ -440,7 +582,7 @@ export function validateAuthDurableStorageMigrationReadinessContract(input: {
       createCoreDiagnostic(
         AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
         'contract.typed_boundary_status',
-        `Core platform auth durable storage migration readiness boundary must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS}\` until DB migrations and durable adapters exist.`
+        `Core platform auth durable storage migration readiness boundary must stay \`${AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS}\` until migration apply, durable adapter promotion, and live auth handlers are reviewed.`
       )
     );
   }
@@ -484,6 +626,18 @@ export function validateAuthDurableStorageMigrationReadinessContract(input: {
         REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FORBIDDEN_CLAIMS
     })
   );
+
+  for (const receiptValue of REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_VALUES) {
+    diagnostics.push(
+      ...validateExactValue({
+        value: input.value,
+        file: AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        path: receiptValue.path,
+        expected: receiptValue.expected,
+        message: receiptValue.message
+      })
+    );
+  }
 
   return diagnostics;
 }

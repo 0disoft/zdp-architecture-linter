@@ -71,11 +71,8 @@ const REQUIRED_AUTH_SESSION_HANDOFF_CONTROLS = [
 ] as const;
 
 const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
-  'no_identity_session_store_implementation',
-  'no_credential_vault_capability_handoff_implementation',
-  'no_passkey_challenge_store_implementation',
-  'no_auth_audit_event_persistence_implementation',
-  'idempotency_storage_integration_review_pending',
+  'credential_vault_live_client_integration_review_pending',
+  'auth_audit_integration_review_pending',
   'no_product_reviewer_approval'
 ] as const;
 

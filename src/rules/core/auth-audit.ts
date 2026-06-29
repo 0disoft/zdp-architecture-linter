@@ -2,6 +2,7 @@ import type { Diagnostic } from '../../diagnostics.ts';
 import {
   createCoreDiagnostic,
   readPath,
+  validateExactValue,
   validateRequiredStringArrayEntries
 } from './contract-helpers.ts';
 
@@ -12,12 +13,16 @@ export const AUTH_AUDIT_STORAGE_ADAPTER_FILE =
   'contracts/auth-audit-storage-adapter.yaml';
 
 export const AUTH_AUDIT_EVENT_PERSISTENCE_STATUS =
-  'append_receipt_gate_no_durable_store';
+  'sqlx_audit_persistence_adapter_present_no_live_handler';
 
-export const AUTH_AUDIT_STORAGE_ADAPTER_STATUS = 'contract_only_no_adapter';
+export const AUTH_AUDIT_STORAGE_ADAPTER_STATUS =
+  'sqlx_adapter_present_no_live_handler';
 
 export const AUTH_AUDIT_STORAGE_ADAPTER_BOUNDARY_STATUS =
-  'typed_adapter_boundary_no_migration';
+  'sqlx_auth_audit_storage_adapter_no_auth_promotion';
+
+export const AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_BOUNDARY_STATUS =
+  'typed_auth_audit_integration_review_receipt_no_live_handler';
 
 const REQUIRED_AUTH_AUDIT_EVENT_FIELDS = [
   'event_id',
@@ -118,6 +123,134 @@ const REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES = [
   'raw_error_payload'
 ] as const;
 
+const REQUIRED_AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_VALUES = [
+  {
+    path: 'auth_audit_integration_review_receipt.boundary_status',
+    expected: AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_BOUNDARY_STATUS,
+    message: `Core platform auth audit integration review receipt must stay \`${AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_BOUNDARY_STATUS}\` and must not claim live auth handler readiness.`
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.audit_event_persistence_contract_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check the audit event persistence contract.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.audit_storage_adapter_contract_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check the audit storage adapter contract.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.sqlx_adapter_receipt_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check the SQLx adapter receipt.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.append_only_storage_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check append-only audit storage enforcement.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.unique_event_id_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check unique audit event id enforcement.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.transaction_or_outbox_ref_required',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must require a transaction or outbox reference.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.transaction_or_outbox_atomicity_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check transaction/outbox atomicity before auth success can be reviewed.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.append_receipt_required_before_auth_success',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must keep append receipt evidence required before auth success.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.audit_write_failure_blocks_auth_success',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must keep audit write failure blocking auth success.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.audit_success_gate_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check the audit success gate before auth success.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.failure_event_evidence_required',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must require failure event evidence.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.failed_outcome_evidence_checked',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must check failed outcome evidence handling.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.redacted_summary_only',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must keep redacted summary only evidence.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.live_success_without_append_receipt_rejected',
+    expected: true,
+    message:
+      'Core platform auth audit integration review receipt must reject live auth success without an append receipt.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.raw_payload_serialized',
+    expected: false,
+    message:
+      'Core platform auth audit integration review receipt must keep raw_payload_serialized false.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.live_auth_handler_enabled',
+    expected: false,
+    message:
+      'Core platform auth audit integration review receipt must keep live_auth_handler_enabled false.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.product_route_unblocked',
+    expected: false,
+    message:
+      'Core platform auth audit integration review receipt must keep product_route_unblocked false.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.dispatcher_or_replay_dependency_unblocked',
+    expected: false,
+    message:
+      'Core platform auth audit integration review receipt must keep dispatcher_or_replay_dependency_unblocked false.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.review_status',
+    expected: 'integration_review_pending',
+    message:
+      'Core platform auth audit integration review receipt must keep review_status `integration_review_pending`.'
+  },
+  {
+    path: 'auth_audit_integration_review_receipt.promotion_blocker',
+    expected: 'auth_audit_integration_review_pending',
+    message:
+      'Core platform auth audit integration review receipt must keep promotion blocker `auth_audit_integration_review_pending`.'
+  }
+] as const;
+
 export function validateAuthAuditEventPersistenceContract(
   value: unknown
 ): readonly Diagnostic[] {
@@ -128,7 +261,7 @@ export function validateAuthAuditEventPersistenceContract(
       createCoreDiagnostic(
         AUTH_AUDIT_EVENT_PERSISTENCE_FILE,
         'contract.status',
-        `Core platform auth audit event persistence contract must stay \`${AUTH_AUDIT_EVENT_PERSISTENCE_STATUS}\` until durable append-only storage exists.`
+        `Core platform auth audit event persistence contract must stay \`${AUTH_AUDIT_EVENT_PERSISTENCE_STATUS}\` after the SQLx audit adapter exists but before live auth handlers are promoted.`
       )
     );
   }
@@ -204,7 +337,7 @@ export function validateAuthAuditStorageAdapterContract(
       createCoreDiagnostic(
         AUTH_AUDIT_STORAGE_ADAPTER_FILE,
         'contract.status',
-        `Core platform auth audit storage adapter contract must stay \`${AUTH_AUDIT_STORAGE_ADAPTER_STATUS}\` until a durable adapter exists.`
+        `Core platform auth audit storage adapter contract must stay \`${AUTH_AUDIT_STORAGE_ADAPTER_STATUS}\` after the SQLx adapter exists but before live auth handlers are promoted.`
       )
     );
   }
@@ -262,6 +395,18 @@ export function validateAuthAuditStorageAdapterContract(
       requiredEntries: REQUIRED_AUTH_AUDIT_STORAGE_ADAPTER_FORBIDDEN_VALUES
     })
   );
+
+  for (const receiptValue of REQUIRED_AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_VALUES) {
+    diagnostics.push(
+      ...validateExactValue({
+        value,
+        file: AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+        path: receiptValue.path,
+        expected: receiptValue.expected,
+        message: receiptValue.message
+      })
+    );
+  }
 
   return diagnostics;
 }

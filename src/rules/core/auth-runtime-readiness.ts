@@ -9,9 +9,10 @@ import {
 
 export interface AuthRuntimeReadinessContractRefs {
   readonly authSessionRuntimeFile: string;
+  readonly authRuntimeReadinessFile: string;
   readonly authRuntimeAdmissionContextFile: string;
-  readonly authRuntimeAdmissionContextBoundaryStatus: string;
   readonly authRuntimeCommandPropagationFile: string;
+  readonly authRuntimeCommandPropagationBoundaryStatus: string;
   readonly identitySessionStoreFile: string;
   readonly identitySessionStoreStatus: string;
   readonly identitySessionStoreAdapterBoundaryStatus: string;
@@ -39,6 +40,9 @@ export interface AuthRuntimeReadinessContractRefs {
   readonly authIdempotencyStorageFile: string;
   readonly authIdempotencyStorageStatus: string;
   readonly authIdempotencyStorageAdapterBoundaryStatus: string;
+  readonly coreRuntimePostgresAdapterFile: string;
+  readonly coreRuntimePostgresAdapterStatus: string;
+  readonly coreRuntimePostgresAdapterBoundaryStatus: string;
 }
 
 export interface AuthRuntimeReadinessGateRequirement {
@@ -47,7 +51,7 @@ export interface AuthRuntimeReadinessGateRequirement {
   readonly typedBoundaryStatus: string;
   readonly durableImplementationStatus: string;
   readonly reviewStatus: string;
-  readonly promotionBlocker: string;
+  readonly promotionBlocker?: string;
   readonly evidenceContracts: readonly string[];
 }
 
@@ -68,10 +72,9 @@ export function createRequiredAuthRuntimeReadinessGates(
     {
       gateId: 'request_id_propagation',
       contractStatus: 'required_by_auth_runtime_admission_context',
-      typedBoundaryStatus: refs.authRuntimeAdmissionContextBoundaryStatus,
-      durableImplementationStatus: 'propagation_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_request_id_propagation_implementation',
+      typedBoundaryStatus: refs.authRuntimeCommandPropagationBoundaryStatus,
+      durableImplementationStatus: 'typed_propagation_plan_implemented',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authRuntimeAdmissionContextFile,
@@ -81,10 +84,9 @@ export function createRequiredAuthRuntimeReadinessGates(
     {
       gateId: 'trace_id_propagation',
       contractStatus: 'required_by_auth_runtime_admission_context',
-      typedBoundaryStatus: refs.authRuntimeAdmissionContextBoundaryStatus,
-      durableImplementationStatus: 'propagation_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_trace_id_propagation_implementation',
+      typedBoundaryStatus: refs.authRuntimeCommandPropagationBoundaryStatus,
+      durableImplementationStatus: 'typed_propagation_plan_implemented',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authRuntimeAdmissionContextFile,
@@ -95,9 +97,9 @@ export function createRequiredAuthRuntimeReadinessGates(
       gateId: 'session_store_contract',
       contractStatus: refs.identitySessionStoreStatus,
       typedBoundaryStatus: refs.identitySessionStoreAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_identity_session_store_implementation',
+      durableImplementationStatus:
+        'sqlx_identity_session_store_adapter_implemented',
+      reviewStatus: 'typed_sqlx_adapter_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.identitySessionStoreFile,
@@ -111,10 +113,11 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authCredentialVaultHandoffStatus,
       typedBoundaryStatus:
         refs.authCredentialVaultCapabilityClientBoundaryStatus,
-      durableImplementationStatus: 'live_capability_client_missing',
-      reviewStatus: 'review_missing',
+      durableImplementationStatus:
+        'typed_capability_client_port_present_no_live_vault_client',
+      reviewStatus: 'integration_review_pending',
       promotionBlocker:
-        'no_credential_vault_capability_handoff_implementation',
+        'credential_vault_live_client_integration_review_pending',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authCredentialVaultHandoffFile
@@ -124,9 +127,9 @@ export function createRequiredAuthRuntimeReadinessGates(
       gateId: 'passkey_challenge_store_contract',
       contractStatus: refs.authPasskeyChallengeStoreStatus,
       typedBoundaryStatus: refs.authPasskeyChallengeStoreAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_passkey_challenge_store_implementation',
+      durableImplementationStatus:
+        'sqlx_passkey_challenge_store_adapter_implemented',
+      reviewStatus: 'typed_sqlx_adapter_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authPasskeyChallengeStoreFile,
@@ -139,9 +142,9 @@ export function createRequiredAuthRuntimeReadinessGates(
       gateId: 'oauth_callback_state_verification',
       contractStatus: refs.authOauthCallbackStateStatus,
       typedBoundaryStatus: refs.authOauthCallbackStateAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_oauth_callback_state_storage_implementation',
+      durableImplementationStatus:
+        'sqlx_oauth_callback_state_store_adapter_implemented',
+      reviewStatus: 'typed_sqlx_adapter_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authOauthCallbackStateFile,
@@ -153,10 +156,10 @@ export function createRequiredAuthRuntimeReadinessGates(
     {
       gateId: 'audit_event_emission',
       contractStatus: refs.authAuditEventPersistenceStatus,
-      typedBoundaryStatus: 'typed_port_no_durable_store',
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_auth_audit_event_persistence_implementation',
+      typedBoundaryStatus: refs.authAuditStorageAdapterBoundaryStatus,
+      durableImplementationStatus: 'sqlx_audit_persistence_adapter_implemented',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker: 'auth_audit_integration_review_pending',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authAuditEventPersistenceFile,
@@ -169,9 +172,9 @@ export function createRequiredAuthRuntimeReadinessGates(
       gateId: 'auth_audit_storage_adapter',
       contractStatus: refs.authAuditStorageAdapterStatus,
       typedBoundaryStatus: refs.authAuditStorageAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_auth_audit_storage_adapter_implementation',
+      durableImplementationStatus: 'sqlx_auth_audit_storage_adapter_implemented',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker: 'auth_audit_integration_review_pending',
       evidenceContracts: [
         refs.authAuditEventPersistenceFile,
         refs.authAuditStorageAdapterFile,
@@ -185,8 +188,7 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authIdempotencyStorageStatus,
       typedBoundaryStatus: refs.authIdempotencyStorageAdapterBoundaryStatus,
       durableImplementationStatus: 'idempotency_adapter_implemented',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'idempotency_storage_integration_review_pending',
+      reviewStatus: 'typed_sqlx_adapter_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authRuntimeAdmissionContextFile,
@@ -198,12 +200,28 @@ export function createRequiredAuthRuntimeReadinessGates(
       ]
     },
     {
+      gateId: 'core_runtime_foundation_boundary',
+      contractStatus: refs.coreRuntimePostgresAdapterStatus,
+      typedBoundaryStatus: refs.coreRuntimePostgresAdapterBoundaryStatus,
+      durableImplementationStatus:
+        'sqlx_runtime_foundation_implemented_no_auth_promotion',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker: 'core_runtime_live_auth_integration_review_pending',
+      evidenceContracts: [
+        refs.authSessionRuntimeFile,
+        refs.authRuntimeReadinessFile,
+        refs.coreRuntimePostgresAdapterFile,
+        refs.authIdempotencyStorageFile,
+        refs.authDurableStorageTransactionOutboxFile
+      ]
+    },
+    {
       gateId: 'refresh_token_rotation_without_plaintext_storage',
       contractStatus: refs.identitySessionStoreStatus,
       typedBoundaryStatus: refs.identitySessionStoreAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_refresh_token_rotation_storage_implementation',
+      durableImplementationStatus:
+        'sqlx_refresh_token_rotation_adapter_implemented',
+      reviewStatus: 'typed_sqlx_adapter_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.identitySessionStoreFile,
@@ -217,9 +235,11 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authDurableStorageMigrationReadinessStatus,
       typedBoundaryStatus:
         refs.authDurableStorageMigrationReadinessBoundaryStatus,
-      durableImplementationStatus: 'migration_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_auth_durable_storage_migration_implementation',
+      durableImplementationStatus:
+        'repo_local_migration_preflight_implemented_no_apply',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker:
+        'auth_durable_storage_migration_preflight_review_pending',
       evidenceContracts: [
         refs.authDurableStorageAdmissionFile,
         refs.authDurableStorageMigrationReadinessFile
@@ -233,7 +253,7 @@ export function createRequiredAuthRuntimeReadinessGates(
       durableImplementationStatus:
         'idempotency_transaction_outbox_adapter_implemented',
       reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'transaction_outbox_integration_review_pending',
+      promotionBlocker: 'transaction_outbox_dispatcher_replay_review_pending',
       evidenceContracts: [
         refs.authDurableStorageMigrationReadinessFile,
         refs.authDurableStorageTransactionOutboxFile
@@ -336,7 +356,9 @@ export function validateAuthRuntimeReadinessContract(input: {
       file: input.file,
       path: 'blocking_summary',
       field: 'blocking_summary',
-      requiredEntries: input.requiredGates.map((gate) => gate.promotionBlocker)
+      requiredEntries: input.requiredGates.flatMap((gate) =>
+        gate.promotionBlocker === undefined ? [] : [gate.promotionBlocker]
+      )
     }),
     ...validateRequiredStringArrayEntries({
       value: input.value,
@@ -403,11 +425,10 @@ function validateAuthRuntimeReadinessGateStates(input: {
         field: 'review_status',
         expectedValue: requiredGate.reviewStatus
       }),
-      ...validateReadinessGateField({
+      ...validateReadinessGatePromotionBlocker({
         file: input.file,
         gate,
         gateId: requiredGate.gateId,
-        field: 'promotion_blocker',
         expectedValue: requiredGate.promotionBlocker
       }),
       ...validateRequiredStringArrayEntries({
@@ -421,6 +442,35 @@ function validateAuthRuntimeReadinessGateStates(input: {
   }
 
   return diagnostics;
+}
+
+function validateReadinessGatePromotionBlocker(input: {
+  readonly file: string;
+  readonly gate: Record<string, unknown>;
+  readonly gateId: string;
+  readonly expectedValue?: string;
+}): readonly Diagnostic[] {
+  if (input.expectedValue !== undefined) {
+    return validateReadinessGateField({
+      file: input.file,
+      gate: input.gate,
+      gateId: input.gateId,
+      field: 'promotion_blocker',
+      expectedValue: input.expectedValue
+    });
+  }
+
+  if (readStringField(input.gate, 'promotion_blocker') === null) {
+    return [];
+  }
+
+  return [
+    createCoreDiagnostic(
+      input.file,
+      `required_gate_states.${input.gateId}.promotion_blocker`,
+      `Core platform auth runtime readiness gate \`${input.gateId}\` must omit \`promotion_blocker\` after typed integration review passes.`
+    )
+  ];
 }
 
 function validateReadinessGateField(input: {

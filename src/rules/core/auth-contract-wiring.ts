@@ -38,13 +38,18 @@ import {
   IDENTITY_SESSION_STORE_STATUS
 } from './auth-identity-session-store.ts';
 import {
-  AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
   AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
+  AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS,
   AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
   AUTH_SESSION_RUNTIME_FILE,
   AUTH_SESSION_RUNTIME_STATUS
 } from './auth-runtime-contracts.ts';
 import { createRequiredAuthRuntimeReadinessGates } from './auth-runtime-readiness.ts';
+import {
+  CORE_RUNTIME_POSTGRES_ADAPTER_BOUNDARY_STATUS,
+  CORE_RUNTIME_POSTGRES_ADAPTER_FILE,
+  CORE_RUNTIME_POSTGRES_ADAPTER_STATUS
+} from './core-runtime-postgres-adapter.ts';
 
 export const AUTH_RUNTIME_READINESS_FILE =
   'contracts/auth-runtime-readiness.yaml';
@@ -57,10 +62,11 @@ export const AUTH_RUNTIME_READINESS_RUNTIME_STATUS = AUTH_SESSION_RUNTIME_STATUS
 export const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
   createRequiredAuthRuntimeReadinessGates({
     authSessionRuntimeFile: AUTH_SESSION_RUNTIME_FILE,
+    authRuntimeReadinessFile: AUTH_RUNTIME_READINESS_FILE,
     authRuntimeAdmissionContextFile: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
-    authRuntimeAdmissionContextBoundaryStatus:
-      AUTH_RUNTIME_ADMISSION_CONTEXT_BOUNDARY_STATUS,
     authRuntimeCommandPropagationFile: AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
+    authRuntimeCommandPropagationBoundaryStatus:
+      AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS,
     identitySessionStoreFile: IDENTITY_SESSION_STORE_FILE,
     identitySessionStoreStatus: IDENTITY_SESSION_STORE_STATUS,
     identitySessionStoreAdapterBoundaryStatus:
@@ -99,7 +105,11 @@ export const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
     authIdempotencyStorageFile: AUTH_IDEMPOTENCY_STORAGE_FILE,
     authIdempotencyStorageStatus: AUTH_IDEMPOTENCY_STORAGE_STATUS,
     authIdempotencyStorageAdapterBoundaryStatus:
-      AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
+      AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS,
+    coreRuntimePostgresAdapterFile: CORE_RUNTIME_POSTGRES_ADAPTER_FILE,
+    coreRuntimePostgresAdapterStatus: CORE_RUNTIME_POSTGRES_ADAPTER_STATUS,
+    coreRuntimePostgresAdapterBoundaryStatus:
+      CORE_RUNTIME_POSTGRES_ADAPTER_BOUNDARY_STATUS
   });
 
 export const AUTH_DURABLE_STORAGE_CONTRACT_REFS = {

@@ -12,16 +12,16 @@ export const AUTH_OAUTH_CALLBACK_STATE_FILE =
   'contracts/auth-oauth-callback-state.yaml';
 
 export const AUTH_PASSKEY_CHALLENGE_STORE_STATUS =
-  'migration_shape_declared_no_adapter';
+  'sqlx_adapter_present_no_live_handler';
 
 export const AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS =
-  'typed_adapter_boundary_no_migration';
+  'sqlx_passkey_challenge_store_adapter_no_auth_promotion';
 
 export const AUTH_OAUTH_CALLBACK_STATE_STATUS =
-  'migration_shape_declared_no_adapter';
+  'sqlx_adapter_present_no_live_handler';
 
 export const AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS =
-  'typed_adapter_boundary_no_migration';
+  'sqlx_oauth_callback_state_store_adapter_no_auth_promotion';
 
 const REQUIRED_AUTH_PASSKEY_CHALLENGE_FIELDS = [
   'challenge_id',
@@ -228,7 +228,7 @@ export function validateAuthPasskeyChallengeStoreContract(
       createCoreDiagnostic(
         AUTH_PASSKEY_CHALLENGE_STORE_FILE,
         'contract.status',
-        `Core platform auth passkey challenge store contract must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_STATUS}\` until a migration-backed adapter exists.`
+        `Core platform auth passkey challenge store contract must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_STATUS}\` until live handlers are reviewed.`
       )
     );
   }
@@ -251,7 +251,7 @@ export function validateAuthPasskeyChallengeStoreContract(
       createCoreDiagnostic(
         AUTH_PASSKEY_CHALLENGE_STORE_FILE,
         'adapter_contract.status',
-        `Core platform auth passkey challenge store adapter boundary must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+        `Core platform auth passkey challenge store adapter boundary must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS}\` until live handlers are reviewed.`
       )
     );
   }
@@ -342,7 +342,7 @@ export function validateAuthOauthCallbackStateContract(
       createCoreDiagnostic(
         AUTH_OAUTH_CALLBACK_STATE_FILE,
         'contract.status',
-        `Core platform auth OAuth callback state contract must stay \`${AUTH_OAUTH_CALLBACK_STATE_STATUS}\` until a migration-backed adapter exists.`
+        `Core platform auth OAuth callback state contract must stay \`${AUTH_OAUTH_CALLBACK_STATE_STATUS}\` until live handlers are reviewed.`
       )
     );
   }
@@ -365,7 +365,7 @@ export function validateAuthOauthCallbackStateContract(
       createCoreDiagnostic(
         AUTH_OAUTH_CALLBACK_STATE_FILE,
         'adapter_contract.status',
-        `Core platform auth OAuth callback state adapter boundary must stay \`${AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+        `Core platform auth OAuth callback state adapter boundary must stay \`${AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS}\` until live handlers are reviewed.`
       )
     );
   }

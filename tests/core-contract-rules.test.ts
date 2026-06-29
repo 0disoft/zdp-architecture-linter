@@ -78,7 +78,7 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `migrations/postgresql/0001_core_foundation.sql`.'
       });
-      expect(diagnostics).toHaveLength(22);
+      expect(diagnostics).toHaveLength(23);
     });
   });
 
@@ -249,9 +249,9 @@ required_operations:
 required_handoff_controls:
   - request_id_propagation
 promotion_blockers:
-  - no_identity_session_store_implementation
-  - no_credential_vault_capability_handoff_implementation
-  - no_auth_audit_event_persistence_implementation
+  - identity_session_store_integration_review_pending
+  - credential_vault_live_client_integration_review_pending
+  - auth_audit_integration_review_pending
   - no_idempotency_storage_implementation
 forbidden_runtime_claims:
   - live_login_handler
@@ -309,7 +309,7 @@ forbidden_runtime_claims:
           file: 'contracts/auth-session-runtime.yaml',
           path: 'promotion_blockers',
           message:
-            'Core platform contract `contracts/auth-session-runtime.yaml` must include `no_passkey_challenge_store_implementation` in `promotion_blockers`.'
+            'Core platform contract `contracts/auth-session-runtime.yaml` must include `no_product_reviewer_approval` in `promotion_blockers`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -346,7 +346,7 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
 blocking_summary:
-  - no_identity_session_store_implementation
+  - identity_session_store_integration_review_pending
 forbidden_readiness_claims:
   - production_ready
 `
@@ -395,7 +395,7 @@ forbidden_readiness_claims:
           file: 'contracts/auth-runtime-readiness.yaml',
           path: 'required_gate_states.session_store_contract.durable_implementation_status',
           message:
-            'Core platform auth runtime readiness gate `session_store_contract` must keep `durable_implementation_status` as `durable_implementation_missing`.'
+            'Core platform auth runtime readiness gate `session_store_contract` must keep `durable_implementation_status` as `sqlx_identity_session_store_adapter_implemented`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -404,6 +404,119 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-runtime-readiness.yaml` must include `live_auth_handler_ready` in `forbidden_readiness_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when core runtime Postgres adapter review receipt claims live auth readiness', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/core-runtime-postgres-adapter.yaml': `
+contract:
+  version: 1
+  status: production_ready
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: live
+  typed_boundary_status: live_auth_handler_ready
+adapter_contract:
+  adapter_id: core-postgres-adapter-v1
+  database_ref: postgresql:core_foundation_contract
+  live_migration_applied: true
+  live_outbox_dispatcher_implemented: true
+  live_auth_audit_storage_implemented: true
+core_runtime_live_auth_integration_review_receipt:
+  boundary_status: live_auth_ready
+  runtime_foundation_contract_checked: true
+  postgres_adapter_contract_checked: true
+  migration_preflight_receipt_checked: false
+  idempotency_adapter_checked: true
+  transaction_outbox_adapter_checked: true
+  audit_storage_adapter_checked: true
+  session_store_adapter_checked: true
+  passkey_challenge_store_adapter_checked: true
+  oauth_callback_state_store_adapter_checked: true
+  dispatcher_replay_review_receipt_checked: false
+  credential_vault_live_client_review_receipt_checked: true
+  auth_audit_integration_review_receipt_checked: false
+  live_auth_handler_enabled: true
+  product_route_unblocked: true
+  migration_apply_enabled: true
+  startup_migration_apply_enabled: true
+  dispatcher_worker_started: true
+  replay_worker_started: true
+  provider_token_exchange_enabled: true
+  live_success_without_audit_append_receipt_rejected: false
+  live_success_without_idempotency_completion_rejected: false
+  live_success_without_session_store_receipt_rejected: false
+  raw_payload_serialized: true
+  review_status: approved
+  promotion_blocker: none
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'contract.status',
+          message:
+            'Core platform runtime PostgreSQL adapter contract must stay `sqlx_transaction_outbox_audit_session_passkey_and_oauth_adapter_present_no_live_auth_handler` until live auth handlers are reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.boundary_status',
+          message:
+            'Core platform runtime live auth integration review receipt must stay `typed_core_runtime_live_auth_integration_review_receipt_no_live_handler` and must not claim live auth readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.live_auth_handler_enabled',
+          message:
+            'Core platform runtime live auth integration review receipt must keep live_auth_handler_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.product_route_unblocked',
+          message:
+            'Core platform runtime live auth integration review receipt must keep product_route_unblocked false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.migration_apply_enabled',
+          message:
+            'Core platform runtime live auth integration review receipt must keep migration_apply_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.provider_token_exchange_enabled',
+          message:
+            'Core platform runtime live auth integration review receipt must keep provider_token_exchange_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-runtime-postgres-adapter.yaml',
+          path: 'core_runtime_live_auth_integration_review_receipt.promotion_blocker',
+          message:
+            'Core platform runtime live auth integration review receipt must keep promotion blocker `core_runtime_live_auth_integration_review_pending`.'
         });
       }
     );
@@ -662,6 +775,16 @@ required_readiness_fields:
   - target
 supported_targets:
   - identity_session_store
+migration_preflight_review_receipt:
+  boundary_status: migration_applied
+  migration_manifest_checked: false
+  repo_local_plan_check_checked: false
+  destructive_migration_rejected: false
+  durable_adapter_promotion_blocked: false
+  migration_apply_enabled: true
+  live_migration_applied: true
+  live_auth_handler_enabled: true
+  product_route_unblocked: true
 required_controls:
   - durable_storage_admission_source
 forbidden_migration_values:
@@ -682,7 +805,7 @@ forbidden_readiness_claims:
           file: 'contracts/auth-durable-storage-migration-readiness.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth durable storage migration readiness contract must stay `contract_only_no_migration` until DB migrations are applied by a reviewed migration slice.'
+            'Core platform auth durable storage migration readiness contract must stay `repo_local_migration_preflight_present_no_apply` while only repo-local migration plan/check preflight exists and migration apply remains disabled.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -714,7 +837,7 @@ forbidden_readiness_claims:
           file: 'contracts/auth-durable-storage-migration-readiness.yaml',
           path: 'contract.typed_boundary_status',
           message:
-            'Core platform auth durable storage migration readiness boundary must stay `typed_migration_readiness_no_migration` until DB migrations and durable adapters exist.'
+            'Core platform auth durable storage migration readiness boundary must stay `typed_migration_preflight_plan_check_no_apply` until migration apply, durable adapter promotion, and live auth handlers are reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -755,6 +878,46 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-durable-storage-migration-readiness.yaml` must include `durable_adapter_ready` in `forbidden_readiness_claims`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'migration_preflight_review_receipt.live_migration_applied',
+          message:
+            'Core platform auth durable storage migration preflight review receipt must keep live_migration_applied false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'migration_preflight_review_receipt.migration_manifest_checked',
+          message:
+            'Core platform auth durable storage migration preflight review receipt must check the migration manifest.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'migration_preflight_review_receipt.durable_adapter_promotion_blocked',
+          message:
+            'Core platform auth durable storage migration preflight review receipt must keep durable adapter promotion blocked.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'migration_preflight_review_receipt.live_auth_handler_enabled',
+          message:
+            'Core platform auth durable storage migration preflight review receipt must keep live_auth_handler_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-migration-readiness.yaml',
+          path: 'migration_preflight_review_receipt.product_route_unblocked',
+          message:
+            'Core platform auth durable storage migration preflight review receipt must keep product_route_unblocked false.'
         });
       }
     );
@@ -872,6 +1035,14 @@ forbidden_readiness_claims:
           message:
             'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `outbox_dispatcher_ready` in `forbidden_readiness_claims`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
+          path: 'forbidden_readiness_claims',
+          message:
+            'Core platform contract `contracts/auth-durable-storage-transaction-outbox.yaml` must include `event_replay_ready` in `forbidden_readiness_claims`.'
+        });
       }
     );
   });
@@ -920,7 +1091,7 @@ forbidden_storage_values:
           file: 'contracts/identity-session-store.yaml',
           path: 'contract.status',
           message:
-            'Core platform identity session store contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
+            'Core platform identity session store contract must stay `sqlx_adapter_present_no_live_handler` while the SQLx adapter exists without live auth handler promotion.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -976,7 +1147,7 @@ forbidden_storage_values:
           file: 'contracts/identity-session-store.yaml',
           path: 'adapter_contract.status',
           message:
-            'Core platform identity session store adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+            'Core platform identity session store adapter boundary must stay `sqlx_identity_session_store_adapter_no_auth_promotion` until auth runtime promotion is reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1157,6 +1328,30 @@ forbidden_claims:
           file: 'contracts/core-event-outbox.yaml',
           path: 'controls',
           message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `dispatcher_consumer_replay_review_receipt_required` in `controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'dispatcher_consumer_replay_review_receipt.boundary_status',
+          message:
+            'Core platform event outbox dispatcher/consumer/replay review receipt must keep boundary_status `typed_dispatcher_consumer_replay_review_receipt_no_worker` until workers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'dispatcher_consumer_replay_review_receipt.dispatcher_worker_started',
+          message:
+            'Core platform event outbox dispatcher/consumer/replay review receipt must keep dispatcher_worker_started false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'controls',
+          message:
             'Core platform contract `contracts/core-event-outbox.yaml` must include `schema_version_positive_integer` in `controls`.'
         });
         expect(diagnostics).toContainEqual({
@@ -1198,6 +1393,11 @@ capability_client_contract:
     - capability_ref_only
 forbidden_payload_values:
   - refresh_token_plaintext
+live_vault_client_integration_review_receipt:
+  boundary_status: live_vault_client_ready
+  capability_handoff_contract_checked: false
+  live_vault_client_enabled: true
+  product_route_unblocked: true
 `
       },
       async (repositoryRoot) => {
@@ -1212,7 +1412,7 @@ forbidden_payload_values:
           file: 'contracts/auth-credential-vault-handoff.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth credential vault handoff contract must stay `migration_shape_declared_no_capability_client` until a live capability client exists.'
+            'Core platform auth credential vault handoff contract must stay `typed_capability_handoff_declared_no_live_vault_client` until a live capability client exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1270,6 +1470,38 @@ forbidden_payload_values:
           message:
             'Core platform contract `contracts/auth-credential-vault-handoff.yaml` must include `provider_secret` in `forbidden_payload_values`.'
         });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'live_vault_client_integration_review_receipt.boundary_status',
+          message:
+            'Core platform auth credential vault live client integration review receipt must keep boundary_status `typed_vault_client_integration_review_receipt_no_live_client` until a live vault client is reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'live_vault_client_integration_review_receipt.capability_handoff_contract_checked',
+          message:
+            'Core platform auth credential vault live client integration review receipt must check the capability handoff contract.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'live_vault_client_integration_review_receipt.live_vault_client_enabled',
+          message:
+            'Core platform auth credential vault live client integration review receipt must keep live_vault_client_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-credential-vault-handoff.yaml',
+          path: 'live_vault_client_integration_review_receipt.product_route_unblocked',
+          message:
+            'Core platform auth credential vault live client integration review receipt must keep product_route_unblocked false.'
+        });
       }
     );
   });
@@ -1316,7 +1548,7 @@ forbidden_storage_values:
           file: 'contracts/auth-passkey-challenge-store.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth passkey challenge store contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
+            'Core platform auth passkey challenge store contract must stay `sqlx_adapter_present_no_live_handler` until live handlers are reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1364,7 +1596,7 @@ forbidden_storage_values:
           file: 'contracts/auth-passkey-challenge-store.yaml',
           path: 'adapter_contract.status',
           message:
-            'Core platform auth passkey challenge store adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+            'Core platform auth passkey challenge store adapter boundary must stay `sqlx_passkey_challenge_store_adapter_no_auth_promotion` until live handlers are reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1434,7 +1666,7 @@ forbidden_storage_values:
           file: 'contracts/auth-oauth-callback-state.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth OAuth callback state contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
+            'Core platform auth OAuth callback state contract must stay `sqlx_adapter_present_no_live_handler` until live handlers are reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1490,7 +1722,7 @@ forbidden_storage_values:
           file: 'contracts/auth-oauth-callback-state.yaml',
           path: 'adapter_contract.status',
           message:
-            'Core platform auth OAuth callback state adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+            'Core platform auth OAuth callback state adapter boundary must stay `sqlx_oauth_callback_state_store_adapter_no_auth_promotion` until live handlers are reviewed.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1551,7 +1783,7 @@ forbidden_payload_values:
           file: 'contracts/auth-audit-event-persistence.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth audit event persistence contract must stay `append_receipt_gate_no_durable_store` until durable append-only storage exists.'
+            'Core platform auth audit event persistence contract must stay `sqlx_audit_persistence_adapter_present_no_live_handler` after the SQLx audit adapter exists but before live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1606,6 +1838,28 @@ required_controls:
   - append_only_enforced_by_storage
 forbidden_storage_values:
   - refresh_token_plaintext
+auth_audit_integration_review_receipt:
+  boundary_status: live_auth_ready
+  audit_event_persistence_contract_checked: false
+  audit_storage_adapter_contract_checked: false
+  sqlx_adapter_receipt_checked: false
+  append_only_storage_checked: false
+  unique_event_id_checked: false
+  transaction_or_outbox_ref_required: false
+  transaction_or_outbox_atomicity_checked: false
+  append_receipt_required_before_auth_success: false
+  audit_write_failure_blocks_auth_success: false
+  audit_success_gate_checked: false
+  failure_event_evidence_required: false
+  failed_outcome_evidence_checked: false
+  redacted_summary_only: false
+  live_success_without_append_receipt_rejected: false
+  raw_payload_serialized: true
+  live_auth_handler_enabled: true
+  product_route_unblocked: true
+  dispatcher_or_replay_dependency_unblocked: true
+  review_status: approved
+  promotion_blocker: none
 `
       },
       async (repositoryRoot) => {
@@ -1620,7 +1874,7 @@ forbidden_storage_values:
           file: 'contracts/auth-audit-storage-adapter.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth audit storage adapter contract must stay `contract_only_no_adapter` until a durable adapter exists.'
+            'Core platform auth audit storage adapter contract must stay `sqlx_adapter_present_no_live_handler` after the SQLx adapter exists but before live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1669,6 +1923,54 @@ forbidden_storage_values:
           path: 'forbidden_storage_values',
           message:
             'Core platform contract `contracts/auth-audit-storage-adapter.yaml` must include `raw_provider_payload` in `forbidden_storage_values`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.boundary_status',
+          message:
+            'Core platform auth audit integration review receipt must stay `typed_auth_audit_integration_review_receipt_no_live_handler` and must not claim live auth handler readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.append_only_storage_checked',
+          message:
+            'Core platform auth audit integration review receipt must check append-only audit storage enforcement.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.transaction_or_outbox_atomicity_checked',
+          message:
+            'Core platform auth audit integration review receipt must check transaction/outbox atomicity before auth success can be reviewed.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.live_auth_handler_enabled',
+          message:
+            'Core platform auth audit integration review receipt must keep live_auth_handler_enabled false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.product_route_unblocked',
+          message:
+            'Core platform auth audit integration review receipt must keep product_route_unblocked false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-audit-storage-adapter.yaml',
+          path: 'auth_audit_integration_review_receipt.dispatcher_or_replay_dependency_unblocked',
+          message:
+            'Core platform auth audit integration review receipt must keep dispatcher_or_replay_dependency_unblocked false.'
         });
       }
     );
@@ -2016,11 +2318,8 @@ required_handoff_controls:
   - oauth_callback_state_verification
   - refresh_token_rotation_without_plaintext_storage
 promotion_blockers:
-  - no_identity_session_store_implementation
-  - no_credential_vault_capability_handoff_implementation
-  - no_passkey_challenge_store_implementation
-  - no_auth_audit_event_persistence_implementation
-  - idempotency_storage_integration_review_pending
+  - credential_vault_live_client_integration_review_pending
+  - auth_audit_integration_review_pending
   - no_product_reviewer_approval
 forbidden_runtime_claims:
   - live_login_handler
@@ -2043,30 +2342,27 @@ production_route_ready: false
 required_gate_states:
   - gate_id: request_id_propagation
     contract_status: required_by_auth_runtime_admission_context
-    typed_boundary_status: typed_admission_boundary_no_live_handler
-    durable_implementation_status: propagation_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_request_id_propagation_implementation
+    typed_boundary_status: typed_propagation_boundary_no_live_handler
+    durable_implementation_status: typed_propagation_plan_implemented
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
       - contracts/auth-runtime-command-propagation.yaml
   - gate_id: trace_id_propagation
     contract_status: required_by_auth_runtime_admission_context
-    typed_boundary_status: typed_admission_boundary_no_live_handler
-    durable_implementation_status: propagation_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_trace_id_propagation_implementation
+    typed_boundary_status: typed_propagation_boundary_no_live_handler
+    durable_implementation_status: typed_propagation_plan_implemented
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
       - contracts/auth-runtime-command-propagation.yaml
   - gate_id: session_store_contract
-    contract_status: migration_shape_declared_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_identity_session_store_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_identity_session_store_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_identity_session_store_adapter_implemented
+    review_status: typed_sqlx_adapter_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/identity-session-store.yaml
@@ -2074,20 +2370,19 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: credential_vault_handoff
-    contract_status: migration_shape_declared_no_capability_client
+    contract_status: typed_capability_handoff_declared_no_live_vault_client
     typed_boundary_status: typed_capability_client_boundary_no_vault_client
-    durable_implementation_status: live_capability_client_missing
-    review_status: review_missing
-    promotion_blocker: no_credential_vault_capability_handoff_implementation
+    durable_implementation_status: typed_capability_client_port_present_no_live_vault_client
+    review_status: integration_review_pending
+    promotion_blocker: credential_vault_live_client_integration_review_pending
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-credential-vault-handoff.yaml
   - gate_id: passkey_challenge_store_contract
-    contract_status: migration_shape_declared_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_passkey_challenge_store_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_passkey_challenge_store_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_passkey_challenge_store_adapter_implemented
+    review_status: typed_sqlx_adapter_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-passkey-challenge-store.yaml
@@ -2095,11 +2390,10 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: oauth_callback_state_verification
-    contract_status: migration_shape_declared_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_oauth_callback_state_storage_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_oauth_callback_state_store_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_oauth_callback_state_store_adapter_implemented
+    review_status: typed_sqlx_adapter_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-oauth-callback-state.yaml
@@ -2107,11 +2401,11 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: audit_event_emission
-    contract_status: append_receipt_gate_no_durable_store
-    typed_boundary_status: typed_port_no_durable_store
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_auth_audit_event_persistence_implementation
+    contract_status: sqlx_audit_persistence_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_auth_audit_storage_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_audit_persistence_adapter_implemented
+    review_status: integration_review_pending
+    promotion_blocker: auth_audit_integration_review_pending
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-audit-event-persistence.yaml
@@ -2119,11 +2413,11 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: auth_audit_storage_adapter
-    contract_status: contract_only_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_auth_audit_storage_adapter_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_auth_audit_storage_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_auth_audit_storage_adapter_implemented
+    review_status: integration_review_pending
+    promotion_blocker: auth_audit_integration_review_pending
     evidence_contracts:
       - contracts/auth-audit-event-persistence.yaml
       - contracts/auth-audit-storage-adapter.yaml
@@ -2134,8 +2428,7 @@ required_gate_states:
     contract_status: sqlx_adapter_present_no_live_handler
     typed_boundary_status: sqlx_auth_idempotency_store_adapter_no_auth_promotion
     durable_implementation_status: idempotency_adapter_implemented
-    review_status: integration_review_pending
-    promotion_blocker: idempotency_storage_integration_review_pending
+    review_status: typed_sqlx_adapter_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
@@ -2144,12 +2437,23 @@ required_gate_states:
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
+  - gate_id: core_runtime_foundation_boundary
+    contract_status: sqlx_transaction_outbox_audit_session_passkey_and_oauth_adapter_present_no_live_auth_handler
+    typed_boundary_status: typed_postgres_adapter_sqlx_pool_no_live_auth_handler
+    durable_implementation_status: sqlx_runtime_foundation_implemented_no_auth_promotion
+    review_status: integration_review_pending
+    promotion_blocker: core_runtime_live_auth_integration_review_pending
+    evidence_contracts:
+      - contracts/auth-session-runtime.yaml
+      - contracts/auth-runtime-readiness.yaml
+      - contracts/core-runtime-postgres-adapter.yaml
+      - contracts/auth-idempotency-storage.yaml
+      - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: refresh_token_rotation_without_plaintext_storage
-    contract_status: migration_shape_declared_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_refresh_token_rotation_storage_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_identity_session_store_adapter_no_auth_promotion
+    durable_implementation_status: sqlx_refresh_token_rotation_adapter_implemented
+    review_status: typed_sqlx_adapter_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/identity-session-store.yaml
@@ -2157,11 +2461,11 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: auth_durable_storage_migration_readiness
-    contract_status: contract_only_no_migration
-    typed_boundary_status: typed_migration_readiness_no_migration
-    durable_implementation_status: migration_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_auth_durable_storage_migration_implementation
+    contract_status: repo_local_migration_preflight_present_no_apply
+    typed_boundary_status: typed_migration_preflight_plan_check_no_apply
+    durable_implementation_status: repo_local_migration_preflight_implemented_no_apply
+    review_status: integration_review_pending
+    promotion_blocker: auth_durable_storage_migration_preflight_review_pending
     evidence_contracts:
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
@@ -2170,7 +2474,7 @@ required_gate_states:
     typed_boundary_status: sqlx_transaction_outbox_adapter_no_dispatcher
     durable_implementation_status: idempotency_transaction_outbox_adapter_implemented
     review_status: integration_review_pending
-    promotion_blocker: transaction_outbox_integration_review_pending
+    promotion_blocker: transaction_outbox_dispatcher_replay_review_pending
     evidence_contracts:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
@@ -2183,18 +2487,11 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
 blocking_summary:
-  - no_request_id_propagation_implementation
-  - no_trace_id_propagation_implementation
-  - no_identity_session_store_implementation
-  - no_auth_durable_storage_migration_implementation
-  - transaction_outbox_integration_review_pending
-  - no_credential_vault_capability_handoff_implementation
-  - no_passkey_challenge_store_implementation
-  - no_oauth_callback_state_storage_implementation
-  - no_auth_audit_event_persistence_implementation
-  - no_auth_audit_storage_adapter_implementation
-  - idempotency_storage_integration_review_pending
-  - no_refresh_token_rotation_storage_implementation
+  - auth_durable_storage_migration_preflight_review_pending
+  - transaction_outbox_dispatcher_replay_review_pending
+  - credential_vault_live_client_integration_review_pending
+  - auth_audit_integration_review_pending
+  - core_runtime_live_auth_integration_review_pending
   - no_product_reviewer_approval
 forbidden_readiness_claims:
   - production_ready
@@ -2204,6 +2501,50 @@ forbidden_readiness_claims:
   - outbox_dispatcher_ready
   - oauth_provider_exchange_ready
   - product_route_unblocked
+`,
+    'contracts/core-runtime-postgres-adapter.yaml': `
+contract:
+  version: 1
+  status: sqlx_transaction_outbox_audit_session_passkey_and_oauth_adapter_present_no_live_auth_handler
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: typed_runtime_foundation_no_live_adapter
+  typed_boundary_status: typed_postgres_adapter_sqlx_pool_no_live_auth_handler
+adapter_contract:
+  adapter_id: core-postgres-adapter-v1
+  database_ref: postgresql:core_foundation_contract
+  live_driver_implemented: true
+  live_connection_pool_implemented: true
+  live_migration_applied: false
+  live_outbox_dispatcher_implemented: false
+  live_auth_audit_storage_implemented: true
+core_runtime_live_auth_integration_review_receipt:
+  boundary_status: typed_core_runtime_live_auth_integration_review_receipt_no_live_handler
+  runtime_foundation_contract_checked: true
+  postgres_adapter_contract_checked: true
+  migration_preflight_receipt_checked: true
+  idempotency_adapter_checked: true
+  transaction_outbox_adapter_checked: true
+  audit_storage_adapter_checked: true
+  session_store_adapter_checked: true
+  passkey_challenge_store_adapter_checked: true
+  oauth_callback_state_store_adapter_checked: true
+  dispatcher_replay_review_receipt_checked: true
+  credential_vault_live_client_review_receipt_checked: true
+  auth_audit_integration_review_receipt_checked: true
+  live_auth_handler_enabled: false
+  product_route_unblocked: false
+  migration_apply_enabled: false
+  startup_migration_apply_enabled: false
+  dispatcher_worker_started: false
+  replay_worker_started: false
+  provider_token_exchange_enabled: false
+  live_success_without_audit_append_receipt_rejected: true
+  live_success_without_idempotency_completion_rejected: true
+  live_success_without_session_store_receipt_rejected: true
+  raw_payload_serialized: false
+  review_status: integration_review_pending
+  promotion_blocker: core_runtime_live_auth_integration_review_pending
 `,
     'contracts/auth-runtime-admission-context.yaml': `
 contract:
@@ -2423,17 +2764,17 @@ forbidden_readiness_claims:
   - oauth_provider_exchange_ready
   - product_route_unblocked
 `,
-    'contracts/auth-durable-storage-migration-readiness.yaml': `
+'contracts/auth-durable-storage-migration-readiness.yaml': `
 contract:
   version: 1
-  status: contract_only_no_migration
+  status: repo_local_migration_preflight_present_no_apply
   owner_repo: zdp-core-platform
   owner_boundary: identity
   runtime_status: contracted_no_live_handler
   source_contracts:
     - contracts/auth-durable-storage-admission.yaml
     - contracts/auth-runtime-readiness.yaml
-  typed_boundary_status: typed_migration_readiness_no_migration
+  typed_boundary_status: typed_migration_preflight_plan_check_no_apply
 required_readiness_fields:
   - target
   - owner_boundary
@@ -2444,6 +2785,11 @@ required_readiness_fields:
   - schema_owner_ref
   - rollback_plan_ref
   - transaction_boundary_ref
+  - repo_local_migration_cli_ref
+  - migration_manifest_ref
+  - schema_history_ref
+  - migration_preflight_receipt_ref
+  - operator_approval_ref
   - review_ref
   - admission_plan_ref
   - operation_id
@@ -2463,6 +2809,26 @@ supported_targets:
   - auth_audit_storage_adapter
   - idempotency_store
   - refresh_token_rotation_storage
+migration_preflight_review_receipt:
+  boundary_status: typed_migration_preflight_review_receipt_no_apply
+  checked_migration_files_required: true
+  pending_migration_ids_required: true
+  migration_manifest_checked: true
+  repo_local_plan_check_checked: true
+  schema_history_checked: true
+  rollback_plan_ref_required: true
+  rollback_forward_or_revert_path_checked: true
+  destructive_migration_rejected: true
+  operator_approval_required: true
+  durable_adapter_promotion_blocked: true
+  migration_apply_enabled: false
+  startup_migration_apply_enabled: false
+  live_database_connection_enabled: false
+  live_migration_applied: false
+  live_auth_handler_enabled: false
+  product_route_unblocked: false
+  review_status: integration_review_pending
+  promotion_blocker: auth_durable_storage_migration_preflight_review_pending
 required_controls:
   - durable_storage_admission_source
   - migration_id_required
@@ -2474,12 +2840,22 @@ required_controls:
   - seed_or_backfill_declared
   - destructive_migration_rejected
   - rollback_forward_or_revert_path_required
+  - repo_local_migration_cli_required
+  - migration_cli_plan_check_implemented
+  - migration_manifest_required
+  - schema_history_check_required
+  - migration_preflight_receipt_required
+  - migration_apply_disabled
+  - startup_migration_apply_disabled
+  - operator_migration_apply_approval_required
+  - live_database_connection_disabled_for_plan_check
+  - applied_migration_claim_rejected
+  - durable_adapter_promotion_blocked
+  - integration_review_required
   - request_trace_idempotency_audit_metadata_required
   - tenant_actor_scope_required
   - raw_secret_storage_rejected
   - raw_provider_payload_rejected
-  - no_db_migration
-  - no_durable_adapter
   - no_live_handler
 forbidden_migration_values:
   - raw_request_body
@@ -2574,6 +2950,9 @@ required_controls:
   - idempotency_state_and_outbox_adapter_implemented
   - state_and_outbox_committed_atomically
   - outbox_dispatcher_not_started
+  - consumer_inbox_not_started
+  - replay_worker_not_started
+  - dispatcher_replay_review_required
   - no_outbox_dispatcher
   - no_live_handler
 forbidden_boundary_values:
@@ -2604,6 +2983,9 @@ forbidden_readiness_claims:
   - db_migration_applied
   - transaction_manager_ready
   - outbox_dispatcher_ready
+  - consumer_inbox_ready
+  - event_replay_ready
+  - money_realtime_sync_ready
   - durable_adapter_ready
   - live_auth_handler_ready
   - oauth_provider_exchange_ready
@@ -2612,7 +2994,7 @@ forbidden_readiness_claims:
 'contracts/identity-session-store.yaml': `
 contract:
   version: 1
-  status: migration_shape_declared_no_adapter
+  status: sqlx_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_session_record_fields:
@@ -2667,7 +3049,8 @@ uniqueness:
   - refresh_token_hash
   - created_by_command_id
 adapter_contract:
-  status: typed_adapter_boundary_no_migration
+  status: sqlx_identity_session_store_adapter_no_auth_promotion
+  implementation_ref: src/core_postgres_session_store_adapter.rs
   adapter_kinds:
     - transactional_session_store
     - session_state_table
@@ -2705,6 +3088,7 @@ contract:
   status: migration_shape_declared_no_dispatcher
   owner: zdp-core-platform
 runtime:
+  dispatcher_consumer_replay_review_plan_implemented: true
   live_dispatcher_implemented: false
   consumer_inbox_implemented: false
   replay_worker_implemented: false
@@ -2766,6 +3150,44 @@ required_delivery_attempt_fields:
   - attempted_at
   - audit_event_ref
   - trace_id
+dispatcher_consumer_replay_review:
+  boundary_status: typed_dispatcher_consumer_replay_review_plan_no_worker
+  dispatcher_ref: dispatcher://core/not-implemented
+  consumer_inbox_ref: consumer-inbox://core/not-implemented
+  replay_worker_ref: replay-worker://core/not-implemented
+  review_ref: review://core/event-dispatcher-consumer-replay
+  required_before_promotion:
+    - dispatcher_worker_implementation_review
+    - consumer_inbox_contract_review
+    - replay_worker_contract_review
+    - dead_letter_replay_review
+    - money_realtime_sync_review
+    - product_route_unblock_review
+  required_controls:
+    - dispatcher_not_started
+    - consumer_inbox_not_started
+    - replay_worker_not_started
+    - dispatcher_claims_forbidden
+    - consumer_inbox_claims_forbidden
+    - replay_worker_claims_forbidden
+    - dead_letter_replay_review_required
+    - money_realtime_sync_review_required
+    - production_route_unblocked_false
+dispatcher_consumer_replay_review_receipt:
+  boundary_status: typed_dispatcher_consumer_replay_review_receipt_no_worker
+  dispatcher_review_checked: true
+  consumer_inbox_contract_checked: true
+  replay_worker_contract_checked: true
+  dead_letter_replay_checked: true
+  money_realtime_sync_checked: true
+  product_route_unblock_checked: true
+  dispatcher_worker_started: false
+  consumer_inbox_enabled: false
+  replay_worker_enabled: false
+  money_realtime_sync_enabled: false
+  product_route_unblocked: false
+  review_status: integration_review_pending
+  promotion_blocker: transaction_outbox_dispatcher_replay_review_pending
 controls:
   - outbox_rows_are_append_only
   - delivery_attempt_rows_are_append_only
@@ -2779,6 +3201,8 @@ controls:
   - trace_reference_required
   - replay_contract_required
   - dead_letter_attempt_history_required
+  - dispatcher_consumer_replay_review_plan_required
+  - dispatcher_consumer_replay_review_receipt_required
   - dispatcher_ref_required_for_delivery_attempts
   - no_dispatcher_claim_until_worker_exists
 forbidden_values:
@@ -2801,7 +3225,7 @@ forbidden_claims:
     'contracts/auth-passkey-challenge-store.yaml': `
 contract:
   version: 1
-  status: migration_shape_declared_no_adapter
+  status: sqlx_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_challenge_fields:
@@ -2848,7 +3272,7 @@ uniqueness:
   - challenge_hash
   - created_by_command_id
 adapter_contract:
-  status: typed_adapter_boundary_no_migration
+  status: sqlx_passkey_challenge_store_adapter_no_auth_promotion
   adapter_kinds:
     - passkey_challenge_hash_store
     - passkey_challenge_state_table
@@ -2884,7 +3308,7 @@ forbidden_storage_values:
     'contracts/auth-oauth-callback-state.yaml': `
 contract:
   version: 1
-  status: migration_shape_declared_no_adapter
+  status: sqlx_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_state_fields:
@@ -2936,7 +3360,7 @@ uniqueness:
   - callback_state_hash
   - created_by_command_id
 adapter_contract:
-  status: typed_adapter_boundary_no_migration
+  status: sqlx_oauth_callback_state_store_adapter_no_auth_promotion
   adapter_kinds:
     - oauth_callback_state_hash_store
     - oauth_callback_state_table
@@ -2976,7 +3400,7 @@ forbidden_storage_values:
     'contracts/auth-credential-vault-handoff.yaml': `
 contract:
   version: 1
-  status: migration_shape_declared_no_capability_client
+  status: typed_capability_handoff_declared_no_live_vault_client
   owner_repo: zdp-core-platform
   owner_boundary: identity
   vault_owner_repo: zdp-privacy-credential-vault
@@ -3010,6 +3434,7 @@ required_handoff_controls:
   - audit_event_reference
   - no_raw_secret_return
   - vault_access_audit_required
+  - live_vault_client_integration_review_receipt_required
 capability_client_contract:
   status: typed_capability_client_boundary_no_vault_client
   client_kinds:
@@ -3054,11 +3479,27 @@ forbidden_payload_values:
   - authorization_header
   - cookie_header
   - raw_provider_payload
+live_vault_client_integration_review_receipt:
+  boundary_status: typed_vault_client_integration_review_receipt_no_live_client
+  capability_handoff_contract_checked: true
+  capability_client_boundary_checked: true
+  vault_access_audit_contract_checked: true
+  privacy_vault_owner_checked: true
+  metadata_only_response_checked: true
+  capability_ref_only_checked: true
+  raw_secret_material_rejected: true
+  provider_payload_storage_rejected: true
+  live_vault_client_enabled: false
+  vault_network_call_enabled: false
+  secret_decrypt_or_read_enabled: false
+  product_route_unblocked: false
+  review_status: integration_review_pending
+  promotion_blocker: credential_vault_live_client_integration_review_pending
 `,
     'contracts/auth-audit-event-persistence.yaml': `
 contract:
   version: 1
-  status: append_receipt_gate_no_durable_store
+  status: sqlx_audit_persistence_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: audit
   source_boundary: identity
@@ -3115,7 +3556,7 @@ forbidden_payload_values:
     'contracts/auth-audit-storage-adapter.yaml': `
 contract:
   version: 1
-  status: contract_only_no_adapter
+  status: sqlx_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: audit
   source_contract: contracts/auth-audit-event-persistence.yaml
@@ -3151,6 +3592,28 @@ forbidden_storage_values:
   - cookie_header
   - raw_provider_payload
   - raw_error_payload
+auth_audit_integration_review_receipt:
+  boundary_status: typed_auth_audit_integration_review_receipt_no_live_handler
+  audit_event_persistence_contract_checked: true
+  audit_storage_adapter_contract_checked: true
+  sqlx_adapter_receipt_checked: true
+  append_only_storage_checked: true
+  unique_event_id_checked: true
+  transaction_or_outbox_ref_required: true
+  transaction_or_outbox_atomicity_checked: true
+  append_receipt_required_before_auth_success: true
+  audit_write_failure_blocks_auth_success: true
+  audit_success_gate_checked: true
+  failure_event_evidence_required: true
+  failed_outcome_evidence_checked: true
+  redacted_summary_only: true
+  live_success_without_append_receipt_rejected: true
+  raw_payload_serialized: false
+  live_auth_handler_enabled: false
+  product_route_unblocked: false
+  dispatcher_or_replay_dependency_unblocked: false
+  review_status: integration_review_pending
+  promotion_blocker: auth_audit_integration_review_pending
 `,
     'contracts/auth-idempotency-storage.yaml': `
 contract:
