@@ -177,7 +177,7 @@ auth_route_promotion:
   allowed_routes:
     - /login
   requires:
-    - product reviewer approval for auth UI paths
+    - product reviewer approval evidence for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
   scope: app-shell
@@ -241,9 +241,17 @@ forbidden:
           ruleId: 'ZDP-APP-001',
           severity: 'error',
           file: 'contracts/app-shell.yaml',
+          path: 'auth_route_promotion.requires',
+          message:
+            'App shell contract `contracts/app-shell.yaml` must include `zdp-core-platform contracts/auth-product-review-approval.yaml receipt reviewed` in `requires`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'contracts/app-shell.yaml',
           path: 'auth_route_promotion.allowed_routes',
           message:
-            'App shell auth route promotion must keep `allowed_routes` empty before live runtime handoff and product reviewer approval; found `/login`.'
+            'App shell auth route promotion must keep `allowed_routes` empty before live runtime handoff, auth product review receipt review, and product reviewer approval evidence; found `/login`.'
         });
       }
     );
@@ -372,7 +380,10 @@ auth_route_promotion:
     - zdp-api-contracts core-api auth/session route catalog adoption
     - zdp-core-platform live auth/session runtime handoff
     - zdp-core-platform auth/session promotion blockers cleared
-    - product reviewer approval for auth UI paths
+    - zdp-core-platform contracts/auth-product-review-approval.yaml receipt reviewed
+    - zdp-core-platform typed_product_approval_gate_receipt_no_route_unblock observed
+    - zdp-core-platform no_product_reviewer_approval remains until product_reviewer_approval_present and product_approval_evidence_ref_present are true
+    - product reviewer approval evidence for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
   scope: full-product-ui
@@ -489,7 +500,7 @@ export const finalAuthorization = true;
           file: 'src/routes/oauth/callback/+page.svelte',
           path: 'source.auth_route_promotion',
           message:
-            'App shell auth route `src/routes/oauth/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.'
+            'App shell auth route `src/routes/oauth/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, auth product review receipt review, and product reviewer approval evidence exist.'
         });
       }
     );
@@ -515,7 +526,7 @@ export const finalAuthorization = true;
           file: 'src/routes/payments/callback/+page.svelte',
           path: 'source.auth_route_promotion',
           message:
-            'App shell auth route `src/routes/payments/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.'
+            'App shell auth route `src/routes/payments/callback/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, auth product review receipt review, and product reviewer approval evidence exist.'
         });
       }
     );
@@ -562,14 +573,14 @@ function createWebAppsServiceContract(): unknown {
       migration_policy:
         'zdp-platform-localization adoption is limited to the six app-shell navigation and page-title messages until product UI slices are reviewed',
       change_approval:
-        'auth route promotion requires core auth/session route catalog adoption, live runtime handoff, credential ownership review, cleared core auth/session promotion blockers, and manual approval for auth UI paths',
+        'auth route promotion requires core auth/session route catalog adoption, live runtime handoff, credential ownership review, cleared core auth/session promotion blockers, zdp-core-platform contracts/auth-product-review-approval.yaml receipt review, typed_product_approval_gate_receipt_no_route_unblock, and manual approval for auth UI paths',
       canary_policy:
         'app-shell localization dogfood only; keep the previous app-shell copy or i18n runtime path available before expanding to product UI copy',
       feature_flag_required: false
     },
     notes: [
       'check:localization is this consumer repository gate; zdp-platform-localization owns bun run check:adoption, generated large-catalog diagnostics, and bun run verify:hmr.',
-      'auth route promotion remains blocked until the core auth/session route catalog is adopted, live runtime handoff exists, core auth/session promotion blockers are cleared, and auth UI paths have product reviewer approval.',
+      'auth route promotion remains blocked until the core auth/session route catalog is adopted, live runtime handoff exists, core auth/session promotion blockers are cleared, zdp-core-platform contracts/auth-product-review-approval.yaml receipt is reviewed, typed_product_approval_gate_receipt_no_route_unblock is observed, and product_reviewer_approval_present plus product_approval_evidence_ref_present are true.',
       'Required auth catalog operations are core.auth.registrations.create, core.auth.sessions.create, core.auth.sessions.refresh, core.auth.sessions.revoke_current, core.auth.recovery_requests.create, core.auth.passkey_challenges.create, core.auth.passkey_assertions.verify, and core.auth.oauth_callbacks.accept.',
       'The first zdp-platform-localization app canary is intentionally limited to the six app-shell navigation and page-title messages.',
       'Disabling the affected app slice and keeping the previous app-shell copy or i18n runtime path is the rollback boundary for the localization canary, so this shell does not require a runtime feature flag.'
@@ -661,7 +672,10 @@ auth_route_promotion:
     - zdp-api-contracts core-api auth/session route catalog adoption
     - zdp-core-platform live auth/session runtime handoff
     - zdp-core-platform auth/session promotion blockers cleared
-    - product reviewer approval for auth UI paths
+    - zdp-core-platform contracts/auth-product-review-approval.yaml receipt reviewed
+    - zdp-core-platform typed_product_approval_gate_receipt_no_route_unblock observed
+    - zdp-core-platform no_product_reviewer_approval remains until product_reviewer_approval_present and product_approval_evidence_ref_present are true
+    - product reviewer approval evidence for auth UI paths
 localization_canary:
   provider: zdp-platform-localization
   scope: app-shell

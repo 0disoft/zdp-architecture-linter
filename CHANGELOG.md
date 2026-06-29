@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.82
+
+- `ZDP-APP-001`이 `zdp-web-apps` auth route promotion 계약에서 `contracts/auth-product-review-approval.yaml` receipt review, `typed_product_approval_gate_receipt_no_route_unblock`, `no_product_reviewer_approval`, `product_reviewer_approval_present`, `product_approval_evidence_ref_present` 조건을 요구하도록 강화했다.
+- auth route alias 차단 메시지도 product approval receipt review 없이는 route unblock이 불가능하다는 기준으로 동기화했다.
+
 ## 0.39.72
 
 - `ZDP-LOCALIZATION-001`이 `@zdp/localization-content` 내부 package boundary도 필수 package set으로 검사하도록 동기화했다.

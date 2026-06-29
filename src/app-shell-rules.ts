@@ -48,7 +48,10 @@ const REQUIRED_AUTH_ROUTE_PROMOTION_REQUIREMENTS = [
   'zdp-api-contracts core-api auth/session route catalog adoption',
   'zdp-core-platform live auth/session runtime handoff',
   'zdp-core-platform auth/session promotion blockers cleared',
-  'product reviewer approval for auth UI paths'
+  'zdp-core-platform contracts/auth-product-review-approval.yaml receipt reviewed',
+  'zdp-core-platform typed_product_approval_gate_receipt_no_route_unblock observed',
+  'zdp-core-platform no_product_reviewer_approval remains until product_reviewer_approval_present and product_approval_evidence_ref_present are true',
+  'product reviewer approval evidence for auth UI paths'
 ] as const;
 
 const BLOCKED_AUTH_ROUTE_SEGMENTS = new Set([
@@ -79,6 +82,9 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'auth route promotion requires core auth/session route catalog adoption',
   'auth route promotion remains blocked until the core auth/session route catalog is adopted',
   'core auth/session promotion blockers are cleared',
+  'zdp-core-platform contracts/auth-product-review-approval.yaml receipt review',
+  'typed_product_approval_gate_receipt_no_route_unblock',
+  'product_reviewer_approval_present plus product_approval_evidence_ref_present are true',
   'Required auth catalog operations are core.auth.registrations.create',
   'limited to the six app-shell navigation and page-title messages',
   'keep the previous app-shell copy or i18n runtime path',
@@ -563,7 +569,7 @@ async function validateSourceBoundaries(
         createAppShellDiagnostic(
           relativePath,
           'source.auth_route_promotion',
-          `App shell auth route \`${relativePath}\` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, and product reviewer approval exist.`
+          `App shell auth route \`${relativePath}\` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, auth product review receipt review, and product reviewer approval evidence exist.`
         )
       );
     }
@@ -730,7 +736,7 @@ function validateEmptyStringArray(input: {
     createAppShellDiagnostic(
       input.file,
       input.path,
-      `App shell auth route promotion must keep \`${input.field}\` empty before live runtime handoff and product reviewer approval; found \`${entry}\`.`
+      `App shell auth route promotion must keep \`${input.field}\` empty before live runtime handoff, auth product review receipt review, and product reviewer approval evidence; found \`${entry}\`.`
     )
   );
 }
