@@ -239,15 +239,9 @@ const REQUIRED_AUTH_AUDIT_INTEGRATION_REVIEW_RECEIPT_VALUES = [
   },
   {
     path: 'auth_audit_integration_review_receipt.review_status',
-    expected: 'integration_review_pending',
+    expected: 'typed_integration_review_passed',
     message:
-      'Core platform auth audit integration review receipt must keep review_status `integration_review_pending`.'
-  },
-  {
-    path: 'auth_audit_integration_review_receipt.promotion_blocker',
-    expected: 'auth_audit_integration_review_pending',
-    message:
-      'Core platform auth audit integration review receipt must keep promotion blocker `auth_audit_integration_review_pending`.'
+      'Core platform auth audit integration review receipt must keep review_status `typed_integration_review_passed` after audit append gating, SQLx storage, failure evidence, and transaction/outbox references are checked.'
   }
 ] as const;
 
@@ -405,6 +399,21 @@ export function validateAuthAuditStorageAdapterContract(
         expected: receiptValue.expected,
         message: receiptValue.message
       })
+    );
+  }
+
+  if (
+    readPath(
+      value,
+      'auth_audit_integration_review_receipt.promotion_blocker'
+    ) !== undefined
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_AUDIT_STORAGE_ADAPTER_FILE,
+        'auth_audit_integration_review_receipt.promotion_blocker',
+        'Core platform auth audit integration review receipt must omit `promotion_blocker` after typed audit integration review passes.'
+      )
     );
   }
 

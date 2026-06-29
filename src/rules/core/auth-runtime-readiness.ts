@@ -158,8 +158,7 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authAuditEventPersistenceStatus,
       typedBoundaryStatus: refs.authAuditStorageAdapterBoundaryStatus,
       durableImplementationStatus: 'sqlx_audit_persistence_adapter_implemented',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'auth_audit_integration_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authAuditEventPersistenceFile,
@@ -173,8 +172,7 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authAuditStorageAdapterStatus,
       typedBoundaryStatus: refs.authAuditStorageAdapterBoundaryStatus,
       durableImplementationStatus: 'sqlx_auth_audit_storage_adapter_implemented',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'auth_audit_integration_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authAuditEventPersistenceFile,
         refs.authAuditStorageAdapterFile,

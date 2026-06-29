@@ -2368,7 +2368,6 @@ required_handoff_controls:
   - refresh_token_rotation_without_plaintext_storage
 promotion_blockers:
   - credential_vault_live_client_integration_review_pending
-  - auth_audit_integration_review_pending
   - no_product_reviewer_approval
 forbidden_runtime_claims:
   - live_login_handler
@@ -2453,8 +2452,7 @@ required_gate_states:
     contract_status: sqlx_audit_persistence_adapter_present_no_live_handler
     typed_boundary_status: sqlx_auth_audit_storage_adapter_no_auth_promotion
     durable_implementation_status: sqlx_audit_persistence_adapter_implemented
-    review_status: integration_review_pending
-    promotion_blocker: auth_audit_integration_review_pending
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-audit-event-persistence.yaml
@@ -2465,8 +2463,7 @@ required_gate_states:
     contract_status: sqlx_adapter_present_no_live_handler
     typed_boundary_status: sqlx_auth_audit_storage_adapter_no_auth_promotion
     durable_implementation_status: sqlx_auth_audit_storage_adapter_implemented
-    review_status: integration_review_pending
-    promotion_blocker: auth_audit_integration_review_pending
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-audit-event-persistence.yaml
       - contracts/auth-audit-storage-adapter.yaml
@@ -2539,7 +2536,6 @@ blocking_summary:
   - auth_durable_storage_migration_preflight_review_pending
   - transaction_outbox_dispatcher_replay_review_pending
   - credential_vault_live_client_integration_review_pending
-  - auth_audit_integration_review_pending
   - core_runtime_live_auth_integration_review_pending
   - no_product_reviewer_approval
 forbidden_readiness_claims:
@@ -3693,8 +3689,7 @@ auth_audit_integration_review_receipt:
   live_auth_handler_enabled: false
   product_route_unblocked: false
   dispatcher_or_replay_dependency_unblocked: false
-  review_status: integration_review_pending
-  promotion_blocker: auth_audit_integration_review_pending
+  review_status: typed_integration_review_passed
 `,
     'contracts/auth-idempotency-storage.yaml': `
 contract:
