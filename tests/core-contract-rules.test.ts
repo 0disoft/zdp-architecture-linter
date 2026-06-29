@@ -516,7 +516,7 @@ core_runtime_live_auth_integration_review_receipt:
           file: 'contracts/core-runtime-postgres-adapter.yaml',
           path: 'core_runtime_live_auth_integration_review_receipt.promotion_blocker',
           message:
-            'Core platform runtime live auth integration review receipt must keep promotion blocker `core_runtime_live_auth_integration_review_pending`.'
+            'Core platform runtime live auth integration review receipt must omit promotion_blocker after typed integration review passes.'
         });
       }
     );
@@ -2485,8 +2485,7 @@ required_gate_states:
     contract_status: sqlx_transaction_outbox_audit_session_passkey_and_oauth_adapter_present_no_live_auth_handler
     typed_boundary_status: typed_postgres_adapter_sqlx_pool_no_live_auth_handler
     durable_implementation_status: sqlx_runtime_foundation_implemented_no_auth_promotion
-    review_status: integration_review_pending
-    promotion_blocker: core_runtime_live_auth_integration_review_pending
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-readiness.yaml
@@ -2529,7 +2528,6 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
 blocking_summary:
-  - core_runtime_live_auth_integration_review_pending
   - no_product_reviewer_approval
 forbidden_readiness_claims:
   - production_ready
@@ -2581,8 +2579,7 @@ core_runtime_live_auth_integration_review_receipt:
   live_success_without_idempotency_completion_rejected: true
   live_success_without_session_store_receipt_rejected: true
   raw_payload_serialized: false
-  review_status: integration_review_pending
-  promotion_blocker: core_runtime_live_auth_integration_review_pending
+  review_status: typed_integration_review_passed
 `,
     'contracts/auth-runtime-admission-context.yaml': `
 contract:

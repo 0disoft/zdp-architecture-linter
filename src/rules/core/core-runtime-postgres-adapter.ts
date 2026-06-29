@@ -181,15 +181,9 @@ const REQUIRED_CORE_RUNTIME_POSTGRES_ADAPTER_VALUES = [
   },
   {
     path: 'core_runtime_live_auth_integration_review_receipt.review_status',
-    expected: 'integration_review_pending',
+    expected: 'typed_integration_review_passed',
     message:
-      'Core platform runtime live auth integration review receipt must keep review_status `integration_review_pending`.'
-  },
-  {
-    path: 'core_runtime_live_auth_integration_review_receipt.promotion_blocker',
-    expected: 'core_runtime_live_auth_integration_review_pending',
-    message:
-      'Core platform runtime live auth integration review receipt must keep promotion blocker `core_runtime_live_auth_integration_review_pending`.'
+      'Core platform runtime live auth integration review receipt must keep review_status `typed_integration_review_passed`.'
   }
 ] as const;
 
@@ -208,6 +202,22 @@ export function validateCoreRuntimePostgresAdapterContract(
         message: requiredValue.message
       })
     );
+  }
+
+  if (
+    readPath(
+      value,
+      'core_runtime_live_auth_integration_review_receipt.promotion_blocker'
+    ) !== undefined
+  ) {
+    diagnostics.push({
+      ruleId: 'ZDP-CORE-001',
+      severity: 'error',
+      file: CORE_RUNTIME_POSTGRES_ADAPTER_FILE,
+      path: 'core_runtime_live_auth_integration_review_receipt.promotion_blocker',
+      message:
+        'Core platform runtime live auth integration review receipt must omit promotion_blocker after typed integration review passes.'
+    });
   }
 
   if (

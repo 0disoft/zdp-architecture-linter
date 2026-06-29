@@ -201,8 +201,7 @@ export function createRequiredAuthRuntimeReadinessGates(
       typedBoundaryStatus: refs.coreRuntimePostgresAdapterBoundaryStatus,
       durableImplementationStatus:
         'sqlx_runtime_foundation_implemented_no_auth_promotion',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'core_runtime_live_auth_integration_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authRuntimeReadinessFile,
