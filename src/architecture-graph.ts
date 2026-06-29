@@ -82,6 +82,7 @@ export interface RepositoryGraphNode {
   readonly file: 'catalogs/repositories.yaml';
   readonly path: string;
   readonly source: 'catalog';
+  readonly status: string | null;
   readonly area: string | null;
   readonly kind: string | null;
   readonly repoStage: string | null;
@@ -93,6 +94,7 @@ export interface ServiceGraphNode {
   readonly path: string;
   readonly source: ArchitectureNodeSource;
   readonly repo: string | null;
+  readonly status: string | null;
 }
 
 export interface DatastoreGraphNode {
@@ -100,6 +102,7 @@ export interface DatastoreGraphNode {
   readonly file: 'catalogs/datastores.yaml';
   readonly path: string;
   readonly source: 'catalog';
+  readonly status: string | null;
   readonly kind: string | null;
   readonly ownerRepo: string | null;
 }
@@ -174,6 +177,7 @@ function buildRepositoryNodes(
       file: 'catalogs/repositories.yaml',
       path: record.path,
       source: 'catalog',
+      status: record.status,
       area: record.area,
       kind: record.kind,
       repoStage: record.repoStage
@@ -187,7 +191,8 @@ function buildCatalogServiceNodes(index: ServiceIndex): readonly ServiceGraphNod
     file: 'catalogs/services.yaml',
     path: record.path,
     source: 'catalog',
-    repo: record.repo
+    repo: record.repo,
+    status: record.status
   }));
 }
 
@@ -215,7 +220,8 @@ function buildRepositoryServiceContractNodes(
         file: 'service.yaml',
         path: index === 0 ? 'service' : `services[${index}]`,
         source: 'repository-service-contract',
-        repo: readStringField(service, 'repo')
+        repo: readStringField(service, 'repo'),
+        status: readStringField(service, 'status')
       }
     ];
   });
@@ -228,6 +234,7 @@ function buildDatastoreNodes(index: DatastoreIndex): readonly DatastoreGraphNode
       file: 'catalogs/datastores.yaml',
       path: record.path,
       source: 'catalog',
+      status: record.status,
       kind: record.kind,
       ownerRepo: record.ownerRepo
     })

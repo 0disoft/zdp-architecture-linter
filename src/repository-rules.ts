@@ -49,6 +49,7 @@ const EMPTY_REPOSITORY_ROADMAP_EVIDENCE: RepositoryRoadmapEvidence = {
 
 export interface RepositoryCatalogRecord {
   readonly name: string;
+  readonly status: string | null;
   readonly repoStage: string | null;
   readonly kind: string | null;
   readonly area: string | null;
@@ -114,6 +115,7 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
       name,
       {
         name,
+        status: readStringField(repository, 'status'),
         repoStage: readStringField(repository, 'repo_stage'),
         kind: readStringField(repository, 'kind'),
         area: readStringField(repository, 'area'),

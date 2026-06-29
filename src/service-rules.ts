@@ -10,6 +10,7 @@ const SERVICE_CONTRACT_FILE = 'service.yaml';
 export interface ServiceCatalogRecord {
   readonly id: string;
   readonly repo: string | null;
+  readonly status: string | null;
   readonly path: string;
 }
 
@@ -40,6 +41,7 @@ export function buildServiceIndex(value: unknown): ServiceIndex {
       {
         id,
         repo: readStringField(service, 'repo'),
+        status: readStringField(service, 'status'),
         path: getServiceDiagnosticPath(service, index)
       }
     ]);

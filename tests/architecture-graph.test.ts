@@ -9,6 +9,7 @@ describe('architecture graph', () => {
           repositories: [
             {
               name: 'zdp-core-platform',
+              status: 'reserved',
               repo_stage: 'deploy_unit',
               kind: 'deploy_unit',
               area: 'core'
@@ -23,6 +24,7 @@ describe('architecture graph', () => {
             {
               id: 'core-api',
               repo: 'zdp-core-platform',
+              status: 'experiment',
               dependencies: ['auth-api'],
               direct_datastore_access: ['core_postgres'],
               external_dependencies: ['openai'],
@@ -35,7 +37,8 @@ describe('architecture graph', () => {
             },
             {
               id: 'auth-api',
-              repo: 'zdp-core-platform'
+              repo: 'zdp-core-platform',
+              status: 'reserved'
             }
           ]
         },
@@ -43,6 +46,7 @@ describe('architecture graph', () => {
           datastores: [
             {
               id: 'core_postgres',
+              status: 'active',
               kind: 'postgresql',
               owner_repo: 'zdp-core-platform'
             }
@@ -95,6 +99,7 @@ describe('architecture graph', () => {
         file: 'catalogs/repositories.yaml',
         path: 'repositories[0:zdp-core-platform]',
         source: 'catalog',
+        status: 'reserved',
         area: 'core',
         kind: 'deploy_unit',
         repoStage: 'deploy_unit'
@@ -106,14 +111,16 @@ describe('architecture graph', () => {
         file: 'catalogs/services.yaml',
         path: 'services[0:core-api]',
         source: 'catalog',
-        repo: 'zdp-core-platform'
+        repo: 'zdp-core-platform',
+        status: 'experiment'
       },
       {
         id: 'auth-api',
         file: 'catalogs/services.yaml',
         path: 'services[1:auth-api]',
         source: 'catalog',
-        repo: 'zdp-core-platform'
+        repo: 'zdp-core-platform',
+        status: 'reserved'
       }
     ]);
     expect(graph.nodes.datastores[0]).toEqual({
@@ -121,6 +128,7 @@ describe('architecture graph', () => {
       file: 'catalogs/datastores.yaml',
       path: 'datastores[0:core_postgres]',
       source: 'catalog',
+      status: 'active',
       kind: 'postgresql',
       ownerRepo: 'zdp-core-platform'
     });
@@ -235,7 +243,8 @@ describe('architecture graph', () => {
           services: [
             {
               id: 'architecture-linter',
-              repo: 'zdp-architecture-linter'
+              repo: 'zdp-architecture-linter',
+              status: 'reserved'
             }
           ]
         },
@@ -253,7 +262,8 @@ describe('architecture graph', () => {
       repositoryServiceContract: {
         service: {
           id: 'architecture-linter',
-          repo: 'zdp-architecture-linter'
+          repo: 'zdp-architecture-linter',
+          status: 'reserved'
         },
         runtime: {
           core: 'local-cli'
@@ -284,14 +294,16 @@ describe('architecture graph', () => {
         file: 'catalogs/services.yaml',
         path: 'services[0:architecture-linter]',
         source: 'catalog',
-        repo: 'zdp-architecture-linter'
+        repo: 'zdp-architecture-linter',
+        status: 'reserved'
       },
       {
         id: 'architecture-linter',
         file: 'service.yaml',
         path: 'service',
         source: 'repository-service-contract',
-        repo: 'zdp-architecture-linter'
+        repo: 'zdp-architecture-linter',
+        status: 'reserved'
       }
     ]);
     expect(graph.edges).toEqual([

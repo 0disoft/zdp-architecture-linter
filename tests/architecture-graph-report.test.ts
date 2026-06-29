@@ -13,6 +13,7 @@ describe('architecture graph report', () => {
           repositories: [
             {
               name: 'zdp-core-platform',
+              status: 'reserved',
               repo_stage: 'deploy_unit',
               kind: 'deploy_unit',
               area: 'core'
@@ -26,7 +27,8 @@ describe('architecture graph report', () => {
           services: [
             {
               id: 'core-api',
-              repo: 'zdp-core-platform'
+              repo: 'zdp-core-platform',
+              status: 'experiment'
             }
           ]
         },
@@ -34,6 +36,7 @@ describe('architecture graph report', () => {
           datastores: [
             {
               id: 'core_postgres',
+              status: 'active',
               kind: 'postgresql',
               owner_repo: 'zdp-core-platform'
             }
@@ -70,7 +73,8 @@ describe('architecture graph report', () => {
       repositoryServiceContract: {
         service: {
           id: 'architecture-linter',
-          repo: 'zdp-architecture-linter'
+          repo: 'zdp-architecture-linter',
+          status: 'reserved'
         }
       }
     });
@@ -92,14 +96,16 @@ describe('architecture graph report', () => {
         file: 'catalogs/services.yaml',
         path: 'services[0:core-api]',
         source: 'catalog',
-        repo: 'zdp-core-platform'
+        repo: 'zdp-core-platform',
+        status: 'experiment'
       },
       {
         id: 'architecture-linter',
         file: 'service.yaml',
         path: 'service',
         source: 'repository-service-contract',
-        repo: 'zdp-architecture-linter'
+        repo: 'zdp-architecture-linter',
+        status: 'reserved'
       }
     ]);
     expect(report.edges).toEqual([

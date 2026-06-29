@@ -96,7 +96,8 @@ describe('diagnostic explain report', () => {
               file: 'service.yaml',
               path: 'service',
               source: 'repository-service-contract',
-              repo: 'zdp-ai-platform'
+              repo: 'zdp-ai-platform',
+              status: null
             }
           },
           {
@@ -106,6 +107,7 @@ describe('diagnostic explain report', () => {
               file: 'catalogs/datastores.yaml',
               path: 'datastores[0:comm_mail_postgres]',
               source: 'catalog',
+              status: null,
               kind: 'postgresql',
               ownerRepo: 'zdp-comm-platform'
             }

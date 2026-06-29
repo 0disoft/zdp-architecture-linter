@@ -13,6 +13,7 @@ describe('architecture normalize report', () => {
           repositories: [
             {
               name: 'zdp-core-platform',
+              status: 'reserved',
               repo_stage: 'deploy_unit',
               kind: 'deploy_unit',
               area: 'core'
@@ -27,6 +28,7 @@ describe('architecture normalize report', () => {
             {
               id: 'core-api',
               repo: 'zdp-core-platform',
+              status: 'experiment',
               direct_datastore_access: ['core_postgres']
             }
           ]
@@ -35,6 +37,7 @@ describe('architecture normalize report', () => {
           datastores: [
             {
               id: 'core_postgres',
+              status: 'active',
               kind: 'postgresql',
               owner_repo: 'zdp-core-platform'
             }
@@ -83,8 +86,11 @@ describe('architecture normalize report', () => {
       edges: 3
     });
     expect(report.repositories[0]?.id).toBe('zdp-core-platform');
+    expect(report.repositories[0]?.status).toBe('reserved');
     expect(report.services[0]?.id).toBe('core-api');
+    expect(report.services[0]?.status).toBe('experiment');
     expect(report.datastores[0]?.id).toBe('core_postgres');
+    expect(report.datastores[0]?.status).toBe('active');
     expect(report.edges.map((edge) => edge.type)).toEqual([
       'service-owned-by-repository',
       'service-accesses-datastore',

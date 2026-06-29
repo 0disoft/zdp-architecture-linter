@@ -19,6 +19,7 @@ const LOGICAL_BOUNDARY_KIND = 'logical_boundary';
 
 export interface DatastoreCatalogRecord {
   readonly id: string;
+  readonly status: string | null;
   readonly kind: string | null;
   readonly ownerRepo: string | null;
   readonly path: string;
@@ -50,6 +51,7 @@ export function buildDatastoreIndex(value: unknown): DatastoreIndex {
       id,
       {
         id,
+        status: readStringField(datastore, 'status'),
         kind: readStringField(datastore, 'kind'),
         ownerRepo: readStringField(datastore, 'owner_repo'),
         path: getDatastoreDiagnosticPath(datastore, index)

@@ -462,6 +462,7 @@ function createRepositoryIndex(repository: {
         repository.name,
         {
           ...repository,
+          status: null,
           purpose: repository.purpose ?? null,
           riskLevel: repository.riskLevel ?? null,
           ownsData: repository.ownsData ?? [],
