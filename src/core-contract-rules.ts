@@ -75,6 +75,10 @@ import {
   validateAuthIdempotencyStorageContract
 } from './rules/core/auth-idempotency-storage.ts';
 import {
+  AUTH_PRODUCT_REVIEW_APPROVAL_FILE,
+  validateAuthProductReviewApprovalContract
+} from './rules/core/auth-product-review-approval.ts';
+import {
   AUTH_DURABLE_STORAGE_CONTRACT_REFS,
   AUTH_RUNTIME_READINESS_FILE,
   AUTH_RUNTIME_READINESS_RUNTIME_STATUS,
@@ -120,7 +124,8 @@ export async function validateRepositoryCoreContract(input: {
     authAuditStorageAdapter,
     coreEventOutbox,
     authIdempotencyStorage,
-    coreRuntimePostgresAdapter
+    coreRuntimePostgresAdapter,
+    authProductReviewApproval
   ] = await Promise.all([
       readRequiredTextFile(input.repositoryRoot, CORE_CI_WORKFLOW_FILE),
       readRequiredYamlContract(input.repositoryRoot, CORE_BOUNDARIES_FILE),
@@ -150,7 +155,8 @@ export async function validateRepositoryCoreContract(input: {
       readRequiredYamlContract(input.repositoryRoot, AUTH_AUDIT_STORAGE_ADAPTER_FILE),
       readRequiredYamlContract(input.repositoryRoot, CORE_EVENT_OUTBOX_FILE),
       readRequiredYamlContract(input.repositoryRoot, AUTH_IDEMPOTENCY_STORAGE_FILE),
-      readRequiredYamlContract(input.repositoryRoot, CORE_RUNTIME_POSTGRES_ADAPTER_FILE)
+      readRequiredYamlContract(input.repositoryRoot, CORE_RUNTIME_POSTGRES_ADAPTER_FILE),
+      readRequiredYamlContract(input.repositoryRoot, AUTH_PRODUCT_REVIEW_APPROVAL_FILE)
     ]);
 
   return [
@@ -177,6 +183,7 @@ export async function validateRepositoryCoreContract(input: {
     ...coreEventOutbox.diagnostics,
     ...authIdempotencyStorage.diagnostics,
     ...coreRuntimePostgresAdapter.diagnostics,
+    ...authProductReviewApproval.diagnostics,
     ...(ciWorkflow.value === null ? [] : validateCoreCiWorkflow(ciWorkflow.value)),
     ...(boundaries.value === null ? [] : validateCoreBoundaries(boundaries.value)),
     ...(commandEnvelope.value === null
@@ -274,7 +281,10 @@ export async function validateRepositoryCoreContract(input: {
       ? []
       : validateCoreRuntimePostgresAdapterContract(
           coreRuntimePostgresAdapter.value
-        ))
+        )),
+    ...(authProductReviewApproval.value === null
+      ? []
+      : validateAuthProductReviewApprovalContract(authProductReviewApproval.value))
   ];
 }
 

@@ -38,6 +38,10 @@ import {
   IDENTITY_SESSION_STORE_STATUS
 } from './auth-identity-session-store.ts';
 import {
+  AUTH_PRODUCT_REVIEW_APPROVAL_FILE,
+  AUTH_PRODUCT_REVIEW_APPROVAL_RECEIPT_BOUNDARY_STATUS
+} from './auth-product-review-approval.ts';
+import {
   AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
   AUTH_RUNTIME_COMMAND_PROPAGATION_BOUNDARY_STATUS,
   AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
@@ -63,6 +67,9 @@ export const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
   createRequiredAuthRuntimeReadinessGates({
     authSessionRuntimeFile: AUTH_SESSION_RUNTIME_FILE,
     authRuntimeReadinessFile: AUTH_RUNTIME_READINESS_FILE,
+    authProductReviewApprovalFile: AUTH_PRODUCT_REVIEW_APPROVAL_FILE,
+    authProductReviewApprovalReceiptBoundaryStatus:
+      AUTH_PRODUCT_REVIEW_APPROVAL_RECEIPT_BOUNDARY_STATUS,
     authRuntimeAdmissionContextFile: AUTH_RUNTIME_ADMISSION_CONTEXT_FILE,
     authRuntimeCommandPropagationFile: AUTH_RUNTIME_COMMAND_PROPAGATION_FILE,
     authRuntimeCommandPropagationBoundaryStatus:

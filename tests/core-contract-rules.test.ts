@@ -78,7 +78,15 @@ describe('core platform contract rules', () => {
         message:
           'Core platform repository must include `migrations/postgresql/0001_core_foundation.sql`.'
       });
-      expect(diagnostics).toHaveLength(23);
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-CORE-001',
+        severity: 'error',
+        file: 'contracts/auth-product-review-approval.yaml',
+        path: 'repository.root',
+        message:
+          'Core platform repository must include `contracts/auth-product-review-approval.yaml`.'
+      });
+      expect(diagnostics).toHaveLength(24);
     });
   });
 
@@ -404,6 +412,95 @@ forbidden_readiness_claims:
           path: 'forbidden_readiness_claims',
           message:
             'Core platform contract `contracts/auth-runtime-readiness.yaml` must include `live_auth_handler_ready` in `forbidden_readiness_claims`.'
+        });
+      }
+    );
+  });
+
+  test('fails when product review approval contract claims route unblock', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidCoreFiles(),
+        'contracts/auth-product-review-approval.yaml': `
+contract:
+  version: 1
+  status: product_review_gate_declared_no_route_unblock
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contracts:
+    - contracts/auth-session-runtime.yaml
+    - contracts/auth-runtime-readiness.yaml
+approval_gate:
+  gate_id: product_reviewer_approval
+  promotion_blocker: no_product_reviewer_approval
+  approval_status: approved
+  approval_evidence_ref_required: false
+  approved_by_required: true
+  approved_at_required: true
+  approval_scope_required:
+    - auth_session_routes
+  route_unblock_allowed: true
+  live_auth_handler_allowed: true
+product_approval_review_receipt:
+  boundary_status: typed_product_approval_gate_receipt_no_route_unblock
+  auth_session_runtime_contract_checked: true
+  auth_runtime_readiness_contract_checked: true
+  core_runtime_live_auth_integration_review_checked: true
+  product_reviewer_approval_present: true
+  product_approval_evidence_ref_present: true
+  promotion_blocker: no_product_reviewer_approval
+  promotion_ready: true
+  production_route_ready: true
+  live_auth_handler_enabled: true
+  product_route_unblocked: true
+  provider_token_exchange_enabled: true
+  review_status: approved
+required_controls:
+  - product_reviewer_approval_required
+forbidden_claims:
+  - product_route_unblocked
+verification_expectation:
+  - this contract creates the product review evidence surface only
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-product-review-approval.yaml',
+          path: 'approval_gate.approval_status',
+          message:
+            'Core platform auth product review approval gate must keep approval_status `review_missing` until product review evidence exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-product-review-approval.yaml',
+          path: 'approval_gate.route_unblock_allowed',
+          message:
+            'Core platform auth product review approval gate must keep route_unblock_allowed false before review evidence exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-product-review-approval.yaml',
+          path: 'product_approval_review_receipt.product_reviewer_approval_present',
+          message:
+            'Core platform auth product review approval receipt must keep product_reviewer_approval_present false until approval evidence exists.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-product-review-approval.yaml',
+          path: 'product_approval_review_receipt.product_route_unblocked',
+          message:
+            'Core platform auth product review approval receipt must keep product_route_unblocked false.'
         });
       }
     );
@@ -2521,12 +2618,13 @@ required_gate_states:
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: product_reviewer_approval
     contract_status: required_by_auth_session_runtime
-    typed_boundary_status: no_typed_boundary_needed
+    typed_boundary_status: typed_product_approval_gate_receipt_no_route_unblock
     durable_implementation_status: review_missing
     review_status: review_missing
     promotion_blocker: no_product_reviewer_approval
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
+      - contracts/auth-product-review-approval.yaml
 blocking_summary:
   - no_product_reviewer_approval
 forbidden_readiness_claims:
@@ -2537,6 +2635,67 @@ forbidden_readiness_claims:
   - outbox_dispatcher_ready
   - oauth_provider_exchange_ready
   - product_route_unblocked
+`,
+    'contracts/auth-product-review-approval.yaml': `
+contract:
+  version: 1
+  status: product_review_gate_declared_no_route_unblock
+  owner_repo: zdp-core-platform
+  owner_boundary: identity
+  runtime_status: contracted_no_live_handler
+  source_contracts:
+    - contracts/auth-session-runtime.yaml
+    - contracts/auth-runtime-readiness.yaml
+approval_gate:
+  gate_id: product_reviewer_approval
+  promotion_blocker: no_product_reviewer_approval
+  reviewer_role: product_reviewer
+  approval_status: review_missing
+  approval_evidence_ref_required: true
+  approved_by_required: true
+  approved_at_required: true
+  approval_scope_required:
+    - auth_session_routes
+    - signup_login_recovery_routes
+    - passkey_routes
+    - oauth_callback_routes
+  route_unblock_allowed: false
+  live_auth_handler_allowed: false
+product_approval_review_receipt:
+  boundary_status: typed_product_approval_gate_receipt_no_route_unblock
+  auth_session_runtime_contract_checked: true
+  auth_runtime_readiness_contract_checked: true
+  core_runtime_live_auth_integration_review_checked: true
+  product_reviewer_approval_present: false
+  product_approval_evidence_ref_present: false
+  promotion_blocker: no_product_reviewer_approval
+  promotion_ready: false
+  production_route_ready: false
+  live_auth_handler_enabled: false
+  product_route_unblocked: false
+  provider_token_exchange_enabled: false
+  review_status: review_missing
+required_controls:
+  - product_reviewer_approval_required
+  - blocker_remains_until_approval_evidence
+  - approval_evidence_ref_required_before_unblock
+  - auth_session_runtime_contract_checked
+  - auth_runtime_readiness_contract_checked
+  - core_runtime_live_auth_integration_review_checked
+  - live_handler_disabled
+  - provider_exchange_disabled
+  - route_aliases_remain_blocked
+  - product_route_unblocked_false
+forbidden_claims:
+  - product_route_unblocked
+  - production_route_ready
+  - promotion_ready
+  - live_auth_handler_ready
+  - provider_token_exchange_ready
+  - approval_without_evidence
+verification_expectation:
+  - this contract creates the product review evidence surface only
+  - this receipt is not live auth handler, provider token exchange, applied migration, or product route unblock proof
 `,
     'contracts/core-runtime-postgres-adapter.yaml': `
 contract:

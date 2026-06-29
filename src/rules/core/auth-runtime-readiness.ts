@@ -10,6 +10,8 @@ import {
 export interface AuthRuntimeReadinessContractRefs {
   readonly authSessionRuntimeFile: string;
   readonly authRuntimeReadinessFile: string;
+  readonly authProductReviewApprovalFile: string;
+  readonly authProductReviewApprovalReceiptBoundaryStatus: string;
   readonly authRuntimeAdmissionContextFile: string;
   readonly authRuntimeCommandPropagationFile: string;
   readonly authRuntimeCommandPropagationBoundaryStatus: string;
@@ -254,11 +256,14 @@ export function createRequiredAuthRuntimeReadinessGates(
     {
       gateId: 'product_reviewer_approval',
       contractStatus: 'required_by_auth_session_runtime',
-      typedBoundaryStatus: 'no_typed_boundary_needed',
+      typedBoundaryStatus: refs.authProductReviewApprovalReceiptBoundaryStatus,
       durableImplementationStatus: 'review_missing',
       reviewStatus: 'review_missing',
       promotionBlocker: 'no_product_reviewer_approval',
-      evidenceContracts: [refs.authSessionRuntimeFile]
+      evidenceContracts: [
+        refs.authSessionRuntimeFile,
+        refs.authProductReviewApprovalFile
+      ]
     }
   ];
 }
