@@ -8,9 +8,12 @@ const TOKEN_INDEXER_REPOSITORY_NAME = 'zdp-token-indexer';
 const TOKEN_AUTHORITY_RULE_ID = 'ZDP-TOKEN-001';
 const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
 const TOKEN_SUI_API_RULE_ID = 'ZDP-TOKEN-003';
+const TOKEN_PACKAGE_UPGRADE_RULE_ID = 'ZDP-TOKEN-005';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
 const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
 const TOKEN_SUI_API_SELECTION_FILE = 'contracts/sui-api-selection.yaml';
+const TOKEN_PACKAGE_UPGRADE_POLICY_FILE =
+  'contracts/package-upgrade-policy.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -107,6 +110,24 @@ const REQUIRED_SUI_API_SELECTION_EVIDENCE = [
   'endpoint_config_owner'
 ] as const;
 
+const REQUIRED_PACKAGE_MANIFEST_FIELDS = [
+  'original_package_id',
+  'latest_package_id',
+  'dependency_ids',
+  'build_output_digest',
+  'deployment_transaction_digest',
+  'migration_transaction_digest',
+  'activation_transaction_digest',
+  'source_commit',
+  'move_lock_digest'
+] as const;
+
+const REQUIRED_PACKAGE_UPGRADE_EVENTS = [
+  'PackageUpgraded',
+  'StateMigrated',
+  'OperationallyEnabled'
+] as const;
+
 export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -123,7 +144,8 @@ export async function validateRepositoryTokenContracts(input: {
       ...(await validateRepositorySuiApiSelectionContract(
         input.repositoryRoot,
         repositoryName
-      ))
+      )),
+      ...(await validateRepositoryPackageUpgradePolicy(input.repositoryRoot))
     ];
   }
 
@@ -205,6 +227,28 @@ async function validateRepositorySuiApiSelectionContract(
   }
 
   return validateSuiApiSelectionContract(contract.value, repositoryName);
+}
+
+async function validateRepositoryPackageUpgradePolicy(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const contract = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token protocol repository must include \`${relativePath}\` before upgradeable package work starts.`,
+      parseMessage: (relativePath, error) =>
+        `Token package upgrade policy \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_PACKAGE_UPGRADE_POLICY_FILE
+  );
+
+  if (contract.diagnostics.length > 0) {
+    return contract.diagnostics;
+  }
+
+  return validateTokenPackageUpgradePolicy(contract.value);
 }
 
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
@@ -493,6 +537,135 @@ function validateTokenChainFactContract(value: unknown): readonly Diagnostic[] {
         'replay_state'
       ],
       label: 'Money chain fact consumption gate'
+    })
+  ];
+}
+
+function validateTokenPackageUpgradePolicy(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'contract.owner',
+      expected: TOKEN_PROTOCOL_REPOSITORY_NAME,
+      message:
+        'Token package upgrade policy must declare owner `zdp-token-protocol`.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_mainnet',
+      message:
+        'Token package upgrade policy must stay lab-only and must not claim mainnet readiness.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'package_manifest.required_fields',
+      requiredEntries: REQUIRED_PACKAGE_MANIFEST_FIELDS,
+      label: 'Token package upgrade manifest'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'version_guard.old_package_version_guard_required',
+      expected: true,
+      message:
+        'Token package upgrade policy must require old package version guards before state-changing entry functions run.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'migration_plan.required',
+      expected: true,
+      message:
+        'Token package upgrade policy must require an explicit migration plan.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'migration_plan.state_migration_required',
+      expected: true,
+      message:
+        'Token package upgrade policy must keep state migration separate from package publication.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'event_separation.required_events',
+      requiredEntries: REQUIRED_PACKAGE_UPGRADE_EVENTS,
+      label: 'Token package upgrade event separation'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'activation.operational_enable_separate_from_publish',
+      expected: true,
+      message:
+        'Token package upgrade policy must keep operational enablement separate from publish and migration transactions.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'approval_split.pause_unpause_approval_split',
+      expected: true,
+      message:
+        'Token package upgrade policy must keep pause and unpause approval paths separate.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'approval_split.package_upgrade_approval_split',
+      expected: true,
+      message:
+        'Token package upgrade policy must keep package upgrade approval separate from emergency pause and treasury approvals.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'rollback.rollback_forward_only',
+      expected: true,
+      message:
+        'Token package upgrade policy must treat rollback as forward repair, routing, replay, or quarantine rather than chain rewind.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'upgrade_policy.publish_implies_operational_enable',
+      forbiddenValue: true,
+      message:
+        'Token package publication must not automatically imply ZDP operational enablement.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'upgrade_policy.chain_rollback_allowed',
+      forbiddenValue: true,
+      message:
+        'Token package upgrade policy must not claim chain rollback as a recovery path.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_UPGRADE_RULE_ID,
+      file: TOKEN_PACKAGE_UPGRADE_POLICY_FILE,
+      path: 'upgrade_policy.single_admin_upgrade_allowed',
+      forbiddenValue: true,
+      message:
+        'Token package upgrade policy must not allow single-admin package upgrades.'
     })
   ];
 }

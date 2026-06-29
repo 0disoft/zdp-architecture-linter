@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.87
+
+- `ZDP-TOKEN-005`를 추가해 `zdp-token-protocol`의 `contracts/package-upgrade-policy.yaml` package upgrade 계약을 중앙 linter에서도 검사한다.
+- original/latest package id, dependency/build digest manifest, old-version guard, migration plan, `PackageUpgraded`/`StateMigrated`/`OperationallyEnabled` event 분리, publish와 operational enablement 분리, pause/unpause approval split, rollback-forward-only 정책이 사라지면 실패한다.
+
 ## 0.39.86
 
 - `ZDP-TOKEN-004`를 추가해 money/core/product 서비스가 raw chain event 또는 token indexer datastore를 직접 ledger, entitlement, customer-right command로 소비하지 못하게 검사한다.

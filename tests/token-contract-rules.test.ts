@@ -32,7 +32,12 @@ describe('token contract rules', () => {
   });
 
   test('fails when the token authority matrix contract is missing', async () => {
-    await withRepositoryRoot(createValidSuiApiSelectionFiles('zdp-token-protocol'), async (repositoryRoot) => {
+    await withRepositoryRoot(
+      {
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles()
+      },
+      async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
         repositoryRoot,
         repositoryServiceContract: createTokenProtocolServiceContract()
@@ -48,13 +53,15 @@ describe('token contract rules', () => {
             'Token protocol repository must include `contracts/token-authority-matrix.yaml`.'
         }
       ]);
-    });
+      }
+    );
   });
 
   test('fails when token authority controls collapse into a hot wallet AdminCap', async () => {
     await withRepositoryRoot(
       {
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles(),
         'contracts/token-authority-matrix.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -264,7 +271,12 @@ money_consumption:
   });
 
   test('fails when token protocol omits the Sui API selection contract', async () => {
-    await withRepositoryRoot(createValidTokenAuthorityMatrixFiles(), async (repositoryRoot) => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidPackageUpgradePolicyFiles()
+      },
+      async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
         repositoryRoot,
         repositoryServiceContract: createTokenProtocolServiceContract()
@@ -278,13 +290,15 @@ money_consumption:
         message:
           'Token repository must include `contracts/sui-api-selection.yaml` before choosing a Sui API integration baseline.'
       });
-    });
+      }
+    );
   });
 
   test('fails when Sui API selection uses JSON-RPC as the new baseline', async () => {
     await withRepositoryRoot(
       {
         ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidPackageUpgradePolicyFiles(),
         'contracts/sui-api-selection.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -350,6 +364,114 @@ sui_api:
       }
     );
   });
+
+  test('fails when token protocol omits the package upgrade policy contract', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'repository.root',
+          message:
+            'Token protocol repository must include `contracts/package-upgrade-policy.yaml` before upgradeable package work starts.'
+        });
+      }
+    );
+  });
+
+  test('fails when token package upgrade policy collapses publish, migration, and activation', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        'contracts/package-upgrade-policy.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: mainnet_ready
+package_manifest:
+  required_fields:
+    - original_package_id
+    - latest_package_id
+version_guard:
+  old_package_version_guard_required: false
+migration_plan:
+  required: false
+  state_migration_required: false
+event_separation:
+  required_events:
+    - PackageUpgraded
+activation:
+  operational_enable_separate_from_publish: false
+approval_split:
+  pause_unpause_approval_split: false
+  package_upgrade_approval_split: false
+rollback:
+  rollback_forward_only: false
+upgrade_policy:
+  publish_implies_operational_enable: true
+  chain_rollback_allowed: true
+  single_admin_upgrade_allowed: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'contract.status',
+          message:
+            'Token package upgrade policy must stay lab-only and must not claim mainnet readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'package_manifest.required_fields',
+          message:
+            'Token package upgrade manifest must include `build_output_digest` in `package_manifest.required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'version_guard.old_package_version_guard_required',
+          message:
+            'Token package upgrade policy must require old package version guards before state-changing entry functions run.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'event_separation.required_events',
+          message:
+            'Token package upgrade event separation must include `StateMigrated` in `event_separation.required_events`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-005',
+          severity: 'error',
+          file: 'contracts/package-upgrade-policy.yaml',
+          path: 'upgrade_policy.publish_implies_operational_enable',
+          message:
+            'Token package publication must not automatically imply ZDP operational enablement.'
+        });
+      }
+    );
+  });
 });
 
 function createTokenProtocolServiceContract(): Record<string, unknown> {
@@ -373,7 +495,8 @@ function createTokenIndexerServiceContract(): Record<string, unknown> {
 function createValidTokenProtocolFiles(): Record<string, string> {
   return {
     ...createValidTokenAuthorityMatrixFiles(),
-    ...createValidSuiApiSelectionFiles('zdp-token-protocol')
+    ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+    ...createValidPackageUpgradePolicyFiles()
   };
 }
 
@@ -501,6 +624,48 @@ sui_api:
     - migration_guide_review_ref
     - archival_provider_policy
     - endpoint_config_owner
+`
+  };
+}
+
+function createValidPackageUpgradePolicyFiles(): Record<string, string> {
+  return {
+    'contracts/package-upgrade-policy.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: lab_only_no_mainnet
+package_manifest:
+  required_fields:
+    - original_package_id
+    - latest_package_id
+    - dependency_ids
+    - build_output_digest
+    - deployment_transaction_digest
+    - migration_transaction_digest
+    - activation_transaction_digest
+    - source_commit
+    - move_lock_digest
+version_guard:
+  old_package_version_guard_required: true
+migration_plan:
+  required: true
+  state_migration_required: true
+event_separation:
+  required_events:
+    - PackageUpgraded
+    - StateMigrated
+    - OperationallyEnabled
+activation:
+  operational_enable_separate_from_publish: true
+approval_split:
+  pause_unpause_approval_split: true
+  package_upgrade_approval_split: true
+rollback:
+  rollback_forward_only: true
+upgrade_policy:
+  publish_implies_operational_enable: false
+  chain_rollback_allowed: false
+  single_admin_upgrade_allowed: false
 `
   };
 }
