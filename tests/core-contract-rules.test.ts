@@ -798,7 +798,7 @@ forbidden_readiness_claims:
           file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth durable storage transaction/outbox contract must stay `contract_only_no_transaction_manager` until a DB transaction manager and outbox dispatcher are reviewed.'
+            'Core platform auth durable storage transaction/outbox contract must stay `sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher` after the SQLx idempotency transaction outbox adapter exists but before dispatchers or live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -830,7 +830,7 @@ forbidden_readiness_claims:
           file: 'contracts/auth-durable-storage-transaction-outbox.yaml',
           path: 'contract.typed_boundary_status',
           message:
-            'Core platform auth durable storage transaction/outbox boundary must stay `typed_transaction_outbox_boundary_no_adapter` until transaction managers, outbox dispatchers, and durable adapters exist.'
+            'Core platform auth durable storage transaction/outbox boundary must stay `sqlx_transaction_outbox_adapter_no_dispatcher` after the SQLx transaction outbox adapter exists but before dispatchers or live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -2166,11 +2166,11 @@ required_gate_states:
       - contracts/auth-durable-storage-admission.yaml
       - contracts/auth-durable-storage-migration-readiness.yaml
   - gate_id: auth_durable_storage_transaction_outbox_boundary
-    contract_status: contract_only_no_transaction_manager
-    typed_boundary_status: typed_transaction_outbox_boundary_no_adapter
-    durable_implementation_status: transaction_outbox_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_auth_durable_storage_transaction_outbox_implementation
+    contract_status: sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher
+    typed_boundary_status: sqlx_transaction_outbox_adapter_no_dispatcher
+    durable_implementation_status: idempotency_transaction_outbox_adapter_implemented
+    review_status: integration_review_pending
+    promotion_blocker: transaction_outbox_integration_review_pending
     evidence_contracts:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
@@ -2187,7 +2187,7 @@ blocking_summary:
   - no_trace_id_propagation_implementation
   - no_identity_session_store_implementation
   - no_auth_durable_storage_migration_implementation
-  - no_auth_durable_storage_transaction_outbox_implementation
+  - transaction_outbox_integration_review_pending
   - no_credential_vault_capability_handoff_implementation
   - no_passkey_challenge_store_implementation
   - no_oauth_callback_state_storage_implementation
@@ -2517,14 +2517,14 @@ forbidden_readiness_claims:
     'contracts/auth-durable-storage-transaction-outbox.yaml': `
 contract:
   version: 1
-  status: contract_only_no_transaction_manager
+  status: sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher
   owner_repo: zdp-core-platform
   owner_boundary: identity
   runtime_status: contracted_no_live_handler
   source_contracts:
     - contracts/auth-durable-storage-migration-readiness.yaml
     - contracts/auth-runtime-readiness.yaml
-  typed_boundary_status: typed_transaction_outbox_boundary_no_adapter
+  typed_boundary_status: sqlx_transaction_outbox_adapter_no_dispatcher
 required_boundary_fields:
   - target
   - owner_boundary
@@ -2570,9 +2570,11 @@ required_controls:
   - external_effect_after_commit_only
   - raw_secret_storage_rejected
   - raw_provider_payload_rejected
-  - no_db_transaction_manager
+  - sqlx_transaction_manager_implemented
+  - idempotency_state_and_outbox_adapter_implemented
+  - state_and_outbox_committed_atomically
+  - outbox_dispatcher_not_started
   - no_outbox_dispatcher
-  - no_durable_adapter
   - no_live_handler
 forbidden_boundary_values:
   - raw_request_body
@@ -2594,9 +2596,7 @@ forbidden_boundary_values:
   - attestation_object
   - provider_call_inside_transaction
   - external_effect_inside_transaction
-  - transaction_committed
   - outbox_dispatched
-  - durable_write_applied
 forbidden_readiness_claims:
   - production_ready
   - durable_storage_ready

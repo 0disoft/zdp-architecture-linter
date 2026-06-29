@@ -230,10 +230,10 @@ export function createRequiredAuthRuntimeReadinessGates(
       contractStatus: refs.authDurableStorageTransactionOutboxStatus,
       typedBoundaryStatus:
         refs.authDurableStorageTransactionOutboxBoundaryStatus,
-      durableImplementationStatus: 'transaction_outbox_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker:
-        'no_auth_durable_storage_transaction_outbox_implementation',
+      durableImplementationStatus:
+        'idempotency_transaction_outbox_adapter_implemented',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker: 'transaction_outbox_integration_review_pending',
       evidenceContracts: [
         refs.authDurableStorageMigrationReadinessFile,
         refs.authDurableStorageTransactionOutboxFile

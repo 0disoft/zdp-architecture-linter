@@ -21,9 +21,9 @@ export const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_STATUS =
 export const AUTH_DURABLE_STORAGE_MIGRATION_READINESS_BOUNDARY_STATUS =
   'typed_migration_readiness_no_migration';
 export const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS =
-  'contract_only_no_transaction_manager';
+  'sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher';
 export const AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS =
-  'typed_transaction_outbox_boundary_no_adapter';
+  'sqlx_transaction_outbox_adapter_no_dispatcher';
 
 export interface AuthDurableStorageContractRefs {
   readonly authSessionRuntimeStatus: string;
@@ -224,9 +224,11 @@ const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_CONTROLS = [
   'external_effect_after_commit_only',
   'raw_secret_storage_rejected',
   'raw_provider_payload_rejected',
-  'no_db_transaction_manager',
+  'sqlx_transaction_manager_implemented',
+  'idempotency_state_and_outbox_adapter_implemented',
+  'state_and_outbox_committed_atomically',
+  'outbox_dispatcher_not_started',
   'no_outbox_dispatcher',
-  'no_durable_adapter',
   'no_live_handler'
 ] as const;
 
@@ -250,9 +252,7 @@ const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_VALUES = [
   'attestation_object',
   'provider_call_inside_transaction',
   'external_effect_inside_transaction',
-  'transaction_committed',
-  'outbox_dispatched',
-  'durable_write_applied'
+  'outbox_dispatched'
 ] as const;
 
 const REQUIRED_AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FORBIDDEN_CLAIMS = [
@@ -502,7 +502,7 @@ export function validateAuthDurableStorageTransactionOutboxContract(input: {
       createCoreDiagnostic(
         AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
         'contract.status',
-        `Core platform auth durable storage transaction/outbox contract must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS}\` until a DB transaction manager and outbox dispatcher are reviewed.`
+        `Core platform auth durable storage transaction/outbox contract must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_STATUS}\` after the SQLx idempotency transaction outbox adapter exists but before dispatchers or live auth handlers are promoted.`
       )
     );
   }
@@ -551,7 +551,7 @@ export function validateAuthDurableStorageTransactionOutboxContract(input: {
       createCoreDiagnostic(
         AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_FILE,
         'contract.typed_boundary_status',
-        `Core platform auth durable storage transaction/outbox boundary must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS}\` until transaction managers, outbox dispatchers, and durable adapters exist.`
+        `Core platform auth durable storage transaction/outbox boundary must stay \`${AUTH_DURABLE_STORAGE_TRANSACTION_OUTBOX_BOUNDARY_STATUS}\` after the SQLx transaction outbox adapter exists but before dispatchers or live auth handlers are promoted.`
       )
     );
   }
