@@ -141,6 +141,7 @@ import { validateRepositoryA11yContract } from './xcut-a11y-rules.ts';
 import { validateRepositoryPerformanceContract } from './xcut-perf-rules.ts';
 import { validateRepositorySecurityHeaderContract } from './xcut-secheader-rules.ts';
 import { validateRepositoryAssetContract } from './xcut-asset-rules.ts';
+import { validateRepositoryLlmsContract } from './xcut-llms-rules.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -169,6 +170,7 @@ const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
   validateRepositoryPerformanceContract,
   validateRepositorySecurityHeaderContract,
   validateRepositoryAssetContract,
+  validateRepositoryLlmsContract,
   validateRepositoryCoreContract,
   validateRepositoryAppShellContract,
   validateRepositoryRuntimeContract,
