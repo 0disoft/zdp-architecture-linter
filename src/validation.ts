@@ -135,6 +135,7 @@ import { validateRepositoryTermSheetContract } from './xcut-term-rules.ts';
 import { validateRepositoryTimeContract } from './xcut-time-rules.ts';
 import { validateRepositoryErrorEnvelopeContract } from './xcut-error-rules.ts';
 import { validateRepositoryI18nContract } from './xcut-i18n-rules.ts';
+import { validateRepositoryFeedContract } from './xcut-feed-rules.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -157,6 +158,7 @@ const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
   validateRepositoryTimeContract,
   validateRepositoryErrorEnvelopeContract,
   validateRepositoryI18nContract,
+  validateRepositoryFeedContract,
   validateRepositoryCoreContract,
   validateRepositoryAppShellContract,
   validateRepositoryRuntimeContract,
