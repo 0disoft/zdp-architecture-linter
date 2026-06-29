@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.88
+
+- `ZDP-TOKEN-006`을 추가해 `zdp-token-protocol`의 `contracts/token-identity.yaml` Token Identity Contract를 중앙 linter에서도 검사한다.
+- `ZDP_ENTITLEMENT`와 `ZDP_CREDIT`의 정본 분리, settlement/governance 초기 금지, money ledger chain-state 대체 금지, membership cash-equivalent 표현 금지, credit/settlement/governance 권리의 merged balance 금지를 검사한다.
+
 ## 0.39.87
 
 - `ZDP-TOKEN-005`를 추가해 `zdp-token-protocol`의 `contracts/package-upgrade-policy.yaml` package upgrade 계약을 중앙 linter에서도 검사한다.

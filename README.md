@@ -52,6 +52,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-token-protocol`과 `zdp-token-indexer` 저장소 루트의 Sui API 선택 계약이 JSON-RPC를 신규 baseline으로 삼거나 최신 공식 문서·migration guide 검토, gRPC/GraphQL/Core API/archival provider 선택 근거, 단일 endpoint config owner를 잃지 않는지 검사한다.
 - money/core/product 서비스가 raw chain event 또는 token indexer datastore를 원장 entry, entitlement, 고객 권리 명령으로 직접 소비하지 않고 reconciliation/idempotency/package allowlist gate를 거치는지 검사한다.
 - `zdp-token-protocol` 저장소 루트의 package upgrade 정책이 original/latest package id, dependency/build digest manifest, old package version guard, migration plan, event separation, publish/activation 분리, pause/unpause approval split을 잃지 않는지 검사한다.
+- `zdp-token-protocol` 저장소 루트의 Token Identity Contract가 entitlement, credit, settlement, governance 권리와 각 정본 경계를 분리하는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
 - 예약된 배포 저장소가 로드맵 근거 없이 초기 생성 후보처럼 남는 경우 경고한다.
@@ -163,6 +164,8 @@ fixtures/service-schema/fail/**
 0.39.86부터 `ZDP-TOKEN-004`는 money/core/product 서비스가 raw chain event 또는 token indexer datastore를 ledger, entitlement, customer-right command로 직접 소비하지 못하게 검사한다. `onchain_events_store` 또는 `zdp-token-indexer` 소유 datastore를 소비하거나 `data.raw_chain_event`를 선언한 대상 서비스는 `token.reconciliation_policy`, `token.idempotency_policy`, `token.package_version_allowlist`를 유지해야 하며 `token.raw_chain_event_direct_command: true`이면 실패한다.
 
 0.39.87부터 `ZDP-TOKEN-005`는 `zdp-token-protocol`의 `contracts/package-upgrade-policy.yaml` 계약을 검사한다. original/latest package id, dependency/build digest manifest, old-version guard, migration plan, `PackageUpgraded`/`StateMigrated`/`OperationallyEnabled` event 분리, publish와 operational enablement 분리, pause/unpause approval split, rollback-forward-only 정책이 사라지면 실패한다.
+
+0.39.88부터 `ZDP-TOKEN-006`은 `zdp-token-protocol`의 `contracts/token-identity.yaml` 계약을 검사한다. `ZDP_ENTITLEMENT`와 `ZDP_CREDIT`의 정본 분리, settlement/governance 초기 금지, money ledger chain-state 대체 금지, membership cash-equivalent 표현 금지, credit/settlement/governance 권리의 merged balance 금지가 사라지면 실패한다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 

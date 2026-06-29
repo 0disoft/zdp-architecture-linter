@@ -9,11 +9,13 @@ const TOKEN_AUTHORITY_RULE_ID = 'ZDP-TOKEN-001';
 const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
 const TOKEN_SUI_API_RULE_ID = 'ZDP-TOKEN-003';
 const TOKEN_PACKAGE_UPGRADE_RULE_ID = 'ZDP-TOKEN-005';
+const TOKEN_IDENTITY_RULE_ID = 'ZDP-TOKEN-006';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
 const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
 const TOKEN_SUI_API_SELECTION_FILE = 'contracts/sui-api-selection.yaml';
 const TOKEN_PACKAGE_UPGRADE_POLICY_FILE =
   'contracts/package-upgrade-policy.yaml';
+const TOKEN_IDENTITY_FILE = 'contracts/token-identity.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -128,6 +130,27 @@ const REQUIRED_PACKAGE_UPGRADE_EVENTS = [
   'OperationallyEnabled'
 ] as const;
 
+const REQUIRED_TOKEN_IDENTITY_POLICY_FIELDS = [
+  'holder_claim',
+  'issuer_obligation',
+  'cash_redemption_policy',
+  'usage_scope',
+  'validity_period_policy',
+  'transferability_policy',
+  'refund_chargeback_suspension_policy',
+  'price_policy',
+  'accounting_liability_policy',
+  'authority_approval_conditions'
+] as const;
+
+const FORBIDDEN_MERGED_TOKEN_RIGHTS = [
+  'ZDP_CREDIT',
+  'settlement_unit',
+  'governance_right',
+  'ZDP_SETTLEMENT_UNIT',
+  'ZDP_GOVERNANCE'
+] as const;
+
 export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -145,7 +168,8 @@ export async function validateRepositoryTokenContracts(input: {
         input.repositoryRoot,
         repositoryName
       )),
-      ...(await validateRepositoryPackageUpgradePolicy(input.repositoryRoot))
+      ...(await validateRepositoryPackageUpgradePolicy(input.repositoryRoot)),
+      ...(await validateRepositoryTokenIdentityContract(input.repositoryRoot))
     ];
   }
 
@@ -249,6 +273,28 @@ async function validateRepositoryPackageUpgradePolicy(
   }
 
   return validateTokenPackageUpgradePolicy(contract.value);
+}
+
+async function validateRepositoryTokenIdentityContract(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const contract = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token protocol repository must include \`${relativePath}\` before token implementation starts.`,
+      parseMessage: (relativePath, error) =>
+        `Token identity contract \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_IDENTITY_FILE
+  );
+
+  if (contract.diagnostics.length > 0) {
+    return contract.diagnostics;
+  }
+
+  return validateTokenIdentityContract(contract.value);
 }
 
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
@@ -666,6 +712,116 @@ function validateTokenPackageUpgradePolicy(value: unknown): readonly Diagnostic[
       forbiddenValue: true,
       message:
         'Token package upgrade policy must not allow single-admin package upgrades.'
+    })
+  ];
+}
+
+function validateTokenIdentityContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'contract.owner',
+      expected: TOKEN_PROTOCOL_REPOSITORY_NAME,
+      message: 'Token Identity Contract must declare owner `zdp-token-protocol`.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_mainnet',
+      message:
+        'Token Identity Contract must stay lab-only and must not claim mainnet readiness.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'token_identity.default_candidate',
+      expected: 'ZDP_ENTITLEMENT',
+      message:
+        'Token Identity Contract must keep `ZDP_ENTITLEMENT` as the first candidate identity.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'token_identity.required_policy_fields',
+      requiredEntries: REQUIRED_TOKEN_IDENTITY_POLICY_FIELDS,
+      label: 'Token Identity Contract'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'right_sources.ZDP_ENTITLEMENT',
+      expected: 'core_access_and_money_entitlement',
+      message:
+        'Token Identity Contract must keep entitlement truth in core access and money entitlement boundaries.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'right_sources.ZDP_CREDIT',
+      expected: 'zdp-money-platform_ledger',
+      message:
+        'Token Identity Contract must keep credit truth in the zdp-money-platform ledger.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'right_sources.ZDP_SETTLEMENT_UNIT',
+      expected: 'forbidden_until_legal_tax_risk_review',
+      message:
+        'Token Identity Contract must keep settlement units forbidden until legal, tax, and risk review.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'right_sources.ZDP_GOVERNANCE',
+      expected: 'forbidden_initial_launch',
+      message:
+        'Token Identity Contract must keep governance rights forbidden for the initial launch.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'rights_separation.entitlement_credit_same_balance_allowed',
+      expected: false,
+      message:
+        'Token Identity Contract must not allow ZDP_ENTITLEMENT and ZDP_CREDIT to share one balance.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'rights_separation.money_ledger_replaced_by_chain_allowed',
+      expected: false,
+      message:
+        'Token Identity Contract must not replace money ledger truth with chain state.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'rights_separation.membership_as_cash_allowed',
+      expected: false,
+      message:
+        'Token Identity Contract must not describe membership or service rights as cash-equivalent redemption claims.'
+    }),
+    ...validateForbiddenStringEntries({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'token_identity.merged_balances',
+      forbiddenEntries: FORBIDDEN_MERGED_TOKEN_RIGHTS,
+      label: 'Token Identity merged balance contract'
     })
   ];
 }

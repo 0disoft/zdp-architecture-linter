@@ -35,7 +35,8 @@ describe('token contract rules', () => {
     await withRepositoryRoot(
       {
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
-        ...createValidPackageUpgradePolicyFiles()
+        ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles()
       },
       async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
@@ -62,6 +63,7 @@ describe('token contract rules', () => {
       {
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles(),
         'contracts/token-authority-matrix.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -274,7 +276,8 @@ money_consumption:
     await withRepositoryRoot(
       {
         ...createValidTokenAuthorityMatrixFiles(),
-        ...createValidPackageUpgradePolicyFiles()
+        ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles()
       },
       async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
@@ -299,6 +302,7 @@ money_consumption:
       {
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles(),
         'contracts/sui-api-selection.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -369,7 +373,8 @@ sui_api:
     await withRepositoryRoot(
       {
         ...createValidTokenAuthorityMatrixFiles(),
-        ...createValidSuiApiSelectionFiles('zdp-token-protocol')
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidTokenIdentityFiles()
       },
       async (repositoryRoot) => {
         const diagnostics = await validateRepositoryTokenContracts({
@@ -394,6 +399,7 @@ sui_api:
       {
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidTokenIdentityFiles(),
         'contracts/package-upgrade-policy.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -472,6 +478,120 @@ upgrade_policy:
       }
     );
   });
+
+  test('fails when token protocol omits the Token Identity Contract', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'repository.root',
+          message:
+            'Token protocol repository must include `contracts/token-identity.yaml` before token implementation starts.'
+        });
+      }
+    );
+  });
+
+  test('fails when Token Identity Contract merges credit, entitlement, settlement, or governance rights', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles(),
+        'contracts/token-identity.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: mainnet_ready
+token_identity:
+  default_candidate: ZDP_CREDIT
+  required_policy_fields:
+    - holder_claim
+    - issuer_obligation
+  merged_balances:
+    - ZDP_ENTITLEMENT
+    - ZDP_CREDIT
+    - settlement_unit
+    - governance_right
+right_sources:
+  ZDP_ENTITLEMENT: chain_state
+  ZDP_CREDIT: chain_state
+  ZDP_SETTLEMENT_UNIT: enabled
+  ZDP_GOVERNANCE: enabled
+rights_separation:
+  entitlement_credit_same_balance_allowed: true
+  money_ledger_replaced_by_chain_allowed: true
+  membership_as_cash_allowed: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'contract.status',
+          message:
+            'Token Identity Contract must stay lab-only and must not claim mainnet readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'token_identity.default_candidate',
+          message:
+            'Token Identity Contract must keep `ZDP_ENTITLEMENT` as the first candidate identity.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'token_identity.required_policy_fields',
+          message:
+            'Token Identity Contract must include `cash_redemption_policy` in `token_identity.required_policy_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'right_sources.ZDP_CREDIT',
+          message:
+            'Token Identity Contract must keep credit truth in the zdp-money-platform ledger.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'rights_separation.entitlement_credit_same_balance_allowed',
+          message:
+            'Token Identity Contract must not allow ZDP_ENTITLEMENT and ZDP_CREDIT to share one balance.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-006',
+          severity: 'error',
+          file: 'contracts/token-identity.yaml',
+          path: 'token_identity.merged_balances',
+          message:
+            'Token Identity merged balance contract must not include `ZDP_CREDIT` in `token_identity.merged_balances`.'
+        });
+      }
+    );
+  });
 });
 
 function createTokenProtocolServiceContract(): Record<string, unknown> {
@@ -496,7 +616,8 @@ function createValidTokenProtocolFiles(): Record<string, string> {
   return {
     ...createValidTokenAuthorityMatrixFiles(),
     ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
-    ...createValidPackageUpgradePolicyFiles()
+    ...createValidPackageUpgradePolicyFiles(),
+    ...createValidTokenIdentityFiles()
   };
 }
 
@@ -666,6 +787,39 @@ upgrade_policy:
   publish_implies_operational_enable: false
   chain_rollback_allowed: false
   single_admin_upgrade_allowed: false
+`
+  };
+}
+
+function createValidTokenIdentityFiles(): Record<string, string> {
+  return {
+    'contracts/token-identity.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: lab_only_no_mainnet
+token_identity:
+  default_candidate: ZDP_ENTITLEMENT
+  required_policy_fields:
+    - holder_claim
+    - issuer_obligation
+    - cash_redemption_policy
+    - usage_scope
+    - validity_period_policy
+    - transferability_policy
+    - refund_chargeback_suspension_policy
+    - price_policy
+    - accounting_liability_policy
+    - authority_approval_conditions
+  merged_balances: []
+right_sources:
+  ZDP_ENTITLEMENT: core_access_and_money_entitlement
+  ZDP_CREDIT: zdp-money-platform_ledger
+  ZDP_SETTLEMENT_UNIT: forbidden_until_legal_tax_risk_review
+  ZDP_GOVERNANCE: forbidden_initial_launch
+rights_separation:
+  entitlement_credit_same_balance_allowed: false
+  money_ledger_replaced_by_chain_allowed: false
+  membership_as_cash_allowed: false
 `
   };
 }
