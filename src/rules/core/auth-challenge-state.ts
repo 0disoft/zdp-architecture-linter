@@ -11,12 +11,14 @@ export const AUTH_PASSKEY_CHALLENGE_STORE_FILE =
 export const AUTH_OAUTH_CALLBACK_STATE_FILE =
   'contracts/auth-oauth-callback-state.yaml';
 
-export const AUTH_PASSKEY_CHALLENGE_STORE_STATUS = 'contract_only_no_storage';
+export const AUTH_PASSKEY_CHALLENGE_STORE_STATUS =
+  'migration_shape_declared_no_adapter';
 
 export const AUTH_PASSKEY_CHALLENGE_STORE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
 
-export const AUTH_OAUTH_CALLBACK_STATE_STATUS = 'contract_only_no_storage';
+export const AUTH_OAUTH_CALLBACK_STATE_STATUS =
+  'migration_shape_declared_no_adapter';
 
 export const AUTH_OAUTH_CALLBACK_STATE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
@@ -226,7 +228,7 @@ export function validateAuthPasskeyChallengeStoreContract(
       createCoreDiagnostic(
         AUTH_PASSKEY_CHALLENGE_STORE_FILE,
         'contract.status',
-        `Core platform auth passkey challenge store contract must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_STATUS}\` until durable storage exists.`
+        `Core platform auth passkey challenge store contract must stay \`${AUTH_PASSKEY_CHALLENGE_STORE_STATUS}\` until a migration-backed adapter exists.`
       )
     );
   }
@@ -340,7 +342,7 @@ export function validateAuthOauthCallbackStateContract(
       createCoreDiagnostic(
         AUTH_OAUTH_CALLBACK_STATE_FILE,
         'contract.status',
-        `Core platform auth OAuth callback state contract must stay \`${AUTH_OAUTH_CALLBACK_STATE_STATUS}\` until durable storage exists.`
+        `Core platform auth OAuth callback state contract must stay \`${AUTH_OAUTH_CALLBACK_STATE_STATUS}\` until a migration-backed adapter exists.`
       )
     );
   }

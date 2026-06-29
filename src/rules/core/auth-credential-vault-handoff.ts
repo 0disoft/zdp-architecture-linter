@@ -9,7 +9,7 @@ export const AUTH_CREDENTIAL_VAULT_HANDOFF_FILE =
   'contracts/auth-credential-vault-handoff.yaml';
 
 export const AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS =
-  'contract_only_no_capability_client';
+  'migration_shape_declared_no_capability_client';
 
 export const AUTH_CREDENTIAL_VAULT_CAPABILITY_CLIENT_BOUNDARY_STATUS =
   'typed_capability_client_boundary_no_vault_client';
@@ -114,7 +114,7 @@ export function validateAuthCredentialVaultHandoffContract(
       createCoreDiagnostic(
         AUTH_CREDENTIAL_VAULT_HANDOFF_FILE,
         'contract.status',
-        `Core platform auth credential vault handoff contract must stay \`${AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS}\` until a capability client exists.`
+        `Core platform auth credential vault handoff contract must stay \`${AUTH_CREDENTIAL_VAULT_HANDOFF_STATUS}\` until a live capability client exists.`
       )
     );
   }

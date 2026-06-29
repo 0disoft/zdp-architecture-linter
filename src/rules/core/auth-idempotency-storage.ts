@@ -8,7 +8,8 @@ import {
 export const AUTH_IDEMPOTENCY_STORAGE_FILE =
   'contracts/auth-idempotency-storage.yaml';
 
-export const AUTH_IDEMPOTENCY_STORAGE_STATUS = 'contract_only_no_storage';
+export const AUTH_IDEMPOTENCY_STORAGE_STATUS =
+  'migration_shape_declared_no_adapter';
 
 export const AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS =
   'typed_adapter_boundary_no_migration';
@@ -106,7 +107,7 @@ export function validateAuthIdempotencyStorageContract(
       createCoreDiagnostic(
         AUTH_IDEMPOTENCY_STORAGE_FILE,
         'contract.status',
-        `Core platform auth idempotency storage contract must stay \`${AUTH_IDEMPOTENCY_STORAGE_STATUS}\` until durable storage exists.`
+        `Core platform auth idempotency storage contract must stay \`${AUTH_IDEMPOTENCY_STORAGE_STATUS}\` until a migration-backed adapter exists.`
       )
     );
   }

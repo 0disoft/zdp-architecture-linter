@@ -1169,7 +1169,7 @@ forbidden_payload_values:
           file: 'contracts/auth-credential-vault-handoff.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth credential vault handoff contract must stay `contract_only_no_capability_client` until a capability client exists.'
+            'Core platform auth credential vault handoff contract must stay `migration_shape_declared_no_capability_client` until a live capability client exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1273,7 +1273,7 @@ forbidden_storage_values:
           file: 'contracts/auth-passkey-challenge-store.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth passkey challenge store contract must stay `contract_only_no_storage` until durable storage exists.'
+            'Core platform auth passkey challenge store contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1391,7 +1391,7 @@ forbidden_storage_values:
           file: 'contracts/auth-oauth-callback-state.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth OAuth callback state contract must stay `contract_only_no_storage` until durable storage exists.'
+            'Core platform auth OAuth callback state contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1671,7 +1671,7 @@ forbidden_storage_values:
           file: 'contracts/auth-idempotency-storage.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth idempotency storage contract must stay `contract_only_no_storage` until durable storage exists.'
+            'Core platform auth idempotency storage contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -2031,7 +2031,7 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: credential_vault_handoff
-    contract_status: contract_only_no_capability_client
+    contract_status: migration_shape_declared_no_capability_client
     typed_boundary_status: typed_capability_client_boundary_no_vault_client
     durable_implementation_status: live_capability_client_missing
     review_status: review_missing
@@ -2040,7 +2040,7 @@ required_gate_states:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-credential-vault-handoff.yaml
   - gate_id: passkey_challenge_store_contract
-    contract_status: contract_only_no_storage
+    contract_status: migration_shape_declared_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
     durable_implementation_status: durable_implementation_missing
     review_status: review_missing
@@ -2052,7 +2052,7 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: oauth_callback_state_verification
-    contract_status: contract_only_no_storage
+    contract_status: migration_shape_declared_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
     durable_implementation_status: durable_implementation_missing
     review_status: review_missing
@@ -2088,7 +2088,7 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: idempotency_key_scope
-    contract_status: contract_only_no_storage
+    contract_status: migration_shape_declared_no_adapter
     typed_boundary_status: typed_adapter_boundary_no_migration
     durable_implementation_status: durable_implementation_missing
     review_status: review_missing
@@ -2753,7 +2753,7 @@ forbidden_claims:
     'contracts/auth-passkey-challenge-store.yaml': `
 contract:
   version: 1
-  status: contract_only_no_storage
+  status: migration_shape_declared_no_adapter
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_challenge_fields:
@@ -2836,7 +2836,7 @@ forbidden_storage_values:
     'contracts/auth-oauth-callback-state.yaml': `
 contract:
   version: 1
-  status: contract_only_no_storage
+  status: migration_shape_declared_no_adapter
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_state_fields:
@@ -2928,7 +2928,7 @@ forbidden_storage_values:
     'contracts/auth-credential-vault-handoff.yaml': `
 contract:
   version: 1
-  status: contract_only_no_capability_client
+  status: migration_shape_declared_no_capability_client
   owner_repo: zdp-core-platform
   owner_boundary: identity
   vault_owner_repo: zdp-privacy-credential-vault
@@ -3107,7 +3107,7 @@ forbidden_storage_values:
     'contracts/auth-idempotency-storage.yaml': `
 contract:
   version: 1
-  status: contract_only_no_storage
+  status: migration_shape_declared_no_adapter
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_record_fields:
