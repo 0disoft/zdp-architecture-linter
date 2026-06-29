@@ -1714,7 +1714,7 @@ forbidden_storage_values:
           file: 'contracts/auth-idempotency-storage.yaml',
           path: 'contract.status',
           message:
-            'Core platform auth idempotency storage contract must stay `migration_shape_declared_no_adapter` until a migration-backed adapter exists.'
+            'Core platform auth idempotency storage contract must stay `sqlx_adapter_present_no_live_handler` after the SQLx adapter exists but before live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1762,7 +1762,7 @@ forbidden_storage_values:
           file: 'contracts/auth-idempotency-storage.yaml',
           path: 'adapter_contract.status',
           message:
-            'Core platform auth idempotency storage adapter boundary must stay `typed_adapter_boundary_no_migration` until a migration-backed storage implementation exists.'
+            'Core platform auth idempotency storage adapter status must stay `sqlx_adapter_implemented_no_live_handler` until live auth handlers are promoted.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -2020,7 +2020,7 @@ promotion_blockers:
   - no_credential_vault_capability_handoff_implementation
   - no_passkey_challenge_store_implementation
   - no_auth_audit_event_persistence_implementation
-  - no_idempotency_storage_implementation
+  - idempotency_storage_integration_review_pending
   - no_product_reviewer_approval
 forbidden_runtime_claims:
   - live_login_handler
@@ -2131,11 +2131,11 @@ required_gate_states:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
   - gate_id: idempotency_key_scope
-    contract_status: migration_shape_declared_no_adapter
-    typed_boundary_status: typed_adapter_boundary_no_migration
-    durable_implementation_status: durable_implementation_missing
-    review_status: review_missing
-    promotion_blocker: no_idempotency_storage_implementation
+    contract_status: sqlx_adapter_present_no_live_handler
+    typed_boundary_status: sqlx_auth_idempotency_store_adapter_no_auth_promotion
+    durable_implementation_status: idempotency_adapter_implemented
+    review_status: integration_review_pending
+    promotion_blocker: idempotency_storage_integration_review_pending
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
       - contracts/auth-runtime-admission-context.yaml
@@ -2193,7 +2193,7 @@ blocking_summary:
   - no_oauth_callback_state_storage_implementation
   - no_auth_audit_event_persistence_implementation
   - no_auth_audit_storage_adapter_implementation
-  - no_idempotency_storage_implementation
+  - idempotency_storage_integration_review_pending
   - no_refresh_token_rotation_storage_implementation
   - no_product_reviewer_approval
 forbidden_readiness_claims:
@@ -3155,7 +3155,7 @@ forbidden_storage_values:
     'contracts/auth-idempotency-storage.yaml': `
 contract:
   version: 1
-  status: migration_shape_declared_no_adapter
+  status: sqlx_adapter_present_no_live_handler
   owner_repo: zdp-core-platform
   owner_boundary: identity
 required_record_fields:
@@ -3199,7 +3199,9 @@ uniqueness:
   - resource_ref
   - idempotency_key
 adapter_contract:
-  status: typed_adapter_boundary_no_migration
+  status: sqlx_adapter_implemented_no_live_handler
+  implementation_ref: src/core_postgres_idempotency_adapter.rs
+  boundary_status: sqlx_auth_idempotency_store_adapter_no_auth_promotion
   adapter_kinds:
     - atomic_unique_claim_table
     - transactional_idempotency_record
@@ -3217,6 +3219,16 @@ adapter_contract:
     - ttl_enforced_by_storage
     - no_raw_payload_storage
     - audit_event_reference_required
+    - same_request_replay_enabled
+    - different_fingerprint_conflict_enabled
+    - completion_update_enabled
+    - live_auth_handler_disabled
+  sqlx_statement_refs:
+    - core.postgres.idempotency.claim_insert.v1
+    - core.postgres.idempotency.replay_select.v1
+    - core.postgres.idempotency.conflict_update.v1
+    - core.postgres.idempotency.complete_update.v1
+    - core.postgres.idempotency.ttl_expire_update.v1
 forbidden_storage_values:
   - raw_request_body
   - raw_secret

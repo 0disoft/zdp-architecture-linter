@@ -9,10 +9,13 @@ export const AUTH_IDEMPOTENCY_STORAGE_FILE =
   'contracts/auth-idempotency-storage.yaml';
 
 export const AUTH_IDEMPOTENCY_STORAGE_STATUS =
-  'migration_shape_declared_no_adapter';
+  'sqlx_adapter_present_no_live_handler';
+
+export const AUTH_IDEMPOTENCY_STORAGE_ADAPTER_STATUS =
+  'sqlx_adapter_implemented_no_live_handler';
 
 export const AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS =
-  'typed_adapter_boundary_no_migration';
+  'sqlx_auth_idempotency_store_adapter_no_auth_promotion';
 
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FIELDS = [
   'idempotency_key',
@@ -82,7 +85,19 @@ const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_CONTROLS = [
   'atomic_claim_or_conflict',
   'ttl_enforced_by_storage',
   'no_raw_payload_storage',
-  'audit_event_reference_required'
+  'audit_event_reference_required',
+  'same_request_replay_enabled',
+  'different_fingerprint_conflict_enabled',
+  'completion_update_enabled',
+  'live_auth_handler_disabled'
+] as const;
+
+const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_SQLX_STATEMENT_REFS = [
+  'core.postgres.idempotency.claim_insert.v1',
+  'core.postgres.idempotency.replay_select.v1',
+  'core.postgres.idempotency.conflict_update.v1',
+  'core.postgres.idempotency.complete_update.v1',
+  'core.postgres.idempotency.ttl_expire_update.v1'
 ] as const;
 
 const REQUIRED_AUTH_IDEMPOTENCY_STORAGE_FORBIDDEN_VALUES = [
@@ -107,7 +122,7 @@ export function validateAuthIdempotencyStorageContract(
       createCoreDiagnostic(
         AUTH_IDEMPOTENCY_STORAGE_FILE,
         'contract.status',
-        `Core platform auth idempotency storage contract must stay \`${AUTH_IDEMPOTENCY_STORAGE_STATUS}\` until a migration-backed adapter exists.`
+        `Core platform auth idempotency storage contract must stay \`${AUTH_IDEMPOTENCY_STORAGE_STATUS}\` after the SQLx adapter exists but before live auth handlers are promoted.`
       )
     );
   }
@@ -124,13 +139,26 @@ export function validateAuthIdempotencyStorageContract(
 
   if (
     readPath(value, 'adapter_contract.status') !==
-    AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
+    AUTH_IDEMPOTENCY_STORAGE_ADAPTER_STATUS
   ) {
     diagnostics.push(
       createCoreDiagnostic(
         AUTH_IDEMPOTENCY_STORAGE_FILE,
         'adapter_contract.status',
-        `Core platform auth idempotency storage adapter boundary must stay \`${AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS}\` until a migration-backed storage implementation exists.`
+        `Core platform auth idempotency storage adapter status must stay \`${AUTH_IDEMPOTENCY_STORAGE_ADAPTER_STATUS}\` until live auth handlers are promoted.`
+      )
+    );
+  }
+
+  if (
+    readPath(value, 'adapter_contract.boundary_status') !==
+    AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_IDEMPOTENCY_STORAGE_FILE,
+        'adapter_contract.boundary_status',
+        `Core platform auth idempotency storage adapter boundary must stay \`${AUTH_IDEMPOTENCY_STORAGE_ADAPTER_BOUNDARY_STATUS}\` until live auth handlers are promoted.`
       )
     );
   }
@@ -184,6 +212,13 @@ export function validateAuthIdempotencyStorageContract(
       path: 'adapter_contract.required_adapter_controls',
       field: 'adapter_contract.required_adapter_controls',
       requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_ADAPTER_CONTROLS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: AUTH_IDEMPOTENCY_STORAGE_FILE,
+      path: 'adapter_contract.sqlx_statement_refs',
+      field: 'adapter_contract.sqlx_statement_refs',
+      requiredEntries: REQUIRED_AUTH_IDEMPOTENCY_STORAGE_SQLX_STATEMENT_REFS
     }),
     ...validateRequiredStringArrayEntries({
       value,

@@ -184,9 +184,9 @@ export function createRequiredAuthRuntimeReadinessGates(
       gateId: 'idempotency_key_scope',
       contractStatus: refs.authIdempotencyStorageStatus,
       typedBoundaryStatus: refs.authIdempotencyStorageAdapterBoundaryStatus,
-      durableImplementationStatus: 'durable_implementation_missing',
-      reviewStatus: 'review_missing',
-      promotionBlocker: 'no_idempotency_storage_implementation',
+      durableImplementationStatus: 'idempotency_adapter_implemented',
+      reviewStatus: 'integration_review_pending',
+      promotionBlocker: 'idempotency_storage_integration_review_pending',
       evidenceContracts: [
         refs.authSessionRuntimeFile,
         refs.authRuntimeAdmissionContextFile,

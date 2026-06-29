@@ -75,7 +75,7 @@ const REQUIRED_AUTH_SESSION_PROMOTION_BLOCKERS = [
   'no_credential_vault_capability_handoff_implementation',
   'no_passkey_challenge_store_implementation',
   'no_auth_audit_event_persistence_implementation',
-  'no_idempotency_storage_implementation',
+  'idempotency_storage_integration_review_pending',
   'no_product_reviewer_approval'
 ] as const;
 
