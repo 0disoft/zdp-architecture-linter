@@ -55,6 +55,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-token-protocol` 저장소 루트의 Token Identity Contract가 entitlement, credit, settlement, governance 권리와 각 정본 경계를 분리하는지 검사한다.
 - `zdp-crypto-wallet`과 `zdp-token-operator` 저장소 루트의 custody control plane 계약이 self-custody, managed/custodial, sponsor wallet, treasury wallet, capability wallet 통제면과 signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope를 분리하고, money/core/indexer/CI signer와 raw private key storage를 금지하는지 검사한다.
 - repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)가 비밀값, 내부 URL, 비공개 경로를 노출하지 않는지 검사한다.
+- 공개 API 오류 계약이 raw string이나 message-only 응답이 아니라 `error.code`, `error.message`, `error.request_id` envelope를 유지하는지 검사한다.
 - deploy unit 저장소가 `automation.ci` 계약, dependency update bot 소유자, ruleset required status check 이름을 명확히 선언하는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
@@ -187,6 +188,8 @@ fixtures/service-schema/fail/**
 0.39.96부터 `ZDP-AUTO-007`은 `automation.stale_bot.enabled`가 `true`인 deploy unit 저장소에서 `exempt_labels`가 `bug`와 `security`를 포함하지 않거나, `security_issue_auto_close_allowed`가 `false`가 아니면 warning으로 보고한다.
 
 0.39.97부터 `ZDP-XCUT-TIME-001`은 repository root의 `service.yaml`, `product-spec.md`, `BOUNDARY.md`, `RUNBOOK.md`, `contracts/**`, `schemas/**`에서 시간 계약의 첫 tripwire를 검사한다. `timestamp without time zone`, timestamp field의 모호한 `datetime` 타입, timestamp 예시의 non-UTC offset 또는 timezone 없는 ISO 값, `KST` 같은 local timezone label, locale formatting으로 만든 boundary timestamp, recurring/cron/wall-time 계약의 `timezone` 누락이 보이면 실패한다. 이 검사는 계약·스키마·소스에 드러난 명백한 drift를 막는 gate이며, 런타임 clock source나 모든 로그 formatter의 완전성 증명은 아니다.
+
+0.39.98부터 `ZDP-XCUT-ERROR-001`은 repository root의 `service.yaml`, `product-spec.md`, `openapi.*`, `swagger.*`, `contracts/**`, `schemas/**`에서 공개 API 오류 envelope의 첫 tripwire를 검사한다. 공개 API 저장소나 오류 계약 파일이 raw string `error`, top-level message-only 오류 예시, 또는 `error` 객체의 `code`, `message`, `request_id` 선언 누락을 보이면 실패한다. 이 검사는 계약·스키마에 드러난 명백한 drift를 막는 gate이며, 모든 런타임 handler의 오류 매핑 완전성 증명은 아니다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 
