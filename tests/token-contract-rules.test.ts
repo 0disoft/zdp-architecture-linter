@@ -32,7 +32,7 @@ describe('token contract rules', () => {
   });
 
   test('fails when the token authority matrix contract is missing', async () => {
-    await withRepositoryRoot({}, async (repositoryRoot) => {
+    await withRepositoryRoot(createValidSuiApiSelectionFiles('zdp-token-protocol'), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
         repositoryRoot,
         repositoryServiceContract: createTokenProtocolServiceContract()
@@ -54,6 +54,7 @@ describe('token contract rules', () => {
   test('fails when token authority controls collapse into a hot wallet AdminCap', async () => {
     await withRepositoryRoot(
       {
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         'contracts/token-authority-matrix.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -146,7 +147,7 @@ custody_boundary:
   });
 
   test('fails when the token indexer chain fact contract is missing', async () => {
-    await withRepositoryRoot({}, async (repositoryRoot) => {
+    await withRepositoryRoot(createValidSuiApiSelectionFiles('zdp-token-indexer'), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
         repositoryRoot,
         repositoryServiceContract: createTokenIndexerServiceContract()
@@ -168,6 +169,7 @@ custody_boundary:
   test('fails when token indexer can sign, own custody, or post ledger facts', async () => {
     await withRepositoryRoot(
       {
+        ...createValidSuiApiSelectionFiles('zdp-token-indexer'),
         'contracts/chain-fact-contract.yaml': `
 contract:
   owner: zdp-token-indexer
@@ -260,6 +262,94 @@ money_consumption:
       }
     );
   });
+
+  test('fails when token protocol omits the Sui API selection contract', async () => {
+    await withRepositoryRoot(createValidTokenAuthorityMatrixFiles(), async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryTokenContracts({
+        repositoryRoot,
+        repositoryServiceContract: createTokenProtocolServiceContract()
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-TOKEN-003',
+        severity: 'error',
+        file: 'contracts/sui-api-selection.yaml',
+        path: 'repository.root',
+        message:
+          'Token repository must include `contracts/sui-api-selection.yaml` before choosing a Sui API integration baseline.'
+      });
+    });
+  });
+
+  test('fails when Sui API selection uses JSON-RPC as the new baseline', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        'contracts/sui-api-selection.yaml': `
+contract:
+  owner: zdp-token-protocol
+sui_api:
+  baseline: json_rpc
+  json_rpc_role: default_transport
+  latest_official_docs_review_required: false
+  migration_guide_review_required: false
+  archival_provider_policy_required: false
+  endpoint_config_single_source: false
+  evaluated_apis:
+    - json_rpc_legacy
+  required_selection_evidence:
+    - baseline
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-003',
+          severity: 'error',
+          file: 'contracts/sui-api-selection.yaml',
+          path: 'sui_api.baseline',
+          message:
+            'Sui API baseline must be one of: grpc, graphql, core_api, grpc_core_api.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-003',
+          severity: 'error',
+          file: 'contracts/sui-api-selection.yaml',
+          path: 'sui_api.baseline',
+          message:
+            'Sui API selection must not use JSON-RPC as the baseline for new token integrations.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-003',
+          severity: 'error',
+          file: 'contracts/sui-api-selection.yaml',
+          path: 'sui_api.latest_official_docs_review_required',
+          message:
+            'Sui API selection must require a latest official docs review before implementation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-003',
+          severity: 'error',
+          file: 'contracts/sui-api-selection.yaml',
+          path: 'sui_api.evaluated_apis',
+          message:
+            'Sui API evaluated API contract must include `grpc` in `sui_api.evaluated_apis`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-003',
+          severity: 'error',
+          file: 'contracts/sui-api-selection.yaml',
+          path: 'sui_api.required_selection_evidence',
+          message:
+            'Sui API selection evidence contract must include `latest_official_docs_review_ref` in `sui_api.required_selection_evidence`.'
+        });
+      }
+    );
+  });
 });
 
 function createTokenProtocolServiceContract(): Record<string, unknown> {
@@ -281,6 +371,13 @@ function createTokenIndexerServiceContract(): Record<string, unknown> {
 }
 
 function createValidTokenProtocolFiles(): Record<string, string> {
+  return {
+    ...createValidTokenAuthorityMatrixFiles(),
+    ...createValidSuiApiSelectionFiles('zdp-token-protocol')
+  };
+}
+
+function createValidTokenAuthorityMatrixFiles(): Record<string, string> {
   return {
     'contracts/token-authority-matrix.yaml': `
 contract:
@@ -327,6 +424,7 @@ custody_boundary:
 
 function createValidTokenIndexerFiles(): Record<string, string> {
   return {
+    ...createValidSuiApiSelectionFiles('zdp-token-indexer'),
     'contracts/chain-fact-contract.yaml': `
 contract:
   owner: zdp-token-indexer
@@ -374,6 +472,35 @@ money_consumption:
     - amount_invariant
     - package_version_allowlist
     - replay_state
+`
+  };
+}
+
+function createValidSuiApiSelectionFiles(owner: string): Record<string, string> {
+  return {
+    'contracts/sui-api-selection.yaml': `
+contract:
+  owner: ${owner}
+sui_api:
+  baseline: grpc_core_api
+  json_rpc_role: legacy_compatibility_only
+  latest_official_docs_review_required: true
+  migration_guide_review_required: true
+  archival_provider_policy_required: true
+  endpoint_config_single_source: true
+  evaluated_apis:
+    - grpc
+    - graphql
+    - core_api
+    - archival_provider
+    - json_rpc_legacy
+  required_selection_evidence:
+    - baseline
+    - fallback
+    - latest_official_docs_review_ref
+    - migration_guide_review_ref
+    - archival_provider_policy
+    - endpoint_config_owner
 `
   };
 }

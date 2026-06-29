@@ -7,8 +7,10 @@ const TOKEN_PROTOCOL_REPOSITORY_NAME = 'zdp-token-protocol';
 const TOKEN_INDEXER_REPOSITORY_NAME = 'zdp-token-indexer';
 const TOKEN_AUTHORITY_RULE_ID = 'ZDP-TOKEN-001';
 const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
+const TOKEN_SUI_API_RULE_ID = 'ZDP-TOKEN-003';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
 const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
+const TOKEN_SUI_API_SELECTION_FILE = 'contracts/sui-api-selection.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -81,6 +83,30 @@ const FORBIDDEN_INDEXER_RESPONSIBILITIES = [
   'customer_right_source_of_truth'
 ] as const;
 
+const ALLOWED_SUI_API_BASELINES = [
+  'grpc',
+  'graphql',
+  'core_api',
+  'grpc_core_api'
+] as const;
+
+const REQUIRED_EVALUATED_SUI_APIS = [
+  'grpc',
+  'graphql',
+  'core_api',
+  'archival_provider',
+  'json_rpc_legacy'
+] as const;
+
+const REQUIRED_SUI_API_SELECTION_EVIDENCE = [
+  'baseline',
+  'fallback',
+  'latest_official_docs_review_ref',
+  'migration_guide_review_ref',
+  'archival_provider_policy',
+  'endpoint_config_owner'
+] as const;
+
 export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -92,11 +118,23 @@ export async function validateRepositoryTokenContracts(input: {
   const repositoryName = readRepositoryName(input.repositoryServiceContract);
 
   if (repositoryName === TOKEN_PROTOCOL_REPOSITORY_NAME) {
-    return validateRepositoryTokenProtocolContract(input.repositoryRoot);
+    return [
+      ...(await validateRepositoryTokenProtocolContract(input.repositoryRoot)),
+      ...(await validateRepositorySuiApiSelectionContract(
+        input.repositoryRoot,
+        repositoryName
+      ))
+    ];
   }
 
   if (repositoryName === TOKEN_INDEXER_REPOSITORY_NAME) {
-    return validateRepositoryTokenIndexerContract(input.repositoryRoot);
+    return [
+      ...(await validateRepositoryTokenIndexerContract(input.repositoryRoot)),
+      ...(await validateRepositorySuiApiSelectionContract(
+        input.repositoryRoot,
+        repositoryName
+      ))
+    ];
   }
 
   return [];
@@ -144,6 +182,29 @@ async function validateRepositoryTokenIndexerContract(
   }
 
   return validateTokenChainFactContract(contract.value);
+}
+
+async function validateRepositorySuiApiSelectionContract(
+  repositoryRoot: string,
+  repositoryName: string
+): Promise<readonly Diagnostic[]> {
+  const contract = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token repository must include \`${relativePath}\` before choosing a Sui API integration baseline.`,
+      parseMessage: (relativePath, error) =>
+        `Sui API selection contract \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_SUI_API_SELECTION_FILE
+  );
+
+  if (contract.diagnostics.length > 0) {
+    return contract.diagnostics;
+  }
+
+  return validateSuiApiSelectionContract(contract.value, repositoryName);
 }
 
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
@@ -241,6 +302,100 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
       path: 'custody_boundary.forbidden_runtime_owners',
       requiredEntries: REQUIRED_CUSTODY_FORBIDDEN_OWNERS,
       label: 'Token custody forbidden runtime owner contract'
+    })
+  ];
+}
+
+function validateSuiApiSelectionContract(
+  value: unknown,
+  repositoryName: string
+): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'contract.owner',
+      expected: repositoryName,
+      message: `Sui API selection contract must declare owner \`${repositoryName}\`.`
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.latest_official_docs_review_required',
+      expected: true,
+      message:
+        'Sui API selection must require a latest official docs review before implementation.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.migration_guide_review_required',
+      expected: true,
+      message:
+        'Sui API selection must require Sui SDK/API migration guide review before implementation.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.archival_provider_policy_required',
+      expected: true,
+      message:
+        'Sui API selection must keep archival provider or archival storage policy review as an explicit requirement.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.endpoint_config_single_source',
+      expected: true,
+      message:
+        'Sui API selection must keep network, RPC/API endpoint, GraphQL endpoint, package id, and registry id under one config owner.'
+    }),
+    ...validateAllowedStringValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.baseline',
+      allowedValues: ALLOWED_SUI_API_BASELINES,
+      label: 'Sui API baseline'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.baseline',
+      forbiddenValue: 'json_rpc',
+      message:
+        'Sui API selection must not use JSON-RPC as the baseline for new token integrations.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.json_rpc_role',
+      expected: 'legacy_compatibility_only',
+      message:
+        'Sui API selection must keep JSON-RPC as a legacy compatibility path, not the new integration baseline.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.evaluated_apis',
+      requiredEntries: REQUIRED_EVALUATED_SUI_APIS,
+      label: 'Sui API evaluated API contract'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_SUI_API_RULE_ID,
+      file: TOKEN_SUI_API_SELECTION_FILE,
+      path: 'sui_api.required_selection_evidence',
+      requiredEntries: REQUIRED_SUI_API_SELECTION_EVIDENCE,
+      label: 'Sui API selection evidence contract'
     })
   ];
 }
@@ -463,6 +618,61 @@ function validateRequiredStringEntries(input: {
   }
 
   return diagnostics;
+}
+
+function validateAllowedStringValue(input: {
+  readonly value: unknown;
+  readonly ruleId: string;
+  readonly file: string;
+  readonly path: string;
+  readonly allowedValues: readonly string[];
+  readonly label: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.path);
+
+  if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+    return [
+      createTokenDiagnostic(
+        input.ruleId,
+        input.file,
+        input.path,
+        `${input.label} must declare \`${input.path}\` as a non-empty string.`
+      )
+    ];
+  }
+
+  const normalized = candidate.trim();
+
+  return input.allowedValues.includes(normalized)
+    ? []
+    : [
+        createTokenDiagnostic(
+          input.ruleId,
+          input.file,
+          input.path,
+          `${input.label} must be one of: ${input.allowedValues.join(', ')}.`
+        )
+      ];
+}
+
+function validateForbiddenScalarValue(input: {
+  readonly value: unknown;
+  readonly ruleId: string;
+  readonly file: string;
+  readonly path: string;
+  readonly forbiddenValue: unknown;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  return readPath(input.value, input.path) === input.forbiddenValue
+    ? [
+        createTokenDiagnostic(
+          input.ruleId,
+          input.file,
+          input.path,
+          input.message
+        )
+      ]
+    : [];
 }
 
 function validateForbiddenStringEntries(input: {

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.85
+
+- `ZDP-TOKEN-003`을 추가해 `zdp-token-protocol`과 `zdp-token-indexer`의 `contracts/sui-api-selection.yaml` Sui API 선택 계약을 중앙 linter에서도 검사한다.
+- 신규 token 통합이 JSON-RPC를 baseline으로 삼거나, gRPC/GraphQL/Core API/archival provider 검토, 최신 공식 문서·migration guide review requirement, 단일 endpoint config owner를 잃으면 실패한다.
+
 ## 0.39.84
 
 - `ZDP-TOKEN-002`를 추가해 `zdp-token-indexer`의 `contracts/chain-fact-contract.yaml` chain fact 정규화 계약을 중앙 linter에서도 검사한다.
