@@ -8,6 +8,7 @@ const DEPLOY_UNIT_STAGE = 'deploy_unit';
 const AUTO_CI_CONTRACT_RULE_ID = 'ZDP-AUTO-001';
 const AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID = 'ZDP-AUTO-002';
 const AUTO_RULESET_STATUS_CHECK_RULE_ID = 'ZDP-AUTO-003';
+const AUTO_RELEASE_HELPER_POLICY_RULE_ID = 'ZDP-AUTO-004';
 
 const RENOVATE_CONFIG_PATHS = [
   'renovate.json',
@@ -22,6 +23,17 @@ const RENOVATE_CONFIG_PATHS = [
 const DEPENDABOT_CONFIG_PATHS = [
   '.github/dependabot.yml',
   '.github/dependabot.yaml'
+] as const;
+
+const RELEASE_HELPER_CONFIG_PATHS = [
+  'release-please-config.json',
+  '.release-please-manifest.json',
+  '.github/release-drafter.yml',
+  '.github/release-drafter.yaml',
+  '.github/workflows/release-please.yml',
+  '.github/workflows/release-please.yaml',
+  '.github/workflows/release-drafter.yml',
+  '.github/workflows/release-drafter.yaml'
 ] as const;
 
 export function validateRepositoryAutomationContract(input: {
@@ -61,6 +73,10 @@ export function validateRepositoryAutomationContract(input: {
     automation !== null && isRecord(automation.ruleset)
       ? automation.ruleset
       : null;
+  const releaseHelper =
+    automation !== null && isRecord(automation.release_helper)
+      ? automation.release_helper
+      : null;
 
   return [
     ...validateCiContract(ci),
@@ -68,7 +84,11 @@ export function validateRepositoryAutomationContract(input: {
       dependencyUpdates,
       repositoryRoot: input.repositoryRoot
     }),
-    ...validateRulesetStatusChecks(ci, ruleset)
+    ...validateRulesetStatusChecks(ci, ruleset),
+    ...validateReleaseHelperPolicy({
+      releaseHelper,
+      repositoryRoot: input.repositoryRoot
+    })
   ];
 }
 
@@ -151,11 +171,42 @@ function validateRulesetStatusChecks(
   ];
 }
 
+function validateReleaseHelperPolicy(input: {
+  readonly releaseHelper: Record<string, unknown> | null;
+  readonly repositoryRoot: string | undefined;
+}): readonly Diagnostic[] {
+  const serviceContractEnablesReleaseHelper = input.releaseHelper?.enabled === true;
+  const repositoryHasReleaseHelperConfig =
+    input.repositoryRoot !== undefined &&
+    hasAnyPath(input.repositoryRoot, RELEASE_HELPER_CONFIG_PATHS);
+
+  if (!serviceContractEnablesReleaseHelper && !repositoryHasReleaseHelperConfig) {
+    return [];
+  }
+
+  if (
+    input.releaseHelper !== null &&
+    readStringField(input.releaseHelper, 'version_source_of_truth') !== null &&
+    readStringField(input.releaseHelper, 'changelog_policy') !== null
+  ) {
+    return [];
+  }
+
+  return [
+    createAutomationDiagnostic(
+      AUTO_RELEASE_HELPER_POLICY_RULE_ID,
+      'automation.release_helper',
+      'Deploy unit release helper should declare `automation.release_helper.version_source_of_truth` and `automation.release_helper.changelog_policy`.'
+    )
+  ];
+}
+
 function createAutomationDiagnostic(
   ruleId:
     | typeof AUTO_CI_CONTRACT_RULE_ID
     | typeof AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID
-    | typeof AUTO_RULESET_STATUS_CHECK_RULE_ID,
+    | typeof AUTO_RULESET_STATUS_CHECK_RULE_ID
+    | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {

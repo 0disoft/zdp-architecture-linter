@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.93
+
+- `ZDP-AUTO-004`를 추가해 deploy unit 저장소에서 release helper가 켜졌거나 release helper config가 있는데 version source of truth와 changelog 정책이 빠진 경우 경고한다.
+- `release-please-config.json`, `.release-please-manifest.json`, `.github/release-drafter.yml`/`.yaml`, release helper workflow 파일을 repo root 증거로 검사한다.
+
 ## 0.39.92
 
 - `ZDP-AUTO-002`를 추가해 deploy unit 저장소에서 Renovate와 Dependabot이 동시에 dependency update owner가 되는 구성을 경고한다.

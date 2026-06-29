@@ -288,6 +288,97 @@ describe('repository automation contracts', () => {
       }
     ]);
   });
+
+  test('passes when release helper declares version and changelog policies', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          release_helper: {
+            enabled: true,
+            version_source_of_truth: 'package.json version field',
+            changelog_policy: 'CHANGELOG.md is updated before release PR merge.'
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('warns when release helper is enabled without version and changelog policies', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          release_helper: {
+            enabled: true
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AUTO-004',
+        severity: 'warning',
+        file: 'service.yaml',
+        path: 'automation.release_helper',
+        message:
+          'Deploy unit release helper should declare `automation.release_helper.version_source_of_truth` and `automation.release_helper.changelog_policy`.'
+      }
+    ]);
+  });
+
+  test('warns when release helper config exists without service.yaml policies', async () => {
+    await withRepositoryRoot(
+      {
+        'release-please-config.json': '{ "packages": { ".": {} } }\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-004',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'automation.release_helper',
+            message:
+              'Deploy unit release helper should declare `automation.release_helper.version_source_of_truth` and `automation.release_helper.changelog_policy`.'
+          }
+        ]);
+      }
+    );
+  });
 });
 
 function createServiceContract(
