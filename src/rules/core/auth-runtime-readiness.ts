@@ -235,9 +235,7 @@ export function createRequiredAuthRuntimeReadinessGates(
         refs.authDurableStorageMigrationReadinessBoundaryStatus,
       durableImplementationStatus:
         'repo_local_migration_preflight_implemented_no_apply',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker:
-        'auth_durable_storage_migration_preflight_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authDurableStorageAdmissionFile,
         refs.authDurableStorageMigrationReadinessFile

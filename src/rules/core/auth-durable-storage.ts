@@ -309,15 +309,9 @@ const REQUIRED_AUTH_DURABLE_STORAGE_MIGRATION_PREFLIGHT_REVIEW_RECEIPT_VALUES =
     },
     {
       path: 'migration_preflight_review_receipt.review_status',
-      expected: 'integration_review_pending',
+      expected: 'typed_integration_review_passed',
       message:
-        'Core platform auth durable storage migration preflight review receipt must keep review_status `integration_review_pending`.'
-    },
-    {
-      path: 'migration_preflight_review_receipt.promotion_blocker',
-      expected: 'auth_durable_storage_migration_preflight_review_pending',
-      message:
-        'Core platform auth durable storage migration preflight review receipt must keep promotion blocker `auth_durable_storage_migration_preflight_review_pending`.'
+        'Core platform auth durable storage migration preflight review receipt must keep review_status `typed_integration_review_passed` after repo-local plan/check, schema history, rollback, destructive migration rejection, and apply-disabled controls are checked.'
     }
   ] as const;
 
@@ -636,6 +630,19 @@ export function validateAuthDurableStorageMigrationReadinessContract(input: {
         expected: receiptValue.expected,
         message: receiptValue.message
       })
+    );
+  }
+
+  if (
+    readPath(input.value, 'migration_preflight_review_receipt.promotion_blocker') !==
+    undefined
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        AUTH_DURABLE_STORAGE_MIGRATION_READINESS_FILE,
+        'migration_preflight_review_receipt.promotion_blocker',
+        'Core platform auth durable storage migration preflight review receipt must omit `promotion_blocker` after typed migration preflight review passes.'
+      )
     );
   }
 
