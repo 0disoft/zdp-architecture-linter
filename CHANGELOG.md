@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.83
+
+- `ZDP-TOKEN-001`을 추가해 `zdp-token-protocol`의 `contracts/token-authority-matrix.yaml` 권한/capability matrix 계약을 중앙 linter에서도 검사한다.
+- token authority matrix가 lab-only 상태, Supply/Upgrade/Compliance/Emergency authority 분리, 무제한 `AdminCap` 금지, single hot wallet 금지, self-custody 기본값, managed custody 별도 gate를 잃으면 실패한다.
+
 ## 0.39.82
 
 - `ZDP-APP-001`이 `zdp-web-apps` auth route promotion 계약에서 `contracts/auth-product-review-approval.yaml` receipt review, `typed_product_approval_gate_receipt_no_route_unblock`, `no_product_reviewer_approval`, `product_reviewer_approval_present`, `product_approval_evidence_ref_present` 조건을 요구하도록 강화했다.
