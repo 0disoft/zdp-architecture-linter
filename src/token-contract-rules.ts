@@ -4,8 +4,11 @@ import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
 
 const TOKEN_PROTOCOL_REPOSITORY_NAME = 'zdp-token-protocol';
+const TOKEN_INDEXER_REPOSITORY_NAME = 'zdp-token-indexer';
 const TOKEN_AUTHORITY_RULE_ID = 'ZDP-TOKEN-001';
+const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
+const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -42,20 +45,75 @@ const REQUIRED_CUSTODY_FORBIDDEN_OWNERS = [
   'ci'
 ] as const;
 
-export async function validateRepositoryTokenProtocolContract(input: {
+const REQUIRED_CHAIN_FACT_FIELDS = [
+  'checkpoint_sequence',
+  'transaction_digest',
+  'event_sequence',
+  'source_kind',
+  'object_id',
+  'package_id',
+  'original_package_id',
+  'emitting_package_id',
+  'type_origin_package_id',
+  'module',
+  'event_type',
+  'raw_bcs',
+  'parsed_payload',
+  'canonical_fact_id',
+  'canonical_status',
+  'quarantine_reason',
+  'processed_at'
+] as const;
+
+const REQUIRED_CHAIN_FACT_SOURCES = [
+  'checkpoint',
+  'transaction_effects',
+  'object_changes',
+  'move_event',
+  'bcs_payload'
+] as const;
+
+const FORBIDDEN_INDEXER_RESPONSIBILITIES = [
+  'signing',
+  'custody',
+  'ledger_posting',
+  'mint_burn_correction',
+  'customer_right_source_of_truth'
+] as const;
+
+export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
 }): Promise<readonly Diagnostic[]> {
-  if (
-    input.repositoryRoot === undefined ||
-    readRepositoryName(input.repositoryServiceContract) !==
-      TOKEN_PROTOCOL_REPOSITORY_NAME
-  ) {
+  if (input.repositoryRoot === undefined) {
     return [];
   }
 
+  const repositoryName = readRepositoryName(input.repositoryServiceContract);
+
+  if (repositoryName === TOKEN_PROTOCOL_REPOSITORY_NAME) {
+    return validateRepositoryTokenProtocolContract(input.repositoryRoot);
+  }
+
+  if (repositoryName === TOKEN_INDEXER_REPOSITORY_NAME) {
+    return validateRepositoryTokenIndexerContract(input.repositoryRoot);
+  }
+
+  return [];
+}
+
+async function validateRepositoryTokenProtocolContract(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
   const contract = await readRequiredYamlContract(
-    input.repositoryRoot,
+    repositoryRoot,
+    {
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token protocol repository must include \`${relativePath}\`.`,
+      parseMessage: (relativePath, error) =>
+        `Token protocol contract \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
     TOKEN_AUTHORITY_MATRIX_FILE
   );
 
@@ -66,10 +124,34 @@ export async function validateRepositoryTokenProtocolContract(input: {
   return validateTokenAuthorityMatrix(contract.value);
 }
 
+async function validateRepositoryTokenIndexerContract(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const contract = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token indexer repository must include \`${relativePath}\`.`,
+      parseMessage: (relativePath, error) =>
+        `Token indexer contract \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_CHAIN_FACT_FILE
+  );
+
+  if (contract.diagnostics.length > 0) {
+    return contract.diagnostics;
+  }
+
+  return validateTokenChainFactContract(contract.value);
+}
+
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
   return [
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'contract.owner',
       expected: TOKEN_PROTOCOL_REPOSITORY_NAME,
       message:
@@ -77,6 +159,8 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'contract.status',
       expected: 'lab_only_no_mainnet',
       message:
@@ -84,18 +168,24 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateRequiredStringEntries({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_matrix.required_capabilities',
       requiredEntries: REQUIRED_CAPABILITIES,
       label: 'Token authority matrix'
     }),
     ...validateRequiredStringEntries({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_matrix.capability_required_fields',
       requiredEntries: REQUIRED_CAPABILITY_FIELDS,
       label: 'Token capability field contract'
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_separation.supply_upgrade_compliance_emergency_split',
       expected: true,
       message:
@@ -103,12 +193,16 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_separation.single_admin_cap_allowed',
       expected: false,
       message: 'Token authority matrix must forbid a single unlimited `AdminCap`.'
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_separation.single_hot_wallet_allowed',
       expected: false,
       message:
@@ -116,12 +210,16 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateRequiredStringEntries({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'authority_separation.forbidden_holders',
       requiredEntries: REQUIRED_FORBIDDEN_HOLDERS,
       label: 'Token authority forbidden holder contract'
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'custody_boundary.default_model',
       expected: 'self_custody',
       message:
@@ -129,6 +227,8 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateExactValue({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'custody_boundary.managed_custody_requires_gate',
       expected: true,
       message:
@@ -136,6 +236,8 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
     }),
     ...validateRequiredStringEntries({
       value,
+      ruleId: TOKEN_AUTHORITY_RULE_ID,
+      file: TOKEN_AUTHORITY_MATRIX_FILE,
       path: 'custody_boundary.forbidden_runtime_owners',
       requiredEntries: REQUIRED_CUSTODY_FORBIDDEN_OWNERS,
       label: 'Token custody forbidden runtime owner contract'
@@ -143,8 +245,110 @@ function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
   ];
 }
 
+function validateTokenChainFactContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'contract.owner',
+      expected: TOKEN_INDEXER_REPOSITORY_NAME,
+      message:
+        'Token chain fact contract must declare owner `zdp-token-indexer`.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_product_rights',
+      message:
+        'Token chain fact contract must stay lab-only until product rights or balance projections are approved.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.sources',
+      requiredEntries: REQUIRED_CHAIN_FACT_SOURCES,
+      label: 'Token chain fact source contract'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.required_fields',
+      requiredEntries: REQUIRED_CHAIN_FACT_FIELDS,
+      label: 'Token chain fact field contract'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.observed_event',
+      expected: 'chain.fact.observed',
+      message:
+        'Token chain fact contract must keep `chain.fact.observed` as the canonical observed fact event.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.quarantined_event',
+      expected: 'chain.fact.quarantined',
+      message:
+        'Token chain fact contract must keep `chain.fact.quarantined` for observations that cannot be interpreted safely.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.replay_required',
+      expected: true,
+      message:
+        'Token indexer chain facts must remain replayable from checkpoint/effects/object-change evidence.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'chain_fact.quarantine_required',
+      expected: true,
+      message:
+        'Token indexer chain facts must keep quarantine for unknown package, type, amount, checkpoint, or event/effects mismatch cases.'
+    }),
+    ...validateForbiddenStringEntries({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'indexer.allowed_responsibilities',
+      forbiddenEntries: FORBIDDEN_INDEXER_RESPONSIBILITIES,
+      label: 'Token indexer responsibility contract'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CHAIN_FACT_RULE_ID,
+      file: TOKEN_CHAIN_FACT_FILE,
+      path: 'money_consumption.required_gates',
+      requiredEntries: [
+        'approved_business_request',
+        'idempotency_key',
+        'amount_invariant',
+        'package_version_allowlist',
+        'replay_state'
+      ],
+      label: 'Money chain fact consumption gate'
+    })
+  ];
+}
+
 async function readRequiredYamlContract(
   repositoryRoot: string,
+  rule: {
+    readonly ruleId: string;
+    readonly missingMessage: (relativePath: string) => string;
+    readonly parseMessage: (relativePath: string, error: unknown) => string;
+  },
   relativePath: string
 ): Promise<{
   readonly value: unknown;
@@ -163,9 +367,10 @@ async function readRequiredYamlContract(
         value: null,
         diagnostics: [
           createTokenDiagnostic(
+            rule.ruleId,
             relativePath,
             'repository.root',
-            `Token protocol repository must include \`${relativePath}\`.`
+            rule.missingMessage(relativePath)
           )
         ]
       };
@@ -175,9 +380,10 @@ async function readRequiredYamlContract(
       value: null,
       diagnostics: [
         createTokenDiagnostic(
+          rule.ruleId,
           relativePath,
           'yaml',
-          `Token protocol contract \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+          rule.parseMessage(relativePath, error)
         )
       ]
     };
@@ -186,6 +392,8 @@ async function readRequiredYamlContract(
 
 function validateExactValue(input: {
   readonly value: unknown;
+  readonly ruleId: string;
+  readonly file: string;
   readonly path: string;
   readonly expected: unknown;
   readonly message: string;
@@ -194,7 +402,8 @@ function validateExactValue(input: {
     ? []
     : [
         createTokenDiagnostic(
-          TOKEN_AUTHORITY_MATRIX_FILE,
+          input.ruleId,
+          input.file,
           input.path,
           input.message
         )
@@ -203,6 +412,8 @@ function validateExactValue(input: {
 
 function validateRequiredStringEntries(input: {
   readonly value: unknown;
+  readonly ruleId: string;
+  readonly file: string;
   readonly path: string;
   readonly requiredEntries: readonly string[];
   readonly label: string;
@@ -212,7 +423,8 @@ function validateRequiredStringEntries(input: {
   if (!Array.isArray(candidate)) {
     return [
       createTokenDiagnostic(
-        TOKEN_AUTHORITY_MATRIX_FILE,
+        input.ruleId,
+        input.file,
         input.path,
         `${input.label} must declare \`${input.path}\` as a string list.`
       )
@@ -227,7 +439,8 @@ function validateRequiredStringEntries(input: {
   if (entries.length !== candidate.length) {
     diagnostics.push(
       createTokenDiagnostic(
-        TOKEN_AUTHORITY_MATRIX_FILE,
+        input.ruleId,
+        input.file,
         input.path,
         `${input.label} must declare only non-empty string entries in \`${input.path}\`.`
       )
@@ -241,9 +454,65 @@ function validateRequiredStringEntries(input: {
 
     diagnostics.push(
       createTokenDiagnostic(
-        TOKEN_AUTHORITY_MATRIX_FILE,
+        input.ruleId,
+        input.file,
         input.path,
         `${input.label} must include \`${requiredEntry}\` in \`${input.path}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateForbiddenStringEntries(input: {
+  readonly value: unknown;
+  readonly ruleId: string;
+  readonly file: string;
+  readonly path: string;
+  readonly forbiddenEntries: readonly string[];
+  readonly label: string;
+}): readonly Diagnostic[] {
+  const candidate = readPath(input.value, input.path);
+
+  if (!Array.isArray(candidate)) {
+    return [
+      createTokenDiagnostic(
+        input.ruleId,
+        input.file,
+        input.path,
+        `${input.label} must declare \`${input.path}\` as a string list.`
+      )
+    ];
+  }
+
+  const entries = candidate.flatMap((entry) =>
+    typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
+  const diagnostics: Diagnostic[] = [];
+
+  if (entries.length !== candidate.length) {
+    diagnostics.push(
+      createTokenDiagnostic(
+        input.ruleId,
+        input.file,
+        input.path,
+        `${input.label} must declare only non-empty string entries in \`${input.path}\`.`
+      )
+    );
+  }
+
+  for (const forbiddenEntry of input.forbiddenEntries) {
+    if (!entries.includes(forbiddenEntry)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createTokenDiagnostic(
+        input.ruleId,
+        input.file,
+        input.path,
+        `${input.label} must not include \`${forbiddenEntry}\` in \`${input.path}\`.`
       )
     );
   }
@@ -278,12 +547,13 @@ function readPath(value: unknown, path: string): unknown {
 }
 
 function createTokenDiagnostic(
+  ruleId: string,
   file: string,
   path: string,
   message: string
 ): Diagnostic {
   return {
-    ruleId: TOKEN_AUTHORITY_RULE_ID,
+    ruleId,
     severity: 'error',
     file,
     path,

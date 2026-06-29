@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.84
+
+- `ZDP-TOKEN-002`를 추가해 `zdp-token-indexer`의 `contracts/chain-fact-contract.yaml` chain fact 정규화 계약을 중앙 linter에서도 검사한다.
+- token indexer가 checkpoint/effects/object-change/Move event/BCS payload source, 필수 chain fact 필드, observed/quarantined event, replay/quarantine 요구사항, money consumption gate를 잃거나 signing/custody/ledger posting/mint-burn correction/customer-right 정본 역할을 맡으면 실패한다.
+
 ## 0.39.83
 
 - `ZDP-TOKEN-001`을 추가해 `zdp-token-protocol`의 `contracts/token-authority-matrix.yaml` 권한/capability matrix 계약을 중앙 linter에서도 검사한다.

@@ -48,6 +48,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-connectors-platform` 저장소 루트의 provider registry, sync-state, webhook replay, provider boundary 계약, checker skeleton, 최소 Rust/Axum runtime skeleton이 credential vault capability·privacy broker scope·idempotency 없이 provider 연동을 열거나 raw token/source payload, final authorization, entitlement, ledger, privacy policy 판단으로 번지지 않는지 검사한다.
 - `zdp-money-platform` 저장소 루트의 billing/payments/ledger/risk boundary, money command envelope, append-only ledger entry, ledger storage, payment webhook, entitlement-credit 계약, checker skeleton, 최소 Rust/Axum API skeleton, 순수 Rust ledger core, command-to-ledger admission layer, payment webhook-to-command handoff layer, payment webhook processing state/outbox skeleton, payment webhook processing storage port skeleton이 제품 저장소의 잔액 변경, 중복 웹훅 반영, raw 결제 데이터 저장으로 번지지 않는지 검사한다.
 - `zdp-token-protocol` 저장소 루트의 token authority matrix 계약이 Move/Sui capability별 owner/approver/signer threshold/timelock/rotation/revocation/monitoring/emergency replacement, authority 분리, 무제한 `AdminCap` 금지, single hot wallet 금지, self-custody 기본값과 managed custody gate를 잃지 않는지 검사한다.
+- `zdp-token-indexer` 저장소 루트의 chain fact 계약이 checkpoint/effects/object-change/Move event/BCS payload source, canonical fact 필드, replay/quarantine, money consumption gate를 잃거나 signing/custody/ledger posting/customer-right 정본 역할로 번지지 않는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
 - 예약된 배포 저장소가 로드맵 근거 없이 초기 생성 후보처럼 남는 경우 경고한다.
@@ -151,6 +152,8 @@ fixtures/service-schema/fail/**
 0.39.82부터 `ZDP-APP-001`은 `zdp-web-apps` auth route promotion 계약도 `zdp-core-platform contracts/auth-product-review-approval.yaml` receipt review, `typed_product_approval_gate_receipt_no_route_unblock`, `no_product_reviewer_approval`, `product_reviewer_approval_present`, `product_approval_evidence_ref_present` 조건을 명시해야 통과한다. 이 조건이 없으면 app shell이 product approval receipt 없이 login/signup/recovery/passkey/OAuth route를 열 수 있는 것처럼 보이므로 실패한다.
 
 0.39.83부터 `ZDP-TOKEN-001`은 `zdp-token-protocol`의 `contracts/token-authority-matrix.yaml` 계약을 검사한다. lab-only 상태, Supply/Upgrade/Compliance/Emergency authority 분리, `TreasuryCap`/`UpgradeCap`/`DenyCapV2`/`MetadataCap`/`PauseCap`/migration/PAS policy capability 목록, capability별 owner/approver/signer threshold/timelock/rotation/revocation/monitoring/emergency replacement 필드, 무제한 `AdminCap` 금지, single hot wallet 금지, self-custody 기본값, managed custody 별도 gate가 사라지면 실패한다.
+
+0.39.84부터 `ZDP-TOKEN-002`는 `zdp-token-indexer`의 `contracts/chain-fact-contract.yaml` 계약을 검사한다. lab-only 상태, checkpoint/effects/object-change/Move event/BCS payload source, chain fact 필수 필드, `chain.fact.observed`/`chain.fact.quarantined`, replay/quarantine 요구사항, signing/custody/ledger posting/mint-burn correction/customer-right 정본 금지, money consumption gate가 사라지면 실패한다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 
