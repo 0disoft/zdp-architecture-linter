@@ -109,6 +109,31 @@ export function GET() {
     );
   });
 
+  test('passes non-feed server routes without feed contracts', async () => {
+    await withRepositoryRoot(
+      {
+        'src/routes/healthz/+server.ts': `
+export function GET() {
+  return new Response('ok');
+}
+`,
+        'src/routes/readyz/+server.ts': `
+export function GET() {
+  return new Response('ready');
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryFeedContract({
+          repositoryRoot,
+          repositoryServiceContract: {}
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('fails runtime feed server routes without exception, cost, and cache contracts', async () => {
     await withRepositoryRoot(
       {

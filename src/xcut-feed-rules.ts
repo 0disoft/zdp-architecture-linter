@@ -53,8 +53,9 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   'target'
 ]);
 
-const FEED_PATH_PATTERN =
-  /(?:^|\/)(?:rss|atom|feed)(?:[./-]|$)|(?:rss|atom|feed)\.(?:xml|json)(?:\/|$)|\+server\.(?:ts|tsx|js|jsx)$/i;
+const FEED_NAMED_PATH_PATTERN =
+  /(?:^|\/)(?:rss|atom|feed)(?:[./-]|$)|(?:rss|atom|feed)\.(?:xml|json)(?:\/|$)/i;
+const SERVER_ROUTE_PATH_PATTERN = /\/\+server\.(?:ts|tsx|js|jsx)$/i;
 const RUNTIME_FEED_DECLARATION_PATTERN =
   /\b(?:rss|atom|json feed|feed)\b.*\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b|\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b.*\b(?:rss|atom|json feed|feed)\b/i;
 const STATIC_FEED_MARKER_PATTERN =
@@ -114,7 +115,9 @@ export async function validateRepositoryFeedContract(input: {
 }
 
 function declaresRuntimeFeedSurface(file: string, source: string): boolean {
-  if (!isFeedSurfacePath(file)) {
+  const feedNamedPath = isFeedNamedPath(file);
+
+  if (!feedNamedPath) {
     return declaresRuntimeFeedContract(source);
   }
 
@@ -156,7 +159,16 @@ function hasRuntimeFeedExceptionContract(source: string): boolean {
 }
 
 function isFeedSurfacePath(file: string): boolean {
-  return FEED_PATH_PATTERN.test(normalizePath(file));
+  const normalized = normalizePath(file);
+
+  return (
+    FEED_NAMED_PATH_PATTERN.test(normalized) ||
+    SERVER_ROUTE_PATH_PATTERN.test(normalized)
+  );
+}
+
+function isFeedNamedPath(file: string): boolean {
+  return FEED_NAMED_PATH_PATTERN.test(normalizePath(file));
 }
 
 function isStaticFeedArtifactPath(file: string): boolean {
