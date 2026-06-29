@@ -1194,6 +1194,7 @@ contract:
   status: live_dispatcher_ready
   owner: product-api
 runtime:
+  sqlx_delivery_attempt_adapter_implemented: false
   live_dispatcher_implemented: true
   consumer_inbox_implemented: true
   replay_worker_implemented: true
@@ -1241,6 +1242,14 @@ forbidden_claims:
           path: 'contract.status',
           message:
             'Core platform event outbox contract must stay `migration_shape_declared_no_dispatcher` until dispatcher and replay workers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'runtime.sqlx_delivery_attempt_adapter_implemented',
+          message:
+            'Core platform event outbox contract must keep sqlx_delivery_attempt_adapter_implemented true so delivery attempt append shape is reviewable before workers exist.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1345,6 +1354,46 @@ forbidden_claims:
           path: 'dispatcher_consumer_replay_review_receipt.dispatcher_worker_started',
           message:
             'Core platform event outbox dispatcher/consumer/replay review receipt must keep dispatcher_worker_started false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'delivery_attempt_sqlx_adapter.boundary_status',
+          message:
+            'Core platform event delivery SQLx adapter must keep boundary_status `sqlx_delivery_attempt_adapter_no_worker` until workers exist.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'dispatcher_consumer_replay_review.required_before_promotion',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `delivery_attempt_sqlx_adapter_review` in `dispatcher_consumer_replay_review.required_before_promotion`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'dispatcher_consumer_replay_review_receipt.delivery_attempt_sqlx_adapter_checked',
+          message:
+            'Core platform event outbox dispatcher/consumer/replay review receipt must check delivery attempt SQLx adapter.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'delivery_attempt_sqlx_adapter.dispatcher_worker_started',
+          message:
+            'Core platform event delivery SQLx adapter must keep dispatcher_worker_started false.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'delivery_attempt_sqlx_adapter.required_controls',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `uses_planned_delivery_transition` in `delivery_attempt_sqlx_adapter.required_controls`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -3088,6 +3137,7 @@ contract:
   status: migration_shape_declared_no_dispatcher
   owner: zdp-core-platform
 runtime:
+  sqlx_delivery_attempt_adapter_implemented: true
   dispatcher_consumer_replay_review_plan_implemented: true
   live_dispatcher_implemented: false
   consumer_inbox_implemented: false
@@ -3150,6 +3200,32 @@ required_delivery_attempt_fields:
   - attempted_at
   - audit_event_ref
   - trace_id
+delivery_attempt_sqlx_adapter:
+  boundary_status: sqlx_delivery_attempt_adapter_no_worker
+  implementation_ref: src/core_postgres_event_delivery_adapter.rs
+  adapter_ref: adapter://core/postgres/event-delivery-attempts
+  storage_ref: audit.core_event_delivery_attempts
+  attempt_id_field: core_event_delivery_attempt_id
+  append_receipt_ref: receipt://core/events/delivery-attempt
+  planned_transition_required: true
+  append_only_insert_required: true
+  dispatcher_worker_started: false
+  consumer_inbox_enabled: false
+  replay_worker_enabled: false
+  money_realtime_sync_enabled: false
+  product_route_unblocked: false
+  raw_payload_serialized: false
+  required_controls:
+    - uses_planned_delivery_transition
+    - append_only_insert
+    - delivery_state_mapping_preserved
+    - request_id_optional_trace_id_required
+    - raw_payload_markers_rejected
+    - no_dispatcher_worker_started
+    - no_consumer_inbox_enabled
+    - no_replay_worker_enabled
+    - no_money_realtime_sync_enabled
+    - no_product_route_unblocked
 dispatcher_consumer_replay_review:
   boundary_status: typed_dispatcher_consumer_replay_review_plan_no_worker
   dispatcher_ref: dispatcher://core/not-implemented
@@ -3157,6 +3233,7 @@ dispatcher_consumer_replay_review:
   replay_worker_ref: replay-worker://core/not-implemented
   review_ref: review://core/event-dispatcher-consumer-replay
   required_before_promotion:
+    - delivery_attempt_sqlx_adapter_review
     - dispatcher_worker_implementation_review
     - consumer_inbox_contract_review
     - replay_worker_contract_review
@@ -3175,6 +3252,7 @@ dispatcher_consumer_replay_review:
     - production_route_unblocked_false
 dispatcher_consumer_replay_review_receipt:
   boundary_status: typed_dispatcher_consumer_replay_review_receipt_no_worker
+  delivery_attempt_sqlx_adapter_checked: true
   dispatcher_review_checked: true
   consumer_inbox_contract_checked: true
   replay_worker_contract_checked: true
@@ -3203,6 +3281,9 @@ controls:
   - dead_letter_attempt_history_required
   - dispatcher_consumer_replay_review_plan_required
   - dispatcher_consumer_replay_review_receipt_required
+  - sqlx_delivery_attempt_adapter_required
+  - delivery_attempt_insert_requires_planned_transition
+  - delivery_attempt_adapter_no_worker
   - dispatcher_ref_required_for_delivery_attempts
   - no_dispatcher_claim_until_worker_exists
 forbidden_values:

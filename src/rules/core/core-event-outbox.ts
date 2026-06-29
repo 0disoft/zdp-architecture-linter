@@ -40,6 +40,9 @@ const CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_STATUS =
 const CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS =
   'typed_dispatcher_consumer_replay_review_receipt_no_worker';
 
+const CORE_EVENT_DELIVERY_SQLX_ADAPTER_STATUS =
+  'sqlx_delivery_attempt_adapter_no_worker';
+
 const REQUIRED_CORE_EVENT_OUTBOX_FIELDS = [
   'cloud_event_id',
   'cloud_event_source',
@@ -86,11 +89,15 @@ const REQUIRED_CORE_EVENT_OUTBOX_CONTROLS = [
   'dead_letter_attempt_history_required',
   'dispatcher_consumer_replay_review_plan_required',
   'dispatcher_consumer_replay_review_receipt_required',
+  'sqlx_delivery_attempt_adapter_required',
+  'delivery_attempt_insert_requires_planned_transition',
+  'delivery_attempt_adapter_no_worker',
   'dispatcher_ref_required_for_delivery_attempts',
   'no_dispatcher_claim_until_worker_exists'
 ] as const;
 
 const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_PROMOTION_REVIEWS = [
+  'delivery_attempt_sqlx_adapter_review',
   'dispatcher_worker_implementation_review',
   'consumer_inbox_contract_review',
   'replay_worker_contract_review',
@@ -117,6 +124,12 @@ const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_RECEIPT_VALUES = [
     expected: CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS,
     message:
       `Core platform event outbox dispatcher/consumer/replay review receipt must keep boundary_status \`${CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_REVIEW_RECEIPT_STATUS}\` until workers exist.`
+  },
+  {
+    path: 'dispatcher_consumer_replay_review_receipt.delivery_attempt_sqlx_adapter_checked',
+    expected: true,
+    message:
+      'Core platform event outbox dispatcher/consumer/replay review receipt must check delivery attempt SQLx adapter.'
   },
   {
     path: 'dispatcher_consumer_replay_review_receipt.dispatcher_review_checked',
@@ -198,6 +211,94 @@ const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_RECEIPT_VALUES = [
   }
 ] as const;
 
+const REQUIRED_CORE_EVENT_DELIVERY_SQLX_ADAPTER_VALUES = [
+  {
+    path: 'delivery_attempt_sqlx_adapter.boundary_status',
+    expected: CORE_EVENT_DELIVERY_SQLX_ADAPTER_STATUS,
+    message:
+      `Core platform event delivery SQLx adapter must keep boundary_status \`${CORE_EVENT_DELIVERY_SQLX_ADAPTER_STATUS}\` until workers exist.`
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.implementation_ref',
+    expected: 'src/core_postgres_event_delivery_adapter.rs',
+    message:
+      'Core platform event delivery SQLx adapter must point to `src/core_postgres_event_delivery_adapter.rs`.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.adapter_ref',
+    expected: 'adapter://core/postgres/event-delivery-attempts',
+    message:
+      'Core platform event delivery SQLx adapter must keep adapter_ref `adapter://core/postgres/event-delivery-attempts`.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.storage_ref',
+    expected: 'audit.core_event_delivery_attempts',
+    message:
+      'Core platform event delivery SQLx adapter must write only `audit.core_event_delivery_attempts`.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.planned_transition_required',
+    expected: true,
+    message:
+      'Core platform event delivery SQLx adapter must require a planned delivery transition before insert.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.append_only_insert_required',
+    expected: true,
+    message:
+      'Core platform event delivery SQLx adapter must require append-only inserts.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.dispatcher_worker_started',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep dispatcher_worker_started false.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.consumer_inbox_enabled',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep consumer_inbox_enabled false.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.replay_worker_enabled',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep replay_worker_enabled false.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.money_realtime_sync_enabled',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep money_realtime_sync_enabled false.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.product_route_unblocked',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep product_route_unblocked false.'
+  },
+  {
+    path: 'delivery_attempt_sqlx_adapter.raw_payload_serialized',
+    expected: false,
+    message:
+      'Core platform event delivery SQLx adapter must keep raw_payload_serialized false.'
+  }
+] as const;
+
+const REQUIRED_CORE_EVENT_DELIVERY_SQLX_ADAPTER_CONTROLS = [
+  'uses_planned_delivery_transition',
+  'append_only_insert',
+  'delivery_state_mapping_preserved',
+  'request_id_optional_trace_id_required',
+  'raw_payload_markers_rejected',
+  'no_dispatcher_worker_started',
+  'no_consumer_inbox_enabled',
+  'no_replay_worker_enabled',
+  'no_money_realtime_sync_enabled',
+  'no_product_route_unblocked'
+] as const;
+
 const REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_VALUES = [
   'raw_password',
   'password_plaintext',
@@ -252,6 +353,15 @@ export function validateCoreEventOutboxContract(
       expected: true,
       message:
         'Core platform event outbox contract must keep dispatcher_consumer_replay_review_plan_implemented true so dispatcher, consumer inbox, and replay promotion stay review-gated.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'runtime.sqlx_delivery_attempt_adapter_implemented',
+      field: 'runtime.sqlx_delivery_attempt_adapter_implemented',
+      expected: true,
+      message:
+        'Core platform event outbox contract must keep sqlx_delivery_attempt_adapter_implemented true so delivery attempt append shape is reviewable before workers exist.'
     }),
     ...validateExactValue({
       value,
@@ -487,6 +597,23 @@ export function validateCoreEventOutboxContract(
           message: receiptValue.message
         })
     ),
+    ...REQUIRED_CORE_EVENT_DELIVERY_SQLX_ADAPTER_VALUES.flatMap(
+      (adapterValue) =>
+        validateExactValue({
+          value,
+          file: CORE_EVENT_OUTBOX_FILE,
+          path: adapterValue.path,
+          expected: adapterValue.expected,
+          message: adapterValue.message
+        })
+    ),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'delivery_attempt_sqlx_adapter.required_controls',
+      field: 'delivery_attempt_sqlx_adapter.required_controls',
+      requiredEntries: REQUIRED_CORE_EVENT_DELIVERY_SQLX_ADAPTER_CONTROLS
+    }),
     ...validateRequiredStringArrayEntries({
       value,
       file: CORE_EVENT_OUTBOX_FILE,
