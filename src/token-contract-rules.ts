@@ -5,12 +5,15 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const TOKEN_PROTOCOL_REPOSITORY_NAME = 'zdp-token-protocol';
 const TOKEN_INDEXER_REPOSITORY_NAME = 'zdp-token-indexer';
+const TOKEN_CRYPTO_WALLET_REPOSITORY_NAME = 'zdp-crypto-wallet';
+const TOKEN_OPERATOR_REPOSITORY_NAME = 'zdp-token-operator';
 const TOKEN_AUTHORITY_RULE_ID = 'ZDP-TOKEN-001';
 const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
 const TOKEN_SUI_API_RULE_ID = 'ZDP-TOKEN-003';
 const TOKEN_PACKAGE_UPGRADE_RULE_ID = 'ZDP-TOKEN-005';
 const TOKEN_IDENTITY_RULE_ID = 'ZDP-TOKEN-006';
 const TOKEN_PACKAGE_PUBLICATION_RULE_ID = 'ZDP-TOKEN-007';
+const TOKEN_CUSTODY_CONTROL_RULE_ID = 'ZDP-TOKEN-008';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
 const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
 const TOKEN_SUI_API_SELECTION_FILE = 'contracts/sui-api-selection.yaml';
@@ -21,6 +24,7 @@ const TOKEN_PACKAGE_PUBLICATION_RECORD_FILE =
   'contracts/package-publication-record.yaml';
 const TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE =
   'contracts/active-deployment-manifest.yaml';
+const TOKEN_CUSTODY_CONTROL_FILE = 'contracts/custody-control-plane.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -178,6 +182,24 @@ const REQUIRED_ACTIVE_DEPLOYMENT_FIELDS = [
   'endpoint_config_ref'
 ] as const;
 
+const REQUIRED_CUSTODY_WALLET_CLASSES = [
+  'self_custody',
+  'managed_custodial',
+  'sponsor_wallet',
+  'treasury_wallet',
+  'capability_wallet'
+] as const;
+
+const REQUIRED_CUSTODY_CONTROLS = [
+  'signer_owner',
+  'recovery_policy',
+  'withdrawal_approval_policy',
+  'signer_rotation_policy',
+  'custody_reconciliation_policy',
+  'audit_event_ref',
+  'capability_scope'
+] as const;
+
 export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -211,6 +233,16 @@ export async function validateRepositoryTokenContracts(input: {
         repositoryName
       ))
     ];
+  }
+
+  if (
+    repositoryName === TOKEN_CRYPTO_WALLET_REPOSITORY_NAME ||
+    repositoryName === TOKEN_OPERATOR_REPOSITORY_NAME
+  ) {
+    return validateRepositoryCustodyControlPlane(
+      input.repositoryRoot,
+      repositoryName
+    );
   }
 
   return [];
@@ -365,6 +397,29 @@ async function validateRepositoryPackagePublicationSeparation(
     ...validateTokenPackagePublicationRecord(publicationRecord.value),
     ...validateTokenActiveDeploymentManifest(deploymentManifest.value)
   ];
+}
+
+async function validateRepositoryCustodyControlPlane(
+  repositoryRoot: string,
+  repositoryName: string
+): Promise<readonly Diagnostic[]> {
+  const contract = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token custody repository must include \`${relativePath}\` before wallet or operator custody work starts.`,
+      parseMessage: (relativePath, error) =>
+        `Token custody control plane \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_CUSTODY_CONTROL_FILE
+  );
+
+  if (contract.diagnostics.length > 0) {
+    return contract.diagnostics;
+  }
+
+  return validateTokenCustodyControlPlane(contract.value, repositoryName);
 }
 
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
@@ -1030,6 +1085,90 @@ function validateTokenActiveDeploymentManifest(
       forbiddenValue: true,
       message:
         'Token active deployment manifest must not allow package ID copy-paste into product repository environment variables.'
+    })
+  ];
+}
+
+function validateTokenCustodyControlPlane(
+  value: unknown,
+  repositoryName: string
+): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'contract.owner',
+      expected: repositoryName,
+      message: `Token custody control plane must declare owner \`${repositoryName}\`.`
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_custody_operations',
+      message:
+        'Token custody control plane must stay lab-only and must not claim custody operation readiness.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.wallet_classes',
+      requiredEntries: REQUIRED_CUSTODY_WALLET_CLASSES,
+      label: 'Token custody wallet class contract'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.required_controls',
+      requiredEntries: REQUIRED_CUSTODY_CONTROLS,
+      label: 'Token custody required control contract'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.forbidden_runtime_owners',
+      requiredEntries: REQUIRED_CUSTODY_FORBIDDEN_OWNERS,
+      label: 'Token custody forbidden runtime owner contract'
+    }),
+    ...validateForbiddenStringEntries({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.signer_runtime_owners',
+      forbiddenEntries: REQUIRED_CUSTODY_FORBIDDEN_OWNERS,
+      label: 'Token custody signer runtime owner contract'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.money_core_indexer_ci_signer_allowed',
+      expected: false,
+      message:
+        'Token custody control plane must forbid money, core, indexer, and CI signer ownership.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.managed_custody_requires_separate_gate',
+      expected: true,
+      message:
+        'Token custody control plane must require a separate gate before managed or custodial operation.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_CUSTODY_CONTROL_RULE_ID,
+      file: TOKEN_CUSTODY_CONTROL_FILE,
+      path: 'custody.raw_private_key_storage_allowed',
+      expected: false,
+      message:
+        'Token custody control plane must not allow raw private key storage.'
     })
   ];
 }

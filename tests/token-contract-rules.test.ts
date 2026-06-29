@@ -637,6 +637,162 @@ rights_separation:
     );
   });
 
+  test('passes when crypto wallet declares custody control plane', async () => {
+    await withRepositoryRoot(
+      createValidCustodyControlPlaneFiles('zdp-crypto-wallet'),
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createCryptoWalletServiceContract()
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('passes when token operator declares custody control plane', async () => {
+    await withRepositoryRoot(
+      createValidCustodyControlPlaneFiles('zdp-token-operator'),
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenOperatorServiceContract()
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('fails when token custody control plane is missing', async () => {
+    await withRepositoryRoot({}, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryTokenContracts({
+        repositoryRoot,
+        repositoryServiceContract: createCryptoWalletServiceContract()
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'repository.root',
+          message:
+            'Token custody repository must include `contracts/custody-control-plane.yaml` before wallet or operator custody work starts.'
+        }
+      ]);
+    });
+  });
+
+  test('fails when custody signer control collapses into money, core, indexer, or CI', async () => {
+    await withRepositoryRoot(
+      {
+        'contracts/custody-control-plane.yaml': `
+contract:
+  owner: zdp-money-platform
+  status: custody_operations_ready
+custody:
+  wallet_classes:
+    - self_custody
+    - managed_custodial
+  required_controls:
+    - signer_owner
+    - recovery_policy
+  forbidden_runtime_owners:
+    - zdp-money-platform
+  signer_runtime_owners:
+    - zdp-money-platform
+    - zdp-core-platform
+    - zdp-token-indexer
+    - ci
+  money_core_indexer_ci_signer_allowed: true
+  managed_custody_requires_separate_gate: false
+  raw_private_key_storage_allowed: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenOperatorServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'contract.owner',
+          message:
+            'Token custody control plane must declare owner `zdp-token-operator`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'contract.status',
+          message:
+            'Token custody control plane must stay lab-only and must not claim custody operation readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.wallet_classes',
+          message:
+            'Token custody wallet class contract must include `sponsor_wallet` in `custody.wallet_classes`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.required_controls',
+          message:
+            'Token custody required control contract must include `withdrawal_approval_policy` in `custody.required_controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.forbidden_runtime_owners',
+          message:
+            'Token custody forbidden runtime owner contract must include `zdp-core-platform` in `custody.forbidden_runtime_owners`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.signer_runtime_owners',
+          message:
+            'Token custody signer runtime owner contract must not include `zdp-money-platform` in `custody.signer_runtime_owners`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.money_core_indexer_ci_signer_allowed',
+          message:
+            'Token custody control plane must forbid money, core, indexer, and CI signer ownership.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.managed_custody_requires_separate_gate',
+          message:
+            'Token custody control plane must require a separate gate before managed or custodial operation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-008',
+          severity: 'error',
+          file: 'contracts/custody-control-plane.yaml',
+          path: 'custody.raw_private_key_storage_allowed',
+          message:
+            'Token custody control plane must not allow raw private key storage.'
+        });
+      }
+    );
+  });
+
   test('fails when package publication and active deployment boundaries collapse', async () => {
     await withRepositoryRoot(
       {
@@ -744,6 +900,24 @@ function createTokenIndexerServiceContract(): Record<string, unknown> {
     service: {
       id: 'token-indexer',
       repo: 'zdp-token-indexer'
+    }
+  };
+}
+
+function createCryptoWalletServiceContract(): Record<string, unknown> {
+  return {
+    service: {
+      id: 'crypto-wallet',
+      repo: 'zdp-crypto-wallet'
+    }
+  };
+}
+
+function createTokenOperatorServiceContract(): Record<string, unknown> {
+  return {
+    service: {
+      id: 'token-operator',
+      repo: 'zdp-token-operator'
     }
   };
 }
@@ -957,6 +1131,40 @@ rights_separation:
   entitlement_credit_same_balance_allowed: false
   money_ledger_replaced_by_chain_allowed: false
   membership_as_cash_allowed: false
+`
+  };
+}
+
+function createValidCustodyControlPlaneFiles(owner: string): Record<string, string> {
+  return {
+    'contracts/custody-control-plane.yaml': `
+contract:
+  owner: ${owner}
+  status: lab_only_no_custody_operations
+custody:
+  wallet_classes:
+    - self_custody
+    - managed_custodial
+    - sponsor_wallet
+    - treasury_wallet
+    - capability_wallet
+  required_controls:
+    - signer_owner
+    - recovery_policy
+    - withdrawal_approval_policy
+    - signer_rotation_policy
+    - custody_reconciliation_policy
+    - audit_event_ref
+    - capability_scope
+  forbidden_runtime_owners:
+    - zdp-money-platform
+    - zdp-core-platform
+    - zdp-token-indexer
+    - ci
+  signer_runtime_owners: []
+  money_core_indexer_ci_signer_allowed: false
+  managed_custody_requires_separate_gate: true
+  raw_private_key_storage_allowed: false
 `
   };
 }

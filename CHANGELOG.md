@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.90
+
+- `ZDP-TOKEN-008`을 추가해 `zdp-crypto-wallet`과 `zdp-token-operator`의 `contracts/custody-control-plane.yaml` wallet/custody 통제면 계약을 중앙 linter에서도 검사한다.
+- self-custody, managed/custodial, sponsor wallet, treasury wallet, capability wallet 분리, signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope 필수 통제, money/core/indexer/CI signer 금지, raw private key 저장 금지를 검사한다.
+
 ## 0.39.89
 
 - `ZDP-TOKEN-007`을 추가해 `zdp-token-protocol`의 `contracts/package-publication-record.yaml`와 `contracts/active-deployment-manifest.yaml` 분리 계약을 중앙 linter에서도 검사한다.
