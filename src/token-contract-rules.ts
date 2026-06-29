@@ -10,12 +10,17 @@ const TOKEN_CHAIN_FACT_RULE_ID = 'ZDP-TOKEN-002';
 const TOKEN_SUI_API_RULE_ID = 'ZDP-TOKEN-003';
 const TOKEN_PACKAGE_UPGRADE_RULE_ID = 'ZDP-TOKEN-005';
 const TOKEN_IDENTITY_RULE_ID = 'ZDP-TOKEN-006';
+const TOKEN_PACKAGE_PUBLICATION_RULE_ID = 'ZDP-TOKEN-007';
 const TOKEN_AUTHORITY_MATRIX_FILE = 'contracts/token-authority-matrix.yaml';
 const TOKEN_CHAIN_FACT_FILE = 'contracts/chain-fact-contract.yaml';
 const TOKEN_SUI_API_SELECTION_FILE = 'contracts/sui-api-selection.yaml';
 const TOKEN_PACKAGE_UPGRADE_POLICY_FILE =
   'contracts/package-upgrade-policy.yaml';
 const TOKEN_IDENTITY_FILE = 'contracts/token-identity.yaml';
+const TOKEN_PACKAGE_PUBLICATION_RECORD_FILE =
+  'contracts/package-publication-record.yaml';
+const TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE =
+  'contracts/active-deployment-manifest.yaml';
 
 const REQUIRED_CAPABILITIES = [
   'TreasuryCap',
@@ -151,6 +156,28 @@ const FORBIDDEN_MERGED_TOKEN_RIGHTS = [
   'ZDP_GOVERNANCE'
 ] as const;
 
+const REQUIRED_PACKAGE_PUBLICATION_FIELDS = [
+  'original_package_id',
+  'published_package_id',
+  'package_digest',
+  'publish_transaction_digest',
+  'publisher_boundary',
+  'source_commit',
+  'move_lock_digest',
+  'network',
+  'published_at'
+] as const;
+
+const REQUIRED_ACTIVE_DEPLOYMENT_FIELDS = [
+  'active_package_id',
+  'allowed_package_version',
+  'package_publication_record_ref',
+  'activation_evidence_ref',
+  'operator_approval_ref',
+  'rollback_forward_plan_ref',
+  'endpoint_config_ref'
+] as const;
+
 export async function validateRepositoryTokenContracts(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -169,7 +196,10 @@ export async function validateRepositoryTokenContracts(input: {
         repositoryName
       )),
       ...(await validateRepositoryPackageUpgradePolicy(input.repositoryRoot)),
-      ...(await validateRepositoryTokenIdentityContract(input.repositoryRoot))
+      ...(await validateRepositoryTokenIdentityContract(input.repositoryRoot)),
+      ...(await validateRepositoryPackagePublicationSeparation(
+        input.repositoryRoot
+      ))
     ];
   }
 
@@ -295,6 +325,46 @@ async function validateRepositoryTokenIdentityContract(
   }
 
   return validateTokenIdentityContract(contract.value);
+}
+
+async function validateRepositoryPackagePublicationSeparation(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const publicationRecord = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token protocol repository must include \`${relativePath}\` as the Move package publication record.`,
+      parseMessage: (relativePath, error) =>
+        `Token package publication record \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_PACKAGE_PUBLICATION_RECORD_FILE
+  );
+  const deploymentManifest = await readRequiredYamlContract(
+    repositoryRoot,
+    {
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      missingMessage: (relativePath) =>
+        `Token protocol repository must include \`${relativePath}\` as the active ZDP deployment manifest.`,
+      parseMessage: (relativePath, error) =>
+        `Token active deployment manifest \`${relativePath}\` could not be read or parsed: ${formatError(error)}`
+    },
+    TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE
+  );
+  const missingOrParseDiagnostics = [
+    ...publicationRecord.diagnostics,
+    ...deploymentManifest.diagnostics
+  ];
+
+  if (missingOrParseDiagnostics.length > 0) {
+    return missingOrParseDiagnostics;
+  }
+
+  return [
+    ...validateTokenPackagePublicationRecord(publicationRecord.value),
+    ...validateTokenActiveDeploymentManifest(deploymentManifest.value)
+  ];
 }
 
 function validateTokenAuthorityMatrix(value: unknown): readonly Diagnostic[] {
@@ -822,6 +892,144 @@ function validateTokenIdentityContract(value: unknown): readonly Diagnostic[] {
       path: 'token_identity.merged_balances',
       forbiddenEntries: FORBIDDEN_MERGED_TOKEN_RIGHTS,
       label: 'Token Identity merged balance contract'
+    })
+  ];
+}
+
+function validateTokenPackagePublicationRecord(
+  value: unknown
+): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'contract.owner',
+      expected: TOKEN_PROTOCOL_REPOSITORY_NAME,
+      message:
+        'Token package publication record must declare owner `zdp-token-protocol`.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_mainnet',
+      message:
+        'Token package publication record must stay lab-only and must not claim mainnet readiness.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'publication_record.required_fields',
+      requiredEntries: REQUIRED_PACKAGE_PUBLICATION_FIELDS,
+      label: 'Token package publication record'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'publication_record.active_deployment_manifest_separate',
+      expected: true,
+      message:
+        'Token package publication record must keep active deployment selection in a separate manifest.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'publication_record.runtime_credentials_allowed',
+      expected: false,
+      message:
+        'Token package publication record must not contain runtime endpoint credentials.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_PACKAGE_PUBLICATION_RECORD_FILE,
+      path: 'publication_record.publish_implies_active_deployment',
+      forbiddenValue: true,
+      message:
+        'Token package publication must not imply active ZDP deployment.'
+    })
+  ];
+}
+
+function validateTokenActiveDeploymentManifest(
+  value: unknown
+): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'contract.owner',
+      expected: TOKEN_PROTOCOL_REPOSITORY_NAME,
+      message:
+        'Token active deployment manifest must declare owner `zdp-token-protocol`.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'contract.status',
+      expected: 'lab_only_no_mainnet',
+      message:
+        'Token active deployment manifest must stay lab-only and must not claim mainnet readiness.'
+    }),
+    ...validateRequiredStringEntries({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'deployment_manifest.required_fields',
+      requiredEntries: REQUIRED_ACTIVE_DEPLOYMENT_FIELDS,
+      label: 'Token active deployment manifest'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'deployment_manifest.package_publication_record_separate',
+      expected: true,
+      message:
+        'Token active deployment manifest must reference package publication records instead of owning publication facts.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'deployment_manifest.runtime_credentials_allowed',
+      expected: false,
+      message:
+        'Token active deployment manifest must not contain runtime endpoint credentials.'
+    }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'product_env.package_id_copy_paste_allowed',
+      expected: false,
+      message:
+        'Token active deployment manifest must forbid package ID copy-paste into product repository environment variables.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'deployment_manifest.contains_runtime_credentials',
+      forbiddenValue: true,
+      message:
+        'Token active deployment manifest must not contain runtime endpoint credentials.'
+    }),
+    ...validateForbiddenScalarValue({
+      value,
+      ruleId: TOKEN_PACKAGE_PUBLICATION_RULE_ID,
+      file: TOKEN_ACTIVE_DEPLOYMENT_MANIFEST_FILE,
+      path: 'product_env.package_id_copy_paste_allowed',
+      forbiddenValue: true,
+      message:
+        'Token active deployment manifest must not allow package ID copy-paste into product repository environment variables.'
     })
   ];
 }

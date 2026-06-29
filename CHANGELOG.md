@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.89
+
+- `ZDP-TOKEN-007`을 추가해 `zdp-token-protocol`의 `contracts/package-publication-record.yaml`와 `contracts/active-deployment-manifest.yaml` 분리 계약을 중앙 linter에서도 검사한다.
+- Move package publication fact와 active ZDP deployment manifest 분리, publication이 active deployment를 암시하는 구조 금지, runtime credential 포함 금지, product repository env var로 package ID를 복붙 허용하는 계약 금지를 검사한다.
+
 ## 0.39.88
 
 - `ZDP-TOKEN-006`을 추가해 `zdp-token-protocol`의 `contracts/token-identity.yaml` Token Identity Contract를 중앙 linter에서도 검사한다.

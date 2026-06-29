@@ -36,7 +36,8 @@ describe('token contract rules', () => {
       {
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         ...createValidPackageUpgradePolicyFiles(),
-        ...createValidTokenIdentityFiles()
+        ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles()
       },
       async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
@@ -64,6 +65,7 @@ describe('token contract rules', () => {
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         ...createValidPackageUpgradePolicyFiles(),
         ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles(),
         'contracts/token-authority-matrix.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -277,7 +279,8 @@ money_consumption:
       {
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidPackageUpgradePolicyFiles(),
-        ...createValidTokenIdentityFiles()
+        ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles()
       },
       async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
@@ -303,6 +306,7 @@ money_consumption:
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidPackageUpgradePolicyFiles(),
         ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles(),
         'contracts/sui-api-selection.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -374,7 +378,8 @@ sui_api:
       {
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
-        ...createValidTokenIdentityFiles()
+        ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles()
       },
       async (repositoryRoot) => {
         const diagnostics = await validateRepositoryTokenContracts({
@@ -400,6 +405,7 @@ sui_api:
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         ...createValidTokenIdentityFiles(),
+        ...createValidPackagePublicationSeparationFiles(),
         'contracts/package-upgrade-policy.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -484,7 +490,8 @@ upgrade_policy:
       {
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
-        ...createValidPackageUpgradePolicyFiles()
+        ...createValidPackageUpgradePolicyFiles(),
+        ...createValidPackagePublicationSeparationFiles()
       },
       async (repositoryRoot) => {
         const diagnostics = await validateRepositoryTokenContracts({
@@ -510,6 +517,7 @@ upgrade_policy:
         ...createValidTokenAuthorityMatrixFiles(),
         ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
         ...createValidPackageUpgradePolicyFiles(),
+        ...createValidPackagePublicationSeparationFiles(),
         'contracts/token-identity.yaml': `
 contract:
   owner: zdp-token-protocol
@@ -592,6 +600,134 @@ rights_separation:
       }
     );
   });
+
+  test('fails when token protocol omits package publication and active deployment manifests', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-TOKEN-007',
+            severity: 'error',
+            file: 'contracts/package-publication-record.yaml',
+            path: 'repository.root',
+            message:
+              'Token protocol repository must include `contracts/package-publication-record.yaml` as the Move package publication record.'
+          },
+          {
+            ruleId: 'ZDP-TOKEN-007',
+            severity: 'error',
+            file: 'contracts/active-deployment-manifest.yaml',
+            path: 'repository.root',
+            message:
+              'Token protocol repository must include `contracts/active-deployment-manifest.yaml` as the active ZDP deployment manifest.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('fails when package publication and active deployment boundaries collapse', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidTokenAuthorityMatrixFiles(),
+        ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
+        ...createValidPackageUpgradePolicyFiles(),
+        ...createValidTokenIdentityFiles(),
+        'contracts/package-publication-record.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: mainnet_ready
+publication_record:
+  required_fields:
+    - original_package_id
+    - published_package_id
+  active_deployment_manifest_separate: false
+  runtime_credentials_allowed: true
+  publish_implies_active_deployment: true
+`,
+        'contracts/active-deployment-manifest.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: mainnet_ready
+deployment_manifest:
+  required_fields:
+    - active_package_id
+    - allowed_package_version
+  package_publication_record_separate: false
+  runtime_credentials_allowed: true
+  contains_runtime_credentials: true
+product_env:
+  package_id_copy_paste_allowed: true
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTokenContracts({
+          repositoryRoot,
+          repositoryServiceContract: createTokenProtocolServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/package-publication-record.yaml',
+          path: 'contract.status',
+          message:
+            'Token package publication record must stay lab-only and must not claim mainnet readiness.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/package-publication-record.yaml',
+          path: 'publication_record.required_fields',
+          message:
+            'Token package publication record must include `package_digest` in `publication_record.required_fields`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/package-publication-record.yaml',
+          path: 'publication_record.publish_implies_active_deployment',
+          message:
+            'Token package publication must not imply active ZDP deployment.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/active-deployment-manifest.yaml',
+          path: 'deployment_manifest.package_publication_record_separate',
+          message:
+            'Token active deployment manifest must reference package publication records instead of owning publication facts.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/active-deployment-manifest.yaml',
+          path: 'deployment_manifest.contains_runtime_credentials',
+          message:
+            'Token active deployment manifest must not contain runtime endpoint credentials.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-TOKEN-007',
+          severity: 'error',
+          file: 'contracts/active-deployment-manifest.yaml',
+          path: 'product_env.package_id_copy_paste_allowed',
+          message:
+            'Token active deployment manifest must forbid package ID copy-paste into product repository environment variables.'
+        });
+      }
+    );
+  });
 });
 
 function createTokenProtocolServiceContract(): Record<string, unknown> {
@@ -617,7 +753,8 @@ function createValidTokenProtocolFiles(): Record<string, string> {
     ...createValidTokenAuthorityMatrixFiles(),
     ...createValidSuiApiSelectionFiles('zdp-token-protocol'),
     ...createValidPackageUpgradePolicyFiles(),
-    ...createValidTokenIdentityFiles()
+    ...createValidTokenIdentityFiles(),
+    ...createValidPackagePublicationSeparationFiles()
   };
 }
 
@@ -820,6 +957,49 @@ rights_separation:
   entitlement_credit_same_balance_allowed: false
   money_ledger_replaced_by_chain_allowed: false
   membership_as_cash_allowed: false
+`
+  };
+}
+
+function createValidPackagePublicationSeparationFiles(): Record<string, string> {
+  return {
+    'contracts/package-publication-record.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: lab_only_no_mainnet
+publication_record:
+  required_fields:
+    - original_package_id
+    - published_package_id
+    - package_digest
+    - publish_transaction_digest
+    - publisher_boundary
+    - source_commit
+    - move_lock_digest
+    - network
+    - published_at
+  active_deployment_manifest_separate: true
+  runtime_credentials_allowed: false
+  publish_implies_active_deployment: false
+`,
+    'contracts/active-deployment-manifest.yaml': `
+contract:
+  owner: zdp-token-protocol
+  status: lab_only_no_mainnet
+deployment_manifest:
+  required_fields:
+    - active_package_id
+    - allowed_package_version
+    - package_publication_record_ref
+    - activation_evidence_ref
+    - operator_approval_ref
+    - rollback_forward_plan_ref
+    - endpoint_config_ref
+  package_publication_record_separate: true
+  runtime_credentials_allowed: false
+  contains_runtime_credentials: false
+product_env:
+  package_id_copy_paste_allowed: false
 `
   };
 }
