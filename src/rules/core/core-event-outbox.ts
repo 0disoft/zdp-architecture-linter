@@ -199,15 +199,9 @@ const REQUIRED_CORE_EVENT_DISPATCHER_CONSUMER_REPLAY_RECEIPT_VALUES = [
   },
   {
     path: 'dispatcher_consumer_replay_review_receipt.review_status',
-    expected: 'integration_review_pending',
+    expected: 'typed_integration_review_passed',
     message:
-      'Core platform event outbox dispatcher/consumer/replay review receipt must keep review_status `integration_review_pending`.'
-  },
-  {
-    path: 'dispatcher_consumer_replay_review_receipt.promotion_blocker',
-    expected: 'transaction_outbox_dispatcher_replay_review_pending',
-    message:
-      'Core platform event outbox dispatcher/consumer/replay review receipt must keep promotion blocker `transaction_outbox_dispatcher_replay_review_pending`.'
+      'Core platform event outbox dispatcher/consumer/replay review receipt must keep review_status `typed_integration_review_passed` after the no-worker dispatcher, consumer inbox, replay, dead-letter, money sync, and product unblock checks pass.'
   }
 ] as const;
 
@@ -636,6 +630,21 @@ export function validateCoreEventOutboxContract(
       requiredEntries: REQUIRED_CORE_EVENT_OUTBOX_FORBIDDEN_CLAIMS
     })
   );
+
+  if (
+    readPath(
+      value,
+      'dispatcher_consumer_replay_review_receipt.promotion_blocker'
+    ) !== undefined
+  ) {
+    diagnostics.push(
+      createCoreDiagnostic(
+        CORE_EVENT_OUTBOX_FILE,
+        'dispatcher_consumer_replay_review_receipt.promotion_blocker',
+        'Core platform event outbox dispatcher/consumer/replay review receipt must omit `promotion_blocker` after the typed no-worker review passes.'
+      )
+    );
+  }
 
   return diagnostics;
 }

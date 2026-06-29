@@ -2518,8 +2518,7 @@ required_gate_states:
     contract_status: sqlx_idempotency_transaction_outbox_adapter_present_no_dispatcher
     typed_boundary_status: sqlx_transaction_outbox_adapter_no_dispatcher
     durable_implementation_status: idempotency_transaction_outbox_adapter_implemented
-    review_status: integration_review_pending
-    promotion_blocker: transaction_outbox_dispatcher_replay_review_pending
+    review_status: typed_integration_review_passed
     evidence_contracts:
       - contracts/auth-durable-storage-migration-readiness.yaml
       - contracts/auth-durable-storage-transaction-outbox.yaml
@@ -2532,7 +2531,6 @@ required_gate_states:
     evidence_contracts:
       - contracts/auth-session-runtime.yaml
 blocking_summary:
-  - transaction_outbox_dispatcher_replay_review_pending
   - credential_vault_live_client_integration_review_pending
   - core_runtime_live_auth_integration_review_pending
   - no_product_reviewer_approval
@@ -3257,8 +3255,7 @@ dispatcher_consumer_replay_review_receipt:
   replay_worker_enabled: false
   money_realtime_sync_enabled: false
   product_route_unblocked: false
-  review_status: integration_review_pending
-  promotion_blocker: transaction_outbox_dispatcher_replay_review_pending
+  review_status: typed_integration_review_passed
 controls:
   - outbox_rows_are_append_only
   - delivery_attempt_rows_are_append_only

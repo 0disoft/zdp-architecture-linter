@@ -248,8 +248,7 @@ export function createRequiredAuthRuntimeReadinessGates(
         refs.authDurableStorageTransactionOutboxBoundaryStatus,
       durableImplementationStatus:
         'idempotency_transaction_outbox_adapter_implemented',
-      reviewStatus: 'integration_review_pending',
-      promotionBlocker: 'transaction_outbox_dispatcher_replay_review_pending',
+      reviewStatus: 'typed_integration_review_passed',
       evidenceContracts: [
         refs.authDurableStorageMigrationReadinessFile,
         refs.authDurableStorageTransactionOutboxFile
