@@ -1030,10 +1030,13 @@ runtime:
 events:
   cloud_events_required: false
   source: product-api
+  replay_required: false
+  dead_letter_required: false
+  dead_letter_policy: product.delivery_attempts
   produced:
-    - core.account.restriction_cleared
+    - core.account.restriction-cleared
   money_relevant:
-    - core.account.restriction_cleared
+    - core.account.restriction-cleared
 storage:
   outbox_table: product.events
   delivery_attempt_table: product.delivery_attempts
@@ -1080,6 +1083,30 @@ forbidden_claims:
           ruleId: 'ZDP-CORE-001',
           severity: 'error',
           file: 'contracts/core-event-outbox.yaml',
+          path: 'events.replay_required',
+          message:
+            'Core platform event outbox contract must require replay contract before production dispatch.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'events.dead_letter_required',
+          message:
+            'Core platform event outbox contract must require dead-letter attempt history before production dispatch.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'events.dead_letter_policy',
+          message:
+            'Core platform event outbox contract must keep events.dead_letter_policy `audit.core_event_delivery_attempts records failed delivery attempts before live dispatchers, consumer inboxes, replay workers, or money realtime sync exist`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
           path: 'events.produced',
           message:
             'Core platform contract `contracts/core-event-outbox.yaml` must include `core.account.restricted` in `events.produced`.'
@@ -1090,7 +1117,7 @@ forbidden_claims:
           file: 'contracts/core-event-outbox.yaml',
           path: 'events.money_relevant',
           message:
-            'Core platform contract `contracts/core-event-outbox.yaml` must include `core.identity.email_verified` in `events.money_relevant`.'
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `core.identity.email-verified` in `events.money_relevant`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -1107,6 +1134,22 @@ forbidden_claims:
           path: 'controls',
           message:
             'Core platform contract `contracts/core-event-outbox.yaml` must include `no_dispatcher_claim_until_worker_exists` in `controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'controls',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `replay_contract_required` in `controls`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/core-event-outbox.yaml',
+          path: 'controls',
+          message:
+            'Core platform contract `contracts/core-event-outbox.yaml` must include `dead_letter_attempt_history_required` in `controls`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -2669,21 +2712,24 @@ runtime:
 events:
   cloud_events_required: true
   source: zdp-core-platform
+  replay_required: true
+  dead_letter_required: true
+  dead_letter_policy: audit.core_event_delivery_attempts records failed delivery attempts before live dispatchers, consumer inboxes, replay workers, or money realtime sync exist
   produced:
     - core.account.restricted
-    - core.account.restriction_cleared
-    - core.identity.email_verified
-    - core.identity.security_pin_changed
-    - core.identity.human_readiness_changed
-    - core.permission.role_assignment_changed
-    - core.access.api_key_changed
+    - core.account.restriction-cleared
+    - core.identity.email-verified
+    - core.identity.security-pin-changed
+    - core.identity.human-readiness-changed
+    - core.permission.role-assignment-changed
+    - core.access.api-key-changed
     - core.consent.withdrawn
   money_relevant:
     - core.account.restricted
-    - core.account.restriction_cleared
-    - core.identity.email_verified
-    - core.identity.security_pin_changed
-    - core.identity.human_readiness_changed
+    - core.account.restriction-cleared
+    - core.identity.email-verified
+    - core.identity.security-pin-changed
+    - core.identity.human-readiness-changed
 storage:
   outbox_table: audit.core_event_outbox
   delivery_attempt_table: audit.core_event_delivery_attempts
@@ -2731,6 +2777,8 @@ controls:
   - audit_event_reference_required
   - command_idempotency_reference_required
   - trace_reference_required
+  - replay_contract_required
+  - dead_letter_attempt_history_required
   - dispatcher_ref_required_for_delivery_attempts
   - no_dispatcher_claim_until_worker_exists
 forbidden_values:

@@ -14,22 +14,25 @@ export const CORE_EVENT_OUTBOX_STATUS =
 
 const REQUIRED_CORE_EVENT_OUTBOX_PRODUCED_EVENTS = [
   'core.account.restricted',
-  'core.account.restriction_cleared',
-  'core.identity.email_verified',
-  'core.identity.security_pin_changed',
-  'core.identity.human_readiness_changed',
-  'core.permission.role_assignment_changed',
-  'core.access.api_key_changed',
+  'core.account.restriction-cleared',
+  'core.identity.email-verified',
+  'core.identity.security-pin-changed',
+  'core.identity.human-readiness-changed',
+  'core.permission.role-assignment-changed',
+  'core.access.api-key-changed',
   'core.consent.withdrawn'
 ] as const;
 
 const REQUIRED_CORE_EVENT_OUTBOX_MONEY_RELEVANT_EVENTS = [
   'core.account.restricted',
-  'core.account.restriction_cleared',
-  'core.identity.email_verified',
-  'core.identity.security_pin_changed',
-  'core.identity.human_readiness_changed'
+  'core.account.restriction-cleared',
+  'core.identity.email-verified',
+  'core.identity.security-pin-changed',
+  'core.identity.human-readiness-changed'
 ] as const;
+
+const CORE_EVENT_OUTBOX_DEAD_LETTER_POLICY =
+  'audit.core_event_delivery_attempts records failed delivery attempts before live dispatchers, consumer inboxes, replay workers, or money realtime sync exist';
 
 const REQUIRED_CORE_EVENT_OUTBOX_FIELDS = [
   'cloud_event_id',
@@ -73,6 +76,8 @@ const REQUIRED_CORE_EVENT_OUTBOX_CONTROLS = [
   'audit_event_reference_required',
   'command_idempotency_reference_required',
   'trace_reference_required',
+  'replay_contract_required',
+  'dead_letter_attempt_history_required',
   'dispatcher_ref_required_for_delivery_attempts',
   'no_dispatcher_claim_until_worker_exists'
 ] as const;
@@ -176,6 +181,33 @@ export function validateCoreEventOutboxContract(
       expected: CORE_REPOSITORY_NAME,
       message:
         `Core platform event outbox contract must keep events.source \`${CORE_REPOSITORY_NAME}\`.`
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.replay_required',
+      field: 'events.replay_required',
+      expected: true,
+      message:
+        'Core platform event outbox contract must require replay contract before production dispatch.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.dead_letter_required',
+      field: 'events.dead_letter_required',
+      expected: true,
+      message:
+        'Core platform event outbox contract must require dead-letter attempt history before production dispatch.'
+    }),
+    ...validateExactValue({
+      value,
+      file: CORE_EVENT_OUTBOX_FILE,
+      path: 'events.dead_letter_policy',
+      field: 'events.dead_letter_policy',
+      expected: CORE_EVENT_OUTBOX_DEAD_LETTER_POLICY,
+      message:
+        `Core platform event outbox contract must keep events.dead_letter_policy \`${CORE_EVENT_OUTBOX_DEAD_LETTER_POLICY}\`.`
     }),
     ...validateRequiredStringArrayEntries({
       value,
