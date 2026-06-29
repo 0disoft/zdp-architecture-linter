@@ -10,6 +10,7 @@ const AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID = 'ZDP-AUTO-002';
 const AUTO_RULESET_STATUS_CHECK_RULE_ID = 'ZDP-AUTO-003';
 const AUTO_RELEASE_HELPER_POLICY_RULE_ID = 'ZDP-AUTO-004';
 const AUTO_TEMPLATE_SECRET_WARNING_RULE_ID = 'ZDP-AUTO-005';
+const AUTO_AUTO_MERGE_GUARD_RULE_ID = 'ZDP-AUTO-006';
 
 const RENOVATE_CONFIG_PATHS = [
   'renovate.json',
@@ -106,6 +107,10 @@ export function validateRepositoryAutomationContract(input: {
     automation !== null && isRecord(automation.templates)
       ? automation.templates
       : null;
+  const autoMerge =
+    automation !== null && isRecord(automation.auto_merge)
+      ? automation.auto_merge
+      : null;
 
   return [
     ...validateCiContract(ci),
@@ -121,7 +126,8 @@ export function validateRepositoryAutomationContract(input: {
     ...validateTemplateSubmissionWarnings({
       repositoryRoot: input.repositoryRoot,
       templates
-    })
+    }),
+    ...validateAutoMergeGuards(autoMerge)
   ];
 }
 
@@ -293,13 +299,42 @@ function validateTemplateSubmissionWarnings(input: {
   ];
 }
 
+function validateAutoMergeGuards(
+  autoMerge: Record<string, unknown> | null
+): readonly Diagnostic[] {
+  if (autoMerge === null || autoMerge.enabled !== true) {
+    return [];
+  }
+
+  const requiredChecks = readStringArray(autoMerge.required_checks);
+  const ownerReviewRequired = autoMerge.owner_review_required === true;
+  const majorUpdateAllowed = autoMerge.major_update_allowed === true;
+
+  if (
+    requiredChecks.length > 0 &&
+    ownerReviewRequired &&
+    !majorUpdateAllowed
+  ) {
+    return [];
+  }
+
+  return [
+    createAutomationDiagnostic(
+      AUTO_AUTO_MERGE_GUARD_RULE_ID,
+      'automation.auto_merge',
+      'Deploy unit auto-merge should declare required checks, require owner review, and keep major updates out of auto-merge.'
+    )
+  ];
+}
+
 function createAutomationDiagnostic(
   ruleId:
     | typeof AUTO_CI_CONTRACT_RULE_ID
     | typeof AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID
     | typeof AUTO_RULESET_STATUS_CHECK_RULE_ID
     | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID
-    | typeof AUTO_TEMPLATE_SECRET_WARNING_RULE_ID,
+    | typeof AUTO_TEMPLATE_SECRET_WARNING_RULE_ID
+    | typeof AUTO_AUTO_MERGE_GUARD_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {

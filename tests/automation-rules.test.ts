@@ -504,6 +504,65 @@ describe('repository automation contracts', () => {
       }
     );
   });
+
+  test('passes when auto-merge declares required checks and review guardrails', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          auto_merge: {
+            enabled: true,
+            required_checks: ['CI'],
+            owner_review_required: true,
+            major_update_allowed: false
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('warns when auto-merge lacks checks, owner review, or major update guard', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          auto_merge: {
+            enabled: true,
+            required_checks: [],
+            owner_review_required: false,
+            major_update_allowed: true
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AUTO-006',
+        severity: 'warning',
+        file: 'service.yaml',
+        path: 'automation.auto_merge',
+        message:
+          'Deploy unit auto-merge should declare required checks, require owner review, and keep major updates out of auto-merge.'
+      }
+    ]);
+  });
 });
 
 function createServiceContract(

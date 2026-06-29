@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.95
+
+- `ZDP-AUTO-006`을 추가해 `automation.auto_merge.enabled`가 `true`인 deploy unit 저장소가 required checks, owner review, major update 금지선을 선언하지 않으면 경고한다.
+
 ## 0.39.94
 
 - `ZDP-AUTO-005`를 추가해 issue form과 PR template이 비밀값, 결제 payload, 고객 원문 데이터 제출 금지를 안내하는지 경고한다.
