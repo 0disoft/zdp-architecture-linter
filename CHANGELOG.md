@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.39.72
+
+- `ZDP-LOCALIZATION-001`이 `@zdp/localization-content` 내부 package boundary도 필수 package set으로 검사하도록 동기화했다.
+
 ## 0.39.71
 
 - `ZDP-APP-001`과 `ZDP-WEBPUB-001`의 GitHub Actions checkout action 계약을 `actions/checkout@v7`로 동기화했다.
