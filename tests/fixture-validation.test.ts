@@ -5,7 +5,13 @@ import { describe, expect, test } from 'bun:test';
 import { buildAiSensitiveDataPolicy, buildAiUserDataPolicy } from '../src/ai-contract-rules.ts';
 import { buildPublicApiContractPolicy } from '../src/api-rules.ts';
 import { buildLedgerDatastoreDependencyPolicy } from '../src/data-access-rules.ts';
+import {
+  buildDataClassIndex,
+  buildServiceDataCatalogPolicy,
+  buildServiceDataOwnershipPolicy
+} from '../src/data-class-rules.ts';
 import { buildDatastoreIndex } from '../src/datastore-rules.ts';
+import { buildEventIndex } from '../src/event-rules.ts';
 import { validateFixtureExpectations } from '../src/fixture-validation.ts';
 import {
   buildCreditMonetizationPolicy,
@@ -208,6 +214,10 @@ function createFixtureContext(architectureRoot: string) {
     architectureRoot,
     repositoryIndex: buildRepositoryIndex({ repositories: [] }),
     datastoreIndex: buildDatastoreIndex({ datastores: [] }),
+    dataClassIndex: buildDataClassIndex({ data_classes: [] }),
+    eventIndex: buildEventIndex({ events: [] }),
+    serviceDataCatalogPolicy: buildServiceDataCatalogPolicy(emptyRules),
+    serviceDataOwnershipPolicy: buildServiceDataOwnershipPolicy(emptyRules),
     ledgerDatastoreDependencyPolicy: buildLedgerDatastoreDependencyPolicy(emptyRules),
     aiUserDataPolicy: buildAiUserDataPolicy(emptyRules),
     aiSensitiveDataPolicy: buildAiSensitiveDataPolicy(emptyRules),

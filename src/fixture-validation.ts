@@ -19,7 +19,15 @@ import {
   type LedgerDatastoreDependencyPolicy
 } from './data-access-rules.ts';
 import type { DatastoreIndex } from './datastore-rules.ts';
+import {
+  validateServiceDataCatalogReferences,
+  validateServiceDataOwnershipContracts,
+  type DataClassIndex,
+  type ServiceDataCatalogPolicy,
+  type ServiceDataOwnershipPolicy
+} from './data-class-rules.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import type { EventIndex } from './event-rules.ts';
 import {
   validateCreditMonetizationContracts,
   validateMoneyMovementContracts,
@@ -35,6 +43,7 @@ import {
   type ProviderWebhookPolicy
 } from './provider-rules.ts';
 import type { RepositoryIndex } from './repository-rules.ts';
+import { validateRepositoryServiceContractEventReferences } from './service-contract-reference-rules.ts';
 import {
   validateTierCriticalControls,
   validateTierOperationalContracts,
@@ -56,6 +65,10 @@ export interface FixtureValidationContext {
   readonly architectureRoot: string;
   readonly repositoryIndex: RepositoryIndex;
   readonly datastoreIndex: DatastoreIndex;
+  readonly dataClassIndex: DataClassIndex;
+  readonly eventIndex: EventIndex;
+  readonly serviceDataCatalogPolicy: ServiceDataCatalogPolicy;
+  readonly serviceDataOwnershipPolicy: ServiceDataOwnershipPolicy;
   readonly ledgerDatastoreDependencyPolicy: LedgerDatastoreDependencyPolicy;
   readonly aiUserDataPolicy: AiUserDataPolicy;
   readonly aiSensitiveDataPolicy: AiSensitiveDataPolicy;
@@ -264,6 +277,20 @@ function validateFixtureService(
       context.datastoreIndex
     ),
     ...validateEdgeRuntimeDirectDatastoreAccess(services, context.datastoreIndex),
+    ...validateServiceDataCatalogReferences(
+      services,
+      context.serviceDataCatalogPolicy,
+      context.dataClassIndex,
+      context.datastoreIndex
+    ),
+    ...validateServiceDataOwnershipContracts(
+      services,
+      context.serviceDataOwnershipPolicy
+    ),
+    ...validateRepositoryServiceContractEventReferences(
+      service,
+      context.eventIndex
+    ),
     ...validateAiUserDataContracts(services, context.aiUserDataPolicy),
     ...validateAiSensitiveDataContracts(services, context.aiSensitiveDataPolicy),
     ...validateMoneyMovementContracts(services, context.moneyMovementPolicy),
