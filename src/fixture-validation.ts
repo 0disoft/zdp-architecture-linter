@@ -43,6 +43,10 @@ import {
   validateTier3RiskyExperimentContracts,
   type Tier3RiskyExperimentPolicy
 } from './tier-rules.ts';
+import {
+  validateTokenRawChainConsumptionContracts,
+  type TokenRawChainConsumptionPolicy
+} from './token-service-rules.ts';
 
 const FIXTURE_INVALID_RULE_ID = 'ZDP-FIXTURE-001';
 const FIXTURE_PASS_RULE_ID = 'ZDP-FIXTURE-002';
@@ -64,6 +68,7 @@ export interface FixtureValidationContext {
   readonly tierCriticalControlsPolicy: TierCriticalControlsPolicy;
   readonly tier3RiskyExperimentPolicy: Tier3RiskyExperimentPolicy;
   readonly publicApiContractPolicy: PublicApiContractPolicy;
+  readonly tokenRawChainConsumptionPolicy: TokenRawChainConsumptionPolicy;
 }
 
 interface FixtureRecord {
@@ -282,7 +287,12 @@ function validateFixtureService(
       services,
       context.tier3RiskyExperimentPolicy
     ),
-    ...validatePublicApiContracts(services, context.publicApiContractPolicy)
+    ...validatePublicApiContracts(services, context.publicApiContractPolicy),
+    ...validateTokenRawChainConsumptionContracts(
+      services,
+      context.tokenRawChainConsumptionPolicy,
+      context.repositoryIndex
+    )
   ];
 }
 

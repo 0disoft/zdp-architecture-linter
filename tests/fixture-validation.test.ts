@@ -22,6 +22,7 @@ import {
   buildTierOperationalContractPolicy,
   buildTier3RiskyExperimentPolicy
 } from '../src/tier-rules.ts';
+import { buildTokenRawChainConsumptionPolicy } from '../src/token-service-rules.ts';
 
 const emptyRules = { rules: [] };
 const publicApiRules = {
@@ -218,7 +219,11 @@ function createFixtureContext(architectureRoot: string) {
     tierOperationalContractPolicy: buildTierOperationalContractPolicy(emptyRules),
     tierCriticalControlsPolicy: buildTierCriticalControlsPolicy(emptyRules),
     tier3RiskyExperimentPolicy: buildTier3RiskyExperimentPolicy(emptyRules),
-    publicApiContractPolicy: buildPublicApiContractPolicy(publicApiRules)
+    publicApiContractPolicy: buildPublicApiContractPolicy(publicApiRules),
+    tokenRawChainConsumptionPolicy: buildTokenRawChainConsumptionPolicy(
+      emptyRules,
+      buildDatastoreIndex({ datastores: [] })
+    )
   };
 }
 

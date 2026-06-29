@@ -104,6 +104,10 @@ import { validateRepositoryObservabilityContract } from './observability-contrac
 import { validateRepositoryInfraContract } from './infra-contract-rules.ts';
 import { validateRepositorySecurityContract } from './security-contract-rules.ts';
 import { validateRepositoryTokenContracts } from './token-contract-rules.ts';
+import {
+  buildTokenRawChainConsumptionPolicy,
+  validateTokenRawChainConsumptionContracts
+} from './token-service-rules.ts';
 import { validateRepositoryDataPlatformContract } from './data-platform-contract-rules.ts';
 import { validateRepositoryGrowthLabContract } from './growth-lab-contract-rules.ts';
 import { validateRepositoryLibsContract } from './libs-contract-rules.ts';
@@ -248,6 +252,10 @@ export async function validateArchitecture(
   const publicApiContractPolicy = buildPublicApiContractPolicy(
     catalogs.apiRules ?? catalogs.tierRules
   );
+  const tokenRawChainConsumptionPolicy = buildTokenRawChainConsumptionPolicy(
+    catalogs.tokenRules,
+    datastoreIndex
+  );
 
   const fixtureDiagnostics = await validateFixtureExpectations({
     architectureRoot: input.architectureRoot,
@@ -264,7 +272,8 @@ export async function validateArchitecture(
     tierOperationalContractPolicy,
     tierCriticalControlsPolicy,
     tier3RiskyExperimentPolicy,
-    publicApiContractPolicy
+    publicApiContractPolicy,
+    tokenRawChainConsumptionPolicy
   });
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
     input.architectureRoot
@@ -358,6 +367,11 @@ export async function validateArchitecture(
           ...validatePublicApiContracts(
             repositoryServiceContractCatalog,
             publicApiContractPolicy
+          ),
+          ...validateTokenRawChainConsumptionContracts(
+            repositoryServiceContractCatalog,
+            tokenRawChainConsumptionPolicy,
+            repositoryIndex
           )
         ]);
   const repositoryAutomationDiagnostics =
@@ -482,6 +496,11 @@ export async function validateArchitecture(
       ...validatePublicApiContracts(
         catalogs.services,
         publicApiContractPolicy
+      ),
+      ...validateTokenRawChainConsumptionContracts(
+        catalogs.services,
+        tokenRawChainConsumptionPolicy,
+        repositoryIndex
       ),
       ...fixtureDiagnostics,
       ...serviceSchemaDiagnostics,

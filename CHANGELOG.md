@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.86
+
+- `ZDP-TOKEN-004`를 추가해 money/core/product 서비스가 raw chain event 또는 token indexer datastore를 직접 ledger, entitlement, customer-right command로 소비하지 못하게 검사한다.
+- `onchain_events_store` 또는 `zdp-token-indexer` 소유 datastore를 소비하는 대상 서비스는 reconciliation policy, idempotency policy, package version allowlist를 선언해야 하며 raw chain event direct command 플래그는 실패한다.
+
 ## 0.39.85
 
 - `ZDP-TOKEN-003`을 추가해 `zdp-token-protocol`과 `zdp-token-indexer`의 `contracts/sui-api-selection.yaml` Sui API 선택 계약을 중앙 linter에서도 검사한다.

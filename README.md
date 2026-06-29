@@ -50,6 +50,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-token-protocol` 저장소 루트의 token authority matrix 계약이 Move/Sui capability별 owner/approver/signer threshold/timelock/rotation/revocation/monitoring/emergency replacement, authority 분리, 무제한 `AdminCap` 금지, single hot wallet 금지, self-custody 기본값과 managed custody gate를 잃지 않는지 검사한다.
 - `zdp-token-indexer` 저장소 루트의 chain fact 계약이 checkpoint/effects/object-change/Move event/BCS payload source, canonical fact 필드, replay/quarantine, money consumption gate를 잃거나 signing/custody/ledger posting/customer-right 정본 역할로 번지지 않는지 검사한다.
 - `zdp-token-protocol`과 `zdp-token-indexer` 저장소 루트의 Sui API 선택 계약이 JSON-RPC를 신규 baseline으로 삼거나 최신 공식 문서·migration guide 검토, gRPC/GraphQL/Core API/archival provider 선택 근거, 단일 endpoint config owner를 잃지 않는지 검사한다.
+- money/core/product 서비스가 raw chain event 또는 token indexer datastore를 원장 entry, entitlement, 고객 권리 명령으로 직접 소비하지 않고 reconciliation/idempotency/package allowlist gate를 거치는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
 - 예약된 배포 저장소가 로드맵 근거 없이 초기 생성 후보처럼 남는 경우 경고한다.
@@ -157,6 +158,8 @@ fixtures/service-schema/fail/**
 0.39.84부터 `ZDP-TOKEN-002`는 `zdp-token-indexer`의 `contracts/chain-fact-contract.yaml` 계약을 검사한다. lab-only 상태, checkpoint/effects/object-change/Move event/BCS payload source, chain fact 필수 필드, `chain.fact.observed`/`chain.fact.quarantined`, replay/quarantine 요구사항, signing/custody/ledger posting/mint-burn correction/customer-right 정본 금지, money consumption gate가 사라지면 실패한다.
 
 0.39.85부터 `ZDP-TOKEN-003`은 `zdp-token-protocol`과 `zdp-token-indexer`의 `contracts/sui-api-selection.yaml` 계약을 검사한다. JSON-RPC baseline 금지, JSON-RPC legacy-only role, gRPC/GraphQL/Core API/archival provider 검토, 최신 공식 문서 review requirement, Sui SDK/API migration guide review requirement, archival provider policy, endpoint config single-source owner가 사라지면 실패한다.
+
+0.39.86부터 `ZDP-TOKEN-004`는 money/core/product 서비스가 raw chain event 또는 token indexer datastore를 ledger, entitlement, customer-right command로 직접 소비하지 못하게 검사한다. `onchain_events_store` 또는 `zdp-token-indexer` 소유 datastore를 소비하거나 `data.raw_chain_event`를 선언한 대상 서비스는 `token.reconciliation_policy`, `token.idempotency_policy`, `token.package_version_allowlist`를 유지해야 하며 `token.raw_chain_event_direct_command: true`이면 실패한다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 

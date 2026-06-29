@@ -20,6 +20,7 @@ export interface ArchitectureCatalogs {
   readonly dataAccessRules: DataAccessRulesCatalog;
   readonly tierRules: TierRulesCatalog;
   readonly apiRules?: ApiRulesCatalog;
+  readonly tokenRules?: TokenRulesCatalog;
 }
 
 export interface RepositoriesCatalog {
@@ -86,6 +87,10 @@ export interface TierRulesCatalog {
 }
 
 export interface ApiRulesCatalog {
+  readonly rules?: unknown;
+}
+
+export interface TokenRulesCatalog {
   readonly rules?: unknown;
 }
 
@@ -161,6 +166,11 @@ export async function loadArchitectureCatalogs(
     apiRules: await loadOptionalYamlFile<ApiRulesCatalog | undefined>(
       architectureRoot,
       'rules/api.rules.yaml',
+      undefined
+    ),
+    tokenRules: await loadOptionalYamlFile<TokenRulesCatalog | undefined>(
+      architectureRoot,
+      'rules/token.rules.yaml',
       undefined
     )
   };
