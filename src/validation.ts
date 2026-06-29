@@ -49,6 +49,7 @@ import {
   validateEventSchemaReferences
 } from './event-schema-validation.ts';
 import { validateFixtureExpectations } from './fixture-validation.ts';
+import { validateRepositoryServiceFixtureExpectations } from './repository-service-fixture-validation.ts';
 import {
   buildProviderContractPolicy,
   buildProviderWebhookPolicy,
@@ -301,6 +302,16 @@ export async function validateArchitecture(
     publicApiContractPolicy,
     tokenRawChainConsumptionPolicy
   });
+  const repositoryServiceFixtureDiagnostics =
+    await validateRepositoryServiceFixtureExpectations({
+      architectureRoot: input.architectureRoot,
+      repositoryIndex,
+      serviceIndex,
+      dataClassIndex,
+      datastoreIndex,
+      eventIndex,
+      externalProviderIndex
+    });
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
     input.architectureRoot
   );
@@ -530,6 +541,7 @@ export async function validateArchitecture(
         repositoryIndex
       ),
       ...fixtureDiagnostics,
+      ...repositoryServiceFixtureDiagnostics,
       ...serviceSchemaDiagnostics,
       ...repositoryBaselineDiagnostics,
       ...repositoryMarkdownDiagnostics,
