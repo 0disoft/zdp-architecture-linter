@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.94
+
+- `ZDP-AUTO-005`를 추가해 issue form과 PR template이 비밀값, 결제 payload, 고객 원문 데이터 제출 금지를 안내하는지 경고한다.
+- 실제 `.github/ISSUE_TEMPLATE`와 PR template 파일 본문, `service.yaml`의 `automation.templates` 경고 플래그와 `forbidden_submission_classes`를 함께 검사한다.
+
 ## 0.39.93
 
 - `ZDP-AUTO-004`를 추가해 deploy unit 저장소에서 release helper가 켜졌거나 release helper config가 있는데 version source of truth와 changelog 정책이 빠진 경우 경고한다.

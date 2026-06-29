@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import type { Diagnostic } from '../diagnostics.ts';
 import type { RepositoryIndex } from '../repository-rules.ts';
 
@@ -9,6 +9,7 @@ const AUTO_CI_CONTRACT_RULE_ID = 'ZDP-AUTO-001';
 const AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID = 'ZDP-AUTO-002';
 const AUTO_RULESET_STATUS_CHECK_RULE_ID = 'ZDP-AUTO-003';
 const AUTO_RELEASE_HELPER_POLICY_RULE_ID = 'ZDP-AUTO-004';
+const AUTO_TEMPLATE_SECRET_WARNING_RULE_ID = 'ZDP-AUTO-005';
 
 const RENOVATE_CONFIG_PATHS = [
   'renovate.json',
@@ -34,6 +35,30 @@ const RELEASE_HELPER_CONFIG_PATHS = [
   '.github/workflows/release-please.yaml',
   '.github/workflows/release-drafter.yml',
   '.github/workflows/release-drafter.yaml'
+] as const;
+
+const ISSUE_TEMPLATE_SINGLE_FILE_PATHS = [
+  'ISSUE_TEMPLATE.md',
+  '.github/ISSUE_TEMPLATE.md'
+] as const;
+
+const ISSUE_TEMPLATE_DIRECTORIES = ['.github/ISSUE_TEMPLATE'] as const;
+
+const PULL_REQUEST_TEMPLATE_SINGLE_FILE_PATHS = [
+  'PULL_REQUEST_TEMPLATE.md',
+  'pull_request_template.md',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/pull_request_template.md'
+] as const;
+
+const PULL_REQUEST_TEMPLATE_DIRECTORIES = ['.github/PULL_REQUEST_TEMPLATE'] as const;
+
+const TEMPLATE_FILE_EXTENSIONS = ['.md', '.txt', '.yml', '.yaml'] as const;
+
+const REQUIRED_FORBIDDEN_SUBMISSION_CLASSES = [
+  'secrets',
+  'payment payloads',
+  'customer raw data'
 ] as const;
 
 export function validateRepositoryAutomationContract(input: {
@@ -77,6 +102,10 @@ export function validateRepositoryAutomationContract(input: {
     automation !== null && isRecord(automation.release_helper)
       ? automation.release_helper
       : null;
+  const templates =
+    automation !== null && isRecord(automation.templates)
+      ? automation.templates
+      : null;
 
   return [
     ...validateCiContract(ci),
@@ -88,6 +117,10 @@ export function validateRepositoryAutomationContract(input: {
     ...validateReleaseHelperPolicy({
       releaseHelper,
       repositoryRoot: input.repositoryRoot
+    }),
+    ...validateTemplateSubmissionWarnings({
+      repositoryRoot: input.repositoryRoot,
+      templates
     })
   ];
 }
@@ -201,12 +234,72 @@ function validateReleaseHelperPolicy(input: {
   ];
 }
 
+function validateTemplateSubmissionWarnings(input: {
+  readonly repositoryRoot: string | undefined;
+  readonly templates: Record<string, unknown> | null;
+}): readonly Diagnostic[] {
+  const issueTemplateFiles =
+    input.repositoryRoot === undefined
+      ? []
+      : collectTemplateFiles(
+          input.repositoryRoot,
+          ISSUE_TEMPLATE_SINGLE_FILE_PATHS,
+          ISSUE_TEMPLATE_DIRECTORIES
+        );
+  const pullRequestTemplateFiles =
+    input.repositoryRoot === undefined
+      ? []
+      : collectTemplateFiles(
+          input.repositoryRoot,
+          PULL_REQUEST_TEMPLATE_SINGLE_FILE_PATHS,
+          PULL_REQUEST_TEMPLATE_DIRECTORIES
+        );
+
+  if (issueTemplateFiles.length === 0 && pullRequestTemplateFiles.length === 0) {
+    return [];
+  }
+
+  const missingIssueContract =
+    issueTemplateFiles.length > 0 &&
+    input.templates?.issue_forms_secret_warning !== true;
+  const missingPullRequestContract =
+    pullRequestTemplateFiles.length > 0 &&
+    input.templates?.pr_template_secret_warning !== true;
+  const missingForbiddenClasses =
+    !hasRequiredForbiddenSubmissionClasses(input.templates);
+  const issueTemplateTextMissingWarning = templateFilesMissWarning(
+    issueTemplateFiles
+  );
+  const pullRequestTemplateTextMissingWarning = templateFilesMissWarning(
+    pullRequestTemplateFiles
+  );
+
+  if (
+    !missingIssueContract &&
+    !missingPullRequestContract &&
+    !missingForbiddenClasses &&
+    !issueTemplateTextMissingWarning &&
+    !pullRequestTemplateTextMissingWarning
+  ) {
+    return [];
+  }
+
+  return [
+    createAutomationDiagnostic(
+      AUTO_TEMPLATE_SECRET_WARNING_RULE_ID,
+      'automation.templates',
+      'Issue forms and PR templates should warn users not to submit secrets, payment payloads, or customer raw data, and `automation.templates` should declare those forbidden submission classes.'
+    )
+  ];
+}
+
 function createAutomationDiagnostic(
   ruleId:
     | typeof AUTO_CI_CONTRACT_RULE_ID
     | typeof AUTO_DEPENDENCY_BOT_CONFLICT_RULE_ID
     | typeof AUTO_RULESET_STATUS_CHECK_RULE_ID
-    | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID,
+    | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID
+    | typeof AUTO_TEMPLATE_SECRET_WARNING_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {
@@ -221,6 +314,89 @@ function createAutomationDiagnostic(
 
 function hasAnyPath(root: string, paths: readonly string[]): boolean {
   return paths.some((path) => existsSync(join(root, path)));
+}
+
+function collectTemplateFiles(
+  root: string,
+  filePaths: readonly string[],
+  directoryPaths: readonly string[]
+): readonly string[] {
+  const directFiles = filePaths
+    .map((path) => join(root, path))
+    .filter(isFile);
+  const directoryFiles = directoryPaths.flatMap((directoryPath) =>
+    collectTemplateFilesFromDirectory(join(root, directoryPath))
+  );
+
+  return [...directFiles, ...directoryFiles];
+}
+
+function collectTemplateFilesFromDirectory(directory: string): readonly string[] {
+  if (!isDirectory(directory)) {
+    return [];
+  }
+
+  return readdirSync(directory)
+    .map((entry) => join(directory, entry))
+    .filter((path) => isFile(path) && hasTemplateExtension(path) && !isIssueTemplateConfig(path));
+}
+
+function templateFilesMissWarning(paths: readonly string[]): boolean {
+  return paths.some((path) => !templateTextIncludesForbiddenSubmissionWarnings(readTextFile(path)));
+}
+
+function templateTextIncludesForbiddenSubmissionWarnings(text: string): boolean {
+  const normalized = text.toLowerCase();
+
+  return (
+    /(secret|token|api key|credential|비밀값|토큰|인증 정보)/u.test(normalized) &&
+    /(payment payload|payment data|card data|결제 payload|결제 데이터|카드 데이터)/u.test(normalized) &&
+    /(customer raw data|raw customer data|customer data|고객 원문 데이터|고객 데이터)/u.test(normalized)
+  );
+}
+
+function hasRequiredForbiddenSubmissionClasses(
+  templates: Record<string, unknown> | null
+): boolean {
+  const forbiddenClasses = readStringArray(templates?.forbidden_submission_classes)
+    .map((value) => value.trim().toLowerCase());
+  const forbiddenClassSet = new Set(forbiddenClasses);
+
+  return REQUIRED_FORBIDDEN_SUBMISSION_CLASSES.every((value) =>
+    forbiddenClassSet.has(value)
+  );
+}
+
+function readTextFile(path: string): string {
+  return readFileSync(path, 'utf8');
+}
+
+function hasTemplateExtension(path: string): boolean {
+  const normalized = path.toLowerCase();
+
+  return TEMPLATE_FILE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+}
+
+function isIssueTemplateConfig(path: string): boolean {
+  const fileName = basename(path).toLowerCase();
+
+  return fileName === 'config.yml' || fileName === 'config.yaml';
+}
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function sameStringSet(

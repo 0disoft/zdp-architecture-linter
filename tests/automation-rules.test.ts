@@ -379,6 +379,131 @@ describe('repository automation contracts', () => {
       }
     );
   });
+
+  test('passes when issue forms and PR template warn against sensitive submissions', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/ISSUE_TEMPLATE/bug.yml': sensitiveSubmissionWarningText(),
+        '.github/PULL_REQUEST_TEMPLATE.md': sensitiveSubmissionWarningText()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              },
+              templates: {
+                issue_forms_secret_warning: true,
+                pr_template_secret_warning: true,
+                forbidden_submission_classes: [
+                  'secrets',
+                  'payment payloads',
+                  'customer raw data'
+                ]
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('warns when template files exist without service.yaml warnings', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/ISSUE_TEMPLATE/bug.yml': sensitiveSubmissionWarningText(),
+        '.github/PULL_REQUEST_TEMPLATE.md': sensitiveSubmissionWarningText()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              },
+              templates: {
+                issue_forms_secret_warning: false,
+                pr_template_secret_warning: false,
+                forbidden_submission_classes: ['secrets']
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-005',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'automation.templates',
+            message:
+              'Issue forms and PR templates should warn users not to submit secrets, payment payloads, or customer raw data, and `automation.templates` should declare those forbidden submission classes.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('warns when template files omit sensitive submission text', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/ISSUE_TEMPLATE/bug.yml': 'name: Bug\nbody: []\n',
+        '.github/PULL_REQUEST_TEMPLATE.md': '## Summary\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              },
+              templates: {
+                issue_forms_secret_warning: true,
+                pr_template_secret_warning: true,
+                forbidden_submission_classes: [
+                  'secrets',
+                  'payment payloads',
+                  'customer raw data'
+                ]
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-005',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'automation.templates',
+            message:
+              'Issue forms and PR templates should warn users not to submit secrets, payment payloads, or customer raw data, and `automation.templates` should declare those forbidden submission classes.'
+          }
+        ]);
+      }
+    );
+  });
 });
 
 function createServiceContract(
@@ -418,4 +543,12 @@ async function withRepositoryRoot(
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true });
   }
+}
+
+function sensitiveSubmissionWarningText(): string {
+  return [
+    'Do not submit secrets, tokens, API keys, or credentials.',
+    'Do not include payment payloads, payment data, or card data.',
+    'Do not paste customer raw data or customer data.'
+  ].join('\n');
 }

@@ -5,6 +5,9 @@ labels: ["feature", "triage"]
 body:
   - type: markdown
     attributes:
+      value: "비밀값, 토큰, 결제 payload, 고객 원문 데이터는 적지 마."
+  - type: markdown
+    attributes:
       value: "새 정책은 이 저장소가 아니라 zdp-architecture 문서, 스키마, 카탈로그, 규칙, fixture 중 하나로 추적 가능해야 해."
   - type: textarea
     id: problem
