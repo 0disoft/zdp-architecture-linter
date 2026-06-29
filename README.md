@@ -55,6 +55,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-token-protocol` 저장소 루트의 Token Identity Contract가 entitlement, credit, settlement, governance 권리와 각 정본 경계를 분리하는지 검사한다.
 - `zdp-crypto-wallet`과 `zdp-token-operator` 저장소 루트의 custody control plane 계약이 self-custody, managed/custodial, sponsor wallet, treasury wallet, capability wallet 통제면과 signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope를 분리하고, money/core/indexer/CI signer와 raw private key storage를 금지하는지 검사한다.
 - repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)가 비밀값, 내부 URL, 비공개 경로를 노출하지 않는지 검사한다.
+- deploy unit 저장소가 `automation.ci` 계약, dependency update bot 소유자, ruleset required status check 이름을 명확히 선언하는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
 - 예약된 배포 저장소가 로드맵 근거 없이 초기 생성 후보처럼 남는 경우 경고한다.
@@ -174,6 +175,8 @@ fixtures/service-schema/fail/**
 0.39.90부터 `ZDP-TOKEN-008`은 `zdp-crypto-wallet`과 `zdp-token-operator`의 `contracts/custody-control-plane.yaml` 계약을 검사한다. lab-only custody posture, self-custody/managed-custodial/sponsor/treasury/capability wallet class 분리, signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope 필수 통제, money/core/indexer/CI signer 금지, raw private key storage 금지가 사라지면 실패한다.
 
 0.39.91부터 `ZDP-XCUT-SECRET-001`은 repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)를 검사한다. localhost/private-network/internal host URL, private/admin/internal/customer-data/ops/backoffice 경로, private key/API key/access token 형태 값, 채워진 secret assignment가 보이면 실패한다. 이 검사는 공개 artifact의 첫 tripwire이며, 런타임 응답·로그 redaction의 완전성 증명은 아니다.
+
+0.39.92부터 `ZDP-AUTO-002`는 deploy unit 저장소에서 Renovate와 Dependabot이 동시에 dependency update owner가 되는 구성을 경고한다. `service.yaml`의 `automation.dependency_updates.renovate_enabled`와 `dependabot_enabled`가 둘 다 `true`이거나, repository root에 Renovate config와 `.github/dependabot.yml`/`.yaml`이 함께 있으면 실패가 아니라 warning으로 보고한다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 

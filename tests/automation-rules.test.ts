@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { validateRepositoryAutomationContract } from '../src/rules/index.ts';
 import { buildRepositoryIndex } from '../src/repository-rules.ts';
@@ -72,6 +75,43 @@ describe('repository automation contracts', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  test('passes when one dependency update bot owns the repository', async () => {
+    await withRepositoryRoot(
+      {
+        'renovate.json': '{ "extends": ["config:recommended"] }\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                provider: 'github-actions',
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              },
+              dependency_updates: {
+                renovate_enabled: true,
+                dependabot_enabled: false,
+                conflict_policy: 'Renovate owns dependency updates.'
+              },
+              ruleset: {
+                required: true,
+                required_status_checks: ['CI']
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('skips non-deploy-unit repository service contracts', () => {
     const diagnostics = validateRepositoryAutomationContract({
       repositoryIndex,
@@ -132,6 +172,91 @@ describe('repository automation contracts', () => {
     ]);
   });
 
+  test('warns when Renovate and Dependabot are both enabled in service.yaml', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        automation: {
+          ci: {
+            required: true,
+            provider: 'github-actions',
+            workflow_names: ['CI'],
+            required_status_checks: ['CI'],
+            private_dependency_token_required: false,
+            required_secrets: []
+          },
+          dependency_updates: {
+            renovate_enabled: true,
+            dependabot_enabled: true,
+            conflict_policy: 'Both bots are active.'
+          },
+          ruleset: {
+            required: true,
+            required_status_checks: ['CI']
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AUTO-002',
+        severity: 'warning',
+        file: 'service.yaml',
+        path: 'automation.dependency_updates',
+        message:
+          'Deploy unit service contract should not enable Renovate and Dependabot in the same repository; choose one dependency update owner or document a migration by disabling one bot.'
+      }
+    ]);
+  });
+
+  test('warns when Renovate and Dependabot config files both exist', async () => {
+    await withRepositoryRoot(
+      {
+        'renovate.json': '{ "extends": ["config:recommended"] }\n',
+        '.github/dependabot.yml': 'version: 2\nupdates: []\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                provider: 'github-actions',
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              },
+              dependency_updates: {
+                renovate_enabled: false,
+                dependabot_enabled: false,
+                conflict_policy: 'No bot is declared yet.'
+              },
+              ruleset: {
+                required: true,
+                required_status_checks: ['CI']
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-002',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'repository.root',
+            message:
+              'Deploy unit service contract should not enable Renovate and Dependabot in the same repository; choose one dependency update owner or document a migration by disabling one bot.'
+          }
+        ]);
+      }
+    );
+  });
+
   test('warns when ruleset checks drift from CI required checks', () => {
     const diagnostics = validateRepositoryAutomationContract({
       repositoryIndex,
@@ -181,4 +306,25 @@ function createServiceContract(
       ? {}
       : { automation: overrides.automation })
   };
+}
+
+async function withRepositoryRoot(
+  files: Record<string, string>,
+  callback: (repositoryRoot: string) => Promise<void>
+): Promise<void> {
+  const repositoryRoot = await mkdtemp(
+    join(tmpdir(), 'zdp-architecture-linter-automation-')
+  );
+
+  try {
+    for (const [file, source] of Object.entries(files)) {
+      const fullPath = join(repositoryRoot, file);
+      await mkdir(dirname(fullPath), { recursive: true });
+      await writeFile(fullPath, source, 'utf8');
+    }
+
+    await callback(repositoryRoot);
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
 }

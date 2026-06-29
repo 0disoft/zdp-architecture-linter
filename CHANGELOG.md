@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.92
+
+- `ZDP-AUTO-002`를 추가해 deploy unit 저장소에서 Renovate와 Dependabot이 동시에 dependency update owner가 되는 구성을 경고한다.
+- `service.yaml`의 `automation.dependency_updates.renovate_enabled`와 `dependabot_enabled`가 둘 다 `true`인 경우, 또는 repository root에 Renovate config와 `.github/dependabot.yml`이 함께 있는 경우를 검사한다.
+
 ## 0.39.91
 
 - `ZDP-XCUT-SECRET-001`을 추가해 repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)에 비밀값, 내부 URL, 비공개 경로가 들어가는지 검사한다.

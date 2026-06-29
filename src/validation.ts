@@ -380,6 +380,7 @@ export async function validateArchitecture(
     repositoryServiceContract === null
       ? []
       : validateRepositoryAutomationContract({
+          repositoryRoot: input.repositoryRoot,
           repositoryServiceContract: repositoryServiceContract.value,
           repositoryIndex
         });
