@@ -130,6 +130,7 @@ import {
   validateTier3RiskyExperimentContracts
 } from './tier-rules.ts';
 import { validateRepositoryWebpubContract } from './webpub-rules.ts';
+import { validateRepositorySecretExposureContract } from './xcut-secret-rules.ts';
 import { validateRepositoryTermSheetContract } from './xcut-term-rules.ts';
 
 export interface ValidateArchitectureInput {
@@ -148,6 +149,7 @@ type RepositoryContractValidator = (
 
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
   validateRepositoryWebpubContract,
+  validateRepositorySecretExposureContract,
   validateRepositoryTermSheetContract,
   validateRepositoryCoreContract,
   validateRepositoryAppShellContract,

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.91
+
+- `ZDP-XCUT-SECRET-001`을 추가해 repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)에 비밀값, 내부 URL, 비공개 경로가 들어가는지 검사한다.
+- 공개 discovery 파일에 localhost/private-network/internal host URL, private/admin/internal/customer-data/ops/backoffice 경로, private key/API key/access token 형태 값, 채워진 secret assignment가 보이면 실패한다.
+
 ## 0.39.90
 
 - `ZDP-TOKEN-008`을 추가해 `zdp-crypto-wallet`과 `zdp-token-operator`의 `contracts/custody-control-plane.yaml` wallet/custody 통제면 계약을 중앙 linter에서도 검사한다.

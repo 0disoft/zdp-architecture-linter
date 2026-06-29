@@ -54,6 +54,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-token-protocol` 저장소 루트의 package upgrade 정책이 original/latest package id, dependency/build digest manifest, old package version guard, migration plan, event separation, publish/activation 분리, pause/unpause approval split을 잃지 않는지 검사한다.
 - `zdp-token-protocol` 저장소 루트의 Token Identity Contract가 entitlement, credit, settlement, governance 권리와 각 정본 경계를 분리하는지 검사한다.
 - `zdp-crypto-wallet`과 `zdp-token-operator` 저장소 루트의 custody control plane 계약이 self-custody, managed/custodial, sponsor wallet, treasury wallet, capability wallet 통제면과 signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope를 분리하고, money/core/indexer/CI signer와 raw private key storage를 금지하는지 검사한다.
+- repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)가 비밀값, 내부 URL, 비공개 경로를 노출하지 않는지 검사한다.
 - 논리 경계나 금지 후보를 실제 배포 저장소처럼 다루는 실수를 막는다.
 - 조건부 배포 저장소가 생성 조건을 밝히지 않는 경우 경고한다.
 - 예약된 배포 저장소가 로드맵 근거 없이 초기 생성 후보처럼 남는 경우 경고한다.
@@ -171,6 +172,8 @@ fixtures/service-schema/fail/**
 0.39.89부터 `ZDP-TOKEN-007`은 `zdp-token-protocol`의 `contracts/package-publication-record.yaml`와 `contracts/active-deployment-manifest.yaml` 분리 계약을 검사한다. package publication fact와 active deployment manifest 분리, publication이 active deployment를 암시하는 구조 금지, runtime credential 포함 금지, product repository env var로 package ID를 복붙 허용하는 계약 금지가 사라지면 실패한다.
 
 0.39.90부터 `ZDP-TOKEN-008`은 `zdp-crypto-wallet`과 `zdp-token-operator`의 `contracts/custody-control-plane.yaml` 계약을 검사한다. lab-only custody posture, self-custody/managed-custodial/sponsor/treasury/capability wallet class 분리, signer owner/recovery/withdrawal approval/signer rotation/custody reconciliation/audit/capability scope 필수 통제, money/core/indexer/CI signer 금지, raw private key storage 금지가 사라지면 실패한다.
+
+0.39.91부터 `ZDP-XCUT-SECRET-001`은 repository root의 public discovery artifact(`llms.txt`, `sitemap.xml`, `robots.txt`, `.well-known`, discovery JSON)를 검사한다. localhost/private-network/internal host URL, private/admin/internal/customer-data/ops/backoffice 경로, private key/API key/access token 형태 값, 채워진 secret assignment가 보이면 실패한다. 이 검사는 공개 artifact의 첫 tripwire이며, 런타임 응답·로그 redaction의 완전성 증명은 아니다.
 
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 
