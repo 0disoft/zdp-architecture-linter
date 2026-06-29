@@ -75,6 +75,7 @@ const REQUIRED_LOCALIZATION_PACKAGE_NAMES = new Map<string, string>([
   ['packages/astro/package.json', '@zdp/localization-astro'],
   ['packages/cli/package.json', '@zdp/localization-cli'],
   ['packages/compiler/package.json', '@zdp/localization-compiler'],
+  ['packages/content/package.json', '@zdp/localization-content'],
   ['packages/core/package.json', '@zdp/localization-core'],
   ['packages/runtime/package.json', '@zdp/localization-runtime'],
   ['packages/svelte/package.json', '@zdp/localization-svelte'],

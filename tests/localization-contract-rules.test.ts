@@ -447,6 +447,9 @@ function createValidLocalizationPackageFiles(): Record<string, string> {
     'packages/compiler/package.json': createPackageJson(
       '@zdp/localization-compiler'
     ),
+    'packages/content/package.json': createPackageJson(
+      '@zdp/localization-content'
+    ),
     'packages/core/package.json': createPackageJson('@zdp/localization-core'),
     'packages/runtime/package.json': createPackageJson(
       '@zdp/localization-runtime'
