@@ -80,6 +80,13 @@ export interface RepositoryRootMarkdownInput {
   readonly repositoryIndex: RepositoryIndex;
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.repository-root-baseline
+ * purpose: Locate checks that enforce required repository root files, Markdown gates, and text policy snippets.
+ * search: repository baseline, root markdown, AGENTS README, SECURITY BOUNDARY, editorconfig gitattributes
+ * invariant: Repository root diagnostics are derived from live files and catalog/service metadata, not hardcoded per-repo exceptions.
+ * risk: config, data_consistency
+ */
 export async function validateRepositoryBaselineFiles(
   repositoryRoot: string | undefined
 ): Promise<readonly Diagnostic[]> {

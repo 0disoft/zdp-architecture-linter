@@ -164,6 +164,13 @@ interface ParsedListCommand {
   readonly json: boolean;
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.cli-dispatch
+ * purpose: Locate the CLI command dispatcher that routes validate, graph, explain, pack, diff, doctor, normalize, and list flows.
+ * search: CLI dispatch, zdp-arch command, validate graph normalize, generated output, command parsing
+ * invariant: CLI commands preserve explicit architecture and repository roots before invoking validation or generated-output writes.
+ * risk: config, data_consistency
+ */
 async function main(argv: readonly string[]): Promise<number> {
   const command = parseCommand(argv);
 

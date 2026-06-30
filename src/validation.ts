@@ -158,6 +158,13 @@ type RepositoryContractValidator = (
   input: RepositoryContractValidatorInput
 ) => readonly Diagnostic[] | Promise<readonly Diagnostic[]>;
 
+/**
+ * mf:anchor zdp.architecture-linter.repository-contract-registry
+ * purpose: Locate the registry that fans repository service.yaml contracts into repo-specific policy validators.
+ * search: repository contract validator, service.yaml policy, contract registry, repo-specific rules
+ * invariant: Repository-specific validators stay centralized here so validation coverage is visible and not hidden in CLI branches.
+ * risk: data_consistency, dependency
+ */
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
   validateRepositoryWebpubContract,
   validateRepositorySecretExposureContract,
@@ -214,6 +221,13 @@ async function validateRepositoryContractRegistry(input: {
   return diagnostics;
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.validation-pipeline
+ * purpose: Locate the full architecture validation pipeline that combines catalog checks, fixture checks, repository root checks, and contract diagnostics.
+ * search: validateArchitecture, diagnostics pipeline, fixture validation, repository root, policy rules
+ * invariant: Architecture validation reports diagnostics from source catalogs and optional repository roots without mutating architecture inputs.
+ * risk: data_consistency, state
+ */
 export async function validateArchitecture(
   input: ValidateArchitectureInput
 ): Promise<ValidationResult> {

@@ -128,6 +128,13 @@ export interface ExternalProviderGraphNode {
   readonly source: 'catalog';
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.graph-builder
+ * purpose: Locate where architecture catalogs and repository service contracts become searchable graph nodes and edges.
+ * search: architecture graph, repository index, service contract nodes, normalized registry, graph edges
+ * invariant: Graph output preserves catalog source paths and marks repository service contract nodes separately from catalog nodes.
+ * risk: data_consistency
+ */
 export function buildArchitectureGraph(input: {
   readonly catalogs: ArchitectureCatalogs;
   readonly repositoryServiceContract?: unknown | null;

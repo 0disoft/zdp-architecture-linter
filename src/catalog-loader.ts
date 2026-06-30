@@ -94,6 +94,13 @@ export interface TokenRulesCatalog {
   readonly rules?: unknown;
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.catalog-loader
+ * purpose: Locate the architecture input loader that defines which zdp-architecture catalogs, rules, schemas, and roadmap text become linter source truth.
+ * search: architecture catalogs, YAML loader, repository rules, roadmap evidence, policy source
+ * invariant: Linter policy comes from zdp-architecture files here instead of hardcoded platform policy in rule evaluators.
+ * risk: dependency, data_consistency
+ */
 export async function loadArchitectureCatalogs(
   architectureRoot: string
 ): Promise<ArchitectureCatalogs> {

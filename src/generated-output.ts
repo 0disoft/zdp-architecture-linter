@@ -16,6 +16,13 @@ export interface GeneratedOutputCheckResult {
   readonly matches: boolean;
 }
 
+/**
+ * mf:anchor zdp.architecture-linter.generated-output-boundary
+ * purpose: Locate the path containment and boundary-file checks for generated architecture reports and registries.
+ * search: generated output, registry write, pack report, path containment, generated README
+ * invariant: Generated writes stay under architecture generated/ and require the generated boundary README.
+ * risk: config, state, data_consistency
+ */
 export async function writeGeneratedArchitectureFile(input: {
   readonly architectureRoot: string;
   readonly outputPath: string;
