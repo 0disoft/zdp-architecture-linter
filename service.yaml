@@ -1,3 +1,8 @@
+# mf:anchor zdp.architecture-linter.service-contract
+# purpose: Locate the architecture linter service contract and catalog validation boundary.
+# search: architecture linter, service contract, catalog loader, rule fixtures, CLI validation
+# invariant: The linter validates zdp-architecture sources without inventing platform policy.
+# risk: config, data_consistency, security
 contract:
   schema_version: 2
   contract_version: 1
