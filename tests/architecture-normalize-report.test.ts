@@ -16,7 +16,15 @@ describe('architecture normalize report', () => {
               status: 'reserved',
               repo_stage: 'deploy_unit',
               kind: 'deploy_unit',
-              area: 'core'
+              area: 'core',
+              agent_review: {
+                status: 'included',
+                playbook_repo: 'zdp-agent-review-playbooks',
+                group_id: 'group-01',
+                cadence: 'nightly',
+                run_scope: 'six-lens-raw-and-reducer',
+                output_policy: 'local_ignored'
+              }
             }
           ]
         },
@@ -87,6 +95,17 @@ describe('architecture normalize report', () => {
     });
     expect(report.repositories[0]?.id).toBe('zdp-core-platform');
     expect(report.repositories[0]?.status).toBe('reserved');
+    expect(report.repositories[0]?.agentReview).toEqual({
+      status: 'included',
+      playbookRepo: 'zdp-agent-review-playbooks',
+      groupId: 'group-01',
+      cadence: 'nightly',
+      runScope: 'six-lens-raw-and-reducer',
+      outputPolicy: 'local_ignored',
+      since: null,
+      removedAt: null,
+      reason: null
+    });
     expect(report.services[0]?.id).toBe('core-api');
     expect(report.services[0]?.status).toBe('experiment');
     expect(report.datastores[0]?.id).toBe('core_postgres');

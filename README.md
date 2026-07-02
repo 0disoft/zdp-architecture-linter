@@ -30,6 +30,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `zdp-web-public` 저장소가 앱 패키지나 zero-fallback/glossary gate를 선언한 뒤에는 `check:localization` zero-fallback production compile gate, glossary stale-manifest gate, click-open Term Sheet placement, hover-card ad exclusion, sibling checkout과 check/build CI가 공개 웹 dogfooding 계약으로 유지되는지 검사한다.
 - glossary/Term Sheet 표면을 선언한 저장소가 hover tooltip/card 광고 슬롯, Term Sheet 광고 슬롯/provider, `term_id` 없는 용어 identity, generated manifest의 YAML source 누락을 갖는지 검사한다.
 - `zdp-api-contracts` 저장소 루트의 route/error/webhook/SDK generation input 계약, core-api auth/session route catalog, checker skeleton, API export dry-run plan gate가 API 구현 전 유지되는지 검사한다.
+- `catalogs/repositories.yaml`의 `agent_review`가 자동 리뷰 편입 여부, playbook/group 연결, 실행 범위, 산출 정책, 제외·보류·삭제 사유를 기계 필드로 유지하는지 검사한다.
 - `zdp-libs-ts` 저장소 루트의 API contract source/package/schema/env/event/error/i18n 계약, checker skeleton, 최소 public export skeleton이 공통 TypeScript 패키지 구현 전 gate로 유지되는지 검사한다.
 - `zdp-platform-localization` 저장소 루트의 `check:adoption` non-browser gate, fixture catalog diagnostics 0건, generated large-catalog diagnostics 0건, production zero-fallback manifest, large-catalog route-scope ratio 기준, HMR 별도 검증 경계, 내부 전용 posture, 필수 `@zdp/localization-*` package boundary가 내부 채택 전 유지되는지 검사한다.
 - `zdp-client-sdks` 저장소 루트의 SDK generation source handoff, API SDK generation input drift check, API export dry-run plan handoff, libs export source handoff, sdk surface, auth helper, upload client 계약과 checker skeleton, dry-run generation plan skeleton이 SDK 구현 전 gate로 유지되는지 검사한다.
@@ -92,7 +93,7 @@ zdp-arch check-split --architecture <path> --json
 zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] --json
 zdp-arch doctor --architecture <path> [--repository <path>] --json
 zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] --json
-zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] --json
+zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] --json
 zdp-arch list services --architecture <path> [--repo <repo>] --json
 ```
 
@@ -211,6 +212,8 @@ fixtures/service-schema/fail/**
 
 0.39.108부터 `fixtures/repository-service/{pass,fail}/**/*.yaml`은 `service_contract` 객체를 실제 repository root `service.yaml` semantic reference validator에 태운다. 첫 용도는 `ZDP-REF-009`처럼 `service.yaml`의 `service.id`/`service.repo`가 `catalogs/services.yaml`와 어긋나는 repo-root drift를 architecture fixture로 고정하는 것이다. 이 fixture harness는 전체 `service.yaml` JSON Schema fixture가 아니라 catalog reference, data/provider/event reference, domain semantic drift를 재현하는 얇은 gate다.
 
+0.39.109부터 `ZDP-REPO-REVIEW-001`은 `catalogs/repositories.yaml`의 `agent_review` 계약을 검사한다. `included` 저장소는 `playbook_repo`, `group_id`, `cadence`, `run_scope`, `output_policy`를 유지해야 하고, `candidate`/`paused`/`excluded`/`removed`는 사람이 판단할 `reason`을 남겨야 한다. `normalize` registry의 repository node는 `agentReview`를 포함하고, `list repos`는 `--agent-review-status <status>` 필터와 `agentReviewStatus` 출력을 제공한다.
+
 0.39.36부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime admission context 계약이 `contract_only_no_live_handler`, `typed_admission_boundary_no_live_handler`, `contracts/auth-session-runtime.yaml` source, 8개 auth/session operation, request/trace/idempotency/resource/audit metadata, raw credential/provider payload 금지선을 유지하는지 검사한다. 이 boundary는 future auth/session command metadata gate일 뿐 live auth handler, durable request propagation, provider token exchange, DB migration, storage adapter, product route unblock proof가 아니다.
 
 0.39.37부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime command propagation 계약이 `contract_only_no_live_handler`, `typed_propagation_boundary_no_live_handler`, `contracts/auth-runtime-admission-context.yaml` source, request/trace/idempotency/resource/audit metadata, session/passkey/OAuth/audit/idempotency target, raw credential/provider payload 금지선을 유지하는지 검사한다. readiness summary는 이 계약을 evidence로 참조해도 live handler, durable propagation, DB migration, storage adapter, audit persistence, provider token exchange, product route unblock proof로 취급하면 안 된다.
@@ -295,6 +298,6 @@ bun src/cli.ts doctor --architecture <zdp-architecture-path> --json
 bun src/cli.ts normalize --architecture <zdp-architecture-path> --json
 bun src/cli.ts normalize --architecture <zdp-architecture-path> --out generated/registry.json --json
 bun src/cli.ts normalize --architecture <zdp-architecture-path> --out generated/registry.json --check --json
-bun src/cli.ts list repos --architecture <zdp-architecture-path> --stage deploy_unit --json
+bun src/cli.ts list repos --architecture <zdp-architecture-path> --stage deploy_unit --agent-review-status included --json
 bun src/cli.ts list services --architecture <zdp-architecture-path> --repo zdp-core-platform --json
 ```

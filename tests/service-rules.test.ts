@@ -457,6 +457,14 @@ function createRepository(
     purpose: 'Example repository.',
     owner: '0disoft',
     risk_level: 'medium',
+    agent_review: {
+      status: 'included',
+      playbook_repo: 'zdp-agent-review-playbooks',
+      group_id: 'group-01',
+      cadence: 'nightly',
+      run_scope: 'six-lens-raw-and-reducer',
+      output_policy: 'local_ignored'
+    },
     ...overrides
   };
 }

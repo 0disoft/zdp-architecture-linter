@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildRepositoryAreaRules,
   buildRepositoryPolicyNoteRules,
-  validateRepositoriesCatalog
+  validateRepositoriesCatalog as validateRepositoriesCatalogBase
 } from '../src/repository-rules.ts';
 
 const repositoryAreaRules = buildRepositoryAreaRules({
@@ -34,6 +34,49 @@ const repositoryPolicyNoteRules = buildRepositoryPolicyNoteRules({
     }
   ]
 });
+
+const defaultAgentReview = {
+  status: 'included',
+  playbook_repo: 'zdp-agent-review-playbooks',
+  group_id: 'group-01',
+  cadence: 'nightly',
+  run_scope: 'six-lens-raw-and-reducer',
+  output_policy: 'local_ignored'
+};
+
+function validateRepositoriesCatalog(
+  value: unknown,
+  areaRules?: Parameters<typeof validateRepositoriesCatalogBase>[1],
+  roadmapEvidence?: Parameters<typeof validateRepositoriesCatalogBase>[2],
+  policyNoteRules?: Parameters<typeof validateRepositoriesCatalogBase>[3]
+): ReturnType<typeof validateRepositoriesCatalogBase> {
+  return validateRepositoriesCatalogBase(
+    withDefaultAgentReview(value),
+    areaRules,
+    roadmapEvidence,
+    policyNoteRules
+  );
+}
+
+function withDefaultAgentReview(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value.repositories)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    repositories: value.repositories.map((repository) => {
+      if (!isRecord(repository) || isRecord(repository.agent_review)) {
+        return repository;
+      }
+
+      return {
+        ...repository,
+        agent_review: defaultAgentReview
+      };
+    })
+  };
+}
 
 describe('repository catalog required fields', () => {
   test('passes when a repository entry has the required baseline fields', () => {
@@ -83,6 +126,134 @@ describe('repository catalog required fields', () => {
         file: 'catalogs/repositories.yaml',
         path: 'repositories[0:zdp-platform-runtime].risk_level',
         message: 'Repository entry is missing required field `risk_level`.'
+      }
+    ]);
+  });
+});
+
+describe('repository agent review contract', () => {
+  test('fails when a repository entry omits agent_review', () => {
+    const diagnostics = validateRepositoriesCatalogBase({
+      repositories: [
+        {
+          name: 'zdp-architecture-linter',
+          status: 'active',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'architecture',
+          purpose: 'Validate ZDP architecture contracts.',
+          owner: '0disoft',
+          risk_level: 'high'
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-REVIEW-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-architecture-linter].agent_review',
+        message: 'Repository entry must declare `agent_review` as an object.'
+      }
+    ]);
+  });
+
+  test('requires included review entries to declare their playbook and group', () => {
+    const diagnostics = validateRepositoriesCatalogBase({
+      repositories: [
+        {
+          name: 'zdp-architecture-linter',
+          status: 'active',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'architecture',
+          purpose: 'Validate ZDP architecture contracts.',
+          owner: '0disoft',
+          risk_level: 'high',
+          agent_review: {
+            status: 'included',
+            cadence: 'nightly',
+            run_scope: 'six-lens-raw-and-reducer',
+            output_policy: 'local_ignored'
+          }
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-REVIEW-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-architecture-linter].agent_review.playbook_repo',
+        message:
+          'Repository included in agent review is missing required field `playbook_repo`.'
+      },
+      {
+        ruleId: 'ZDP-REPO-REVIEW-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-architecture-linter].agent_review.group_id',
+        message:
+          'Repository included in agent review is missing required field `group_id`.'
+      }
+    ]);
+  });
+
+  test('requires non-included review entries to explain why and removed entries to record removal time', () => {
+    const diagnostics = validateRepositoriesCatalogBase({
+      repositories: [
+        {
+          name: 'zdp-web-public',
+          status: 'active',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'frontend',
+          purpose: 'Public web surface.',
+          owner: '0disoft',
+          risk_level: 'medium',
+          agent_review: {
+            status: 'paused',
+            cadence: 'none',
+            run_scope: 'none',
+            output_policy: 'none'
+          }
+        },
+        {
+          name: 'zdp-web-apps',
+          status: 'active',
+          repo_stage: 'deploy_unit',
+          kind: 'deploy_unit',
+          area: 'frontend',
+          purpose: 'App surfaces.',
+          owner: '0disoft',
+          risk_level: 'medium',
+          agent_review: {
+            status: 'removed',
+            cadence: 'none',
+            run_scope: 'none',
+            output_policy: 'none',
+            reason: 'No longer reviewed.'
+          }
+        }
+      ]
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REPO-REVIEW-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[0:zdp-web-public].agent_review.reason',
+        message: 'Repository agent review status `paused` requires a reason.'
+      },
+      {
+        ruleId: 'ZDP-REPO-REVIEW-001',
+        severity: 'error',
+        file: 'catalogs/repositories.yaml',
+        path: 'repositories[1:zdp-web-apps].agent_review.removed_at',
+        message: 'Repository agent review status `removed` requires `removed_at`.'
       }
     ]);
   });
@@ -442,3 +613,7 @@ describe('repository notes machine fields', () => {
     expect(diagnostics).toEqual([]);
   });
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

@@ -34,6 +34,12 @@ repositories:
     purpose: Mobile app shell.
     owner: 0disoft
     risk_level: medium
+    agent_review:
+      status: candidate
+      cadence: none
+      run_scope: none
+      output_policy: none
+      reason: Conditional repository is not reviewed until promotion.
 `
       }),
       async ({ architectureRoot }) => {
@@ -76,6 +82,12 @@ repositories:
     purpose: Admin console.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: candidate
+      cadence: none
+      run_scope: none
+      output_policy: none
+      reason: Conditional repository is not reviewed until promotion.
 `
       }),
       async ({ architectureRoot }) => {
@@ -118,6 +130,13 @@ repositories:
     purpose: Core platform.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
 `,
         'catalogs/services.yaml': `
 services:
@@ -189,6 +208,13 @@ repositories:
     purpose: Core platform.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
 `,
       'catalogs/services.yaml': `
 services:

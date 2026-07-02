@@ -88,6 +88,9 @@ const CLI_OPTION_CONFIG = {
   },
   area: {
     type: 'string'
+  },
+  'agent-review-status': {
+    type: 'string'
   }
 } as const;
 
@@ -159,6 +162,7 @@ interface ParsedListCommand {
   readonly filters: {
     readonly stage?: string;
     readonly area?: string;
+    readonly agentReviewStatus?: string;
     readonly repo?: string;
   };
   readonly json: boolean;
@@ -482,7 +486,8 @@ async function main(argv: readonly string[]): Promise<number> {
               kind: 'repos',
               filters: {
                 stage: command.filters.stage,
-                area: command.filters.area
+                area: command.filters.area,
+                agentReviewStatus: command.filters.agentReviewStatus
               }
             })
           : createArchitectureListReport({
@@ -611,6 +616,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       filters: {
         stage: readStringOption(parsed.values.stage) ?? undefined,
         area: readStringOption(parsed.values.area) ?? undefined,
+        agentReviewStatus:
+          readStringOption(parsed.values['agent-review-status']) ?? undefined,
         repo: readStringOption(parsed.values.repo) ?? undefined
       },
       json: parsed.values.json === true
@@ -699,7 +706,7 @@ function printUsage(): void {
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
       '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
-      '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--json]',
+      '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]',
       '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
     ].join('\n')
   );

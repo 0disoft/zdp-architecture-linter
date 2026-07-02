@@ -36,6 +36,13 @@ repositories:
     purpose: Test edge worker.
     owner: 0disoft
     risk_level: medium
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
   - name: zdp-privacy-access-broker
     status: active
     repo_stage: deploy_unit
@@ -44,6 +51,13 @@ repositories:
     purpose: Privacy access broker.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-02
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
 `,
         'catalogs/services.yaml': `
 services:

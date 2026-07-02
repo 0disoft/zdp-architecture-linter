@@ -12,7 +12,15 @@ describe('architecture graph', () => {
               status: 'reserved',
               repo_stage: 'deploy_unit',
               kind: 'deploy_unit',
-              area: 'core'
+              area: 'core',
+              agent_review: {
+                status: 'included',
+                playbook_repo: 'zdp-agent-review-playbooks',
+                group_id: 'group-01',
+                cadence: 'nightly',
+                run_scope: 'six-lens-raw-and-reducer',
+                output_policy: 'local_ignored'
+              }
             }
           ]
         },
@@ -102,7 +110,18 @@ describe('architecture graph', () => {
         status: 'reserved',
         area: 'core',
         kind: 'deploy_unit',
-        repoStage: 'deploy_unit'
+        repoStage: 'deploy_unit',
+        agentReview: {
+          status: 'included',
+          playbookRepo: 'zdp-agent-review-playbooks',
+          groupId: 'group-01',
+          cadence: 'nightly',
+          runScope: 'six-lens-raw-and-reducer',
+          outputPolicy: 'local_ignored',
+          since: null,
+          removedAt: null,
+          reason: null
+        }
       }
     ]);
     expect(graph.nodes.services).toEqual([

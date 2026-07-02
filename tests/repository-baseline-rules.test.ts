@@ -452,6 +452,7 @@ function createRepositoryIndex(repository: {
   readonly kind: string;
   readonly area: string;
   readonly purpose?: string;
+  readonly owner?: string;
   readonly riskLevel?: string;
   readonly ownsData?: readonly string[];
   readonly splitTargets?: readonly string[];
@@ -464,7 +465,9 @@ function createRepositoryIndex(repository: {
           ...repository,
           status: null,
           purpose: repository.purpose ?? null,
+          owner: repository.owner ?? null,
           riskLevel: repository.riskLevel ?? null,
+          agentReview: null,
           ownsData: repository.ownsData ?? [],
           splitTargets: repository.splitTargets ?? [],
           securityBoundary: null,

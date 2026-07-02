@@ -54,7 +54,9 @@ export interface RepositoryCatalogRecord {
   readonly kind: string | null;
   readonly area: string | null;
   readonly purpose: string | null;
+  readonly owner: string | null;
   readonly riskLevel: string | null;
+  readonly agentReview: RepositoryAgentReview | null;
   readonly ownsData: readonly string[];
   readonly splitTargets: readonly string[];
   readonly securityBoundary: RepositorySecurityBoundary | null;
@@ -68,6 +70,18 @@ export interface RepositoryIndex {
 export interface RepositorySecurityBoundary {
   readonly dbSchema: string | null;
   readonly dbRole: string | null;
+}
+
+export interface RepositoryAgentReview {
+  readonly status: string | null;
+  readonly playbookRepo: string | null;
+  readonly groupId: string | null;
+  readonly cadence: string | null;
+  readonly runScope: string | null;
+  readonly outputPolicy: string | null;
+  readonly since: string | null;
+  readonly removedAt: string | null;
+  readonly reason: string | null;
 }
 
 export interface RepositoryAreaPrefixRule {
@@ -120,7 +134,9 @@ export function buildRepositoryIndex(value: unknown): RepositoryIndex {
         kind: readStringField(repository, 'kind'),
         area: readStringField(repository, 'area'),
         purpose: readStringField(repository, 'purpose'),
+        owner: readStringField(repository, 'owner'),
         riskLevel: readStringField(repository, 'risk_level'),
+        agentReview: readRepositoryAgentReview(repository),
         ownsData: readStringArray(repository.owns_data),
         splitTargets: readStringArray(repository.split_targets),
         securityBoundary: readRepositorySecurityBoundary(repository),
@@ -144,6 +160,28 @@ function readRepositorySecurityBoundary(
   return {
     dbSchema: readStringField(securityBoundary, 'db_schema'),
     dbRole: readStringField(securityBoundary, 'db_role')
+  };
+}
+
+function readRepositoryAgentReview(
+  value: Record<string, unknown>
+): RepositoryAgentReview | null {
+  const agentReview = value.agent_review;
+
+  if (!isRecord(agentReview)) {
+    return null;
+  }
+
+  return {
+    status: readStringField(agentReview, 'status'),
+    playbookRepo: readStringField(agentReview, 'playbook_repo'),
+    groupId: readStringField(agentReview, 'group_id'),
+    cadence: readStringField(agentReview, 'cadence'),
+    runScope: readStringField(agentReview, 'run_scope'),
+    outputPolicy: readStringField(agentReview, 'output_policy'),
+    since: readStringField(agentReview, 'since'),
+    removedAt: readStringField(agentReview, 'removed_at'),
+    reason: readStringField(agentReview, 'reason')
   };
 }
 
@@ -255,6 +293,7 @@ function validateRepositoryRecord(
       repositoryPath,
       roadmapEvidence
     ),
+    ...validateRepositoryAgentReview(value, repositoryPath),
     ...validateLatestReviewPolicyNotes(value, repositoryPath),
     ...validateGeneralPolicyNotesMachineFields(
       value,
@@ -343,6 +382,82 @@ function validateReservedDeployUnitRoadmapEvidence(
         `Reserved deploy unit \`${name}\` should appear in ROADMAP.md or docs/26-eighteen-month-roadmap.md.`
     }
   ];
+}
+
+function validateRepositoryAgentReview(
+  value: Record<string, unknown>,
+  repositoryPath: string
+): readonly Diagnostic[] {
+  const agentReview = value.agent_review;
+
+  if (!isRecord(agentReview)) {
+    return [
+      createRepositoryAgentReviewDiagnostic(
+        `${repositoryPath}.agent_review`,
+        'Repository entry must declare `agent_review` as an object.'
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  const requiredBaseFields = ['status', 'cadence', 'run_scope', 'output_policy'];
+
+  for (const field of requiredBaseFields) {
+    if (readStringField(agentReview, field) !== null) {
+      continue;
+    }
+
+    diagnostics.push(
+      createRepositoryAgentReviewDiagnostic(
+        `${repositoryPath}.agent_review.${field}`,
+        `Repository agent review is missing required field \`${field}\`.`
+      )
+    );
+  }
+
+  const status = readStringField(agentReview, 'status');
+
+  if (status === 'included') {
+    for (const field of ['playbook_repo', 'group_id']) {
+      if (readStringField(agentReview, field) !== null) {
+        continue;
+      }
+
+      diagnostics.push(
+        createRepositoryAgentReviewDiagnostic(
+          `${repositoryPath}.agent_review.${field}`,
+          `Repository included in agent review is missing required field \`${field}\`.`
+        )
+      );
+    }
+  }
+
+  if (
+    status === 'candidate' ||
+    status === 'paused' ||
+    status === 'excluded' ||
+    status === 'removed'
+  ) {
+    if (readStringField(agentReview, 'reason') === null) {
+      diagnostics.push(
+        createRepositoryAgentReviewDiagnostic(
+          `${repositoryPath}.agent_review.reason`,
+          `Repository agent review status \`${status}\` requires a reason.`
+        )
+      );
+    }
+  }
+
+  if (status === 'removed' && readStringField(agentReview, 'removed_at') === null) {
+    diagnostics.push(
+      createRepositoryAgentReviewDiagnostic(
+        `${repositoryPath}.agent_review.removed_at`,
+        'Repository agent review status `removed` requires `removed_at`.'
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validateLatestReviewPolicyNotes(
@@ -574,6 +689,19 @@ function readStringField(value: Record<string, unknown>, field: string): string 
 function createRepositoryDiagnostic(path: string, message: string): Diagnostic {
   return {
     ruleId: 'ZDP-REPO-001',
+    severity: 'error',
+    file: REPOSITORIES_FILE,
+    path,
+    message
+  };
+}
+
+function createRepositoryAgentReviewDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: 'ZDP-REPO-REVIEW-001',
     severity: 'error',
     file: REPOSITORIES_FILE,
     path,

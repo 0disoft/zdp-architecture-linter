@@ -20,6 +20,13 @@ repositories:
     purpose: Core platform.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
   - name: zdp-ai-memory
     status: reserved
     repo_stage: logical_only
@@ -28,6 +35,12 @@ repositories:
     purpose: AI memory boundary.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: excluded
+      cadence: none
+      run_scope: none
+      output_policy: none
+      reason: Logical boundary is not reviewed directly.
 `,
         'catalogs/services.yaml': `
 services:
@@ -55,6 +68,8 @@ datastores:
           architectureRoot,
           '--stage',
           'deploy_unit',
+          '--agent-review-status',
+          'included',
           '--json'
         ]);
 
@@ -72,7 +87,8 @@ datastores:
             kind: 'deploy_unit',
             repoStage: 'deploy_unit',
             owner: '0disoft',
-            riskLevel: 'high'
+            riskLevel: 'high',
+            agentReviewStatus: 'included'
           }
         ]);
       }
@@ -93,6 +109,13 @@ repositories:
     purpose: Core platform.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
 `,
         'catalogs/services.yaml': `
 services:
@@ -147,7 +170,7 @@ datastores:
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--json]'
+      'zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]'
     );
   });
 });
@@ -162,5 +185,6 @@ interface ListRepositoriesCliReport {
     readonly repoStage: string;
     readonly owner: string;
     readonly riskLevel: string;
+    readonly agentReviewStatus: string;
   }>;
 }

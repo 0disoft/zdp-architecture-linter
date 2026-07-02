@@ -29,6 +29,7 @@ describe('normalize CLI', () => {
         expect(report.repositories.map((repository) => repository.id)).toEqual([
           'zdp-core-platform'
         ]);
+        expect(report.repositories[0]?.agentReview?.status).toBe('included');
         expect(report.services.map((service) => service.id)).toEqual(['core-api']);
         expect(report.datastores.map((datastore) => datastore.id)).toEqual([
           'core_postgres'
@@ -256,6 +257,13 @@ repositories:
     purpose: Core platform.
     owner: 0disoft
     risk_level: high
+    agent_review:
+      status: included
+      playbook_repo: zdp-agent-review-playbooks
+      group_id: group-01
+      cadence: nightly
+      run_scope: six-lens-raw-and-reducer
+      output_policy: local_ignored
 `,
     'catalogs/services.yaml': `
 services:
@@ -284,6 +292,9 @@ interface NormalizeCliReport {
   };
   readonly repositories: ReadonlyArray<{
     readonly id: string;
+    readonly agentReview?: {
+      readonly status: string;
+    };
   }>;
   readonly services: ReadonlyArray<{
     readonly id: string;

@@ -12,6 +12,7 @@ export interface ArchitectureRepositoryListReport {
   readonly filters: {
     readonly stage?: string;
     readonly area?: string;
+    readonly agentReviewStatus?: string;
   };
   readonly count: number;
   readonly items: readonly ArchitectureRepositoryListItem[];
@@ -34,6 +35,7 @@ export interface ArchitectureRepositoryListItem {
   readonly repoStage: string | null;
   readonly owner: string | null;
   readonly riskLevel: string | null;
+  readonly agentReviewStatus: string | null;
 }
 
 export interface ArchitectureServiceListItem {
@@ -50,6 +52,7 @@ export function createArchitectureListReport(input: {
   readonly filters?: {
     readonly stage?: string;
     readonly area?: string;
+    readonly agentReviewStatus?: string;
   };
 }): ArchitectureRepositoryListReport;
 export function createArchitectureListReport(input: {
@@ -67,11 +70,15 @@ export function createArchitectureListReport(input: {
   if (input.kind === 'repos') {
     const filters = {
       stage: normalizeFilter(input.filters?.stage),
-      area: normalizeFilter(input.filters?.area)
+      area: normalizeFilter(input.filters?.area),
+      agentReviewStatus: normalizeFilter(input.filters?.agentReviewStatus)
     };
-    const items = readRepositoryItems(input.graph.catalogs.repositories)
+    const items = readRepositoryItems(input.graph.indexes.repositories.byName)
       .filter((item) => matchesOptionalFilter(item.repoStage, filters.stage))
-      .filter((item) => matchesOptionalFilter(item.area, filters.area));
+      .filter((item) => matchesOptionalFilter(item.area, filters.area))
+      .filter((item) =>
+        matchesOptionalFilter(item.agentReviewStatus, filters.agentReviewStatus)
+      );
 
     return {
       schemaVersion: 1,
@@ -113,34 +120,30 @@ export function formatArchitectureListReportText(
   return lines.join('\n');
 }
 
-function readRepositoryItems(value: unknown): readonly ArchitectureRepositoryListItem[] {
-  if (!isRecord(value) || !Array.isArray(value.repositories)) {
-    return [];
-  }
-
-  return value.repositories
-    .flatMap((entry): ArchitectureRepositoryListItem[] => {
-      if (!isRecord(entry)) {
-        return [];
-      }
-
-      const name = readString(entry, 'name');
-
-      if (name === null) {
-        return [];
-      }
-
-      return [
-        {
-          name,
-          area: readString(entry, 'area'),
-          kind: readString(entry, 'kind'),
-          repoStage: readString(entry, 'repo_stage'),
-          owner: readString(entry, 'owner'),
-          riskLevel: readString(entry, 'risk_level')
-        }
-      ];
-    })
+function readRepositoryItems(
+  repositoriesByName: ReadonlyMap<
+    string,
+    {
+      readonly name: string;
+      readonly area: string | null;
+      readonly kind: string | null;
+      readonly repoStage: string | null;
+      readonly owner: string | null;
+      readonly riskLevel: string | null;
+      readonly agentReview: { readonly status: string | null } | null;
+    }
+  >
+): readonly ArchitectureRepositoryListItem[] {
+  return Array.from(repositoriesByName.values())
+    .map((entry): ArchitectureRepositoryListItem => ({
+      name: entry.name,
+      area: entry.area,
+      kind: entry.kind,
+      repoStage: entry.repoStage,
+      owner: entry.owner,
+      riskLevel: entry.riskLevel,
+      agentReviewStatus: entry.agentReview?.status ?? null
+    }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -192,7 +195,8 @@ function formatListItem(
       `kind=${formatValue(item.kind)}`,
       `repoStage=${formatValue(item.repoStage)}`,
       `owner=${formatValue(item.owner)}`,
-      `riskLevel=${formatValue(item.riskLevel)}`
+      `riskLevel=${formatValue(item.riskLevel)}`,
+      `agentReviewStatus=${formatValue(item.agentReviewStatus)}`
     ].join(' ');
   }
 

@@ -169,7 +169,7 @@ function createRepositoryRiskNotes(
   const headById = mapById(
     getCollection(headCatalogs.repositories.repositories, 'name')
   );
-  const fields = ['repo_stage', 'kind', 'owner', 'risk_level', 'area'];
+  const fields = ['repo_stage', 'kind', 'owner', 'risk_level', 'area', 'agent_review'];
 
   return diff.changed.flatMap((id) =>
     createFieldChangeNotes({

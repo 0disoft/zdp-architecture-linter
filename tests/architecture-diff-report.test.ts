@@ -19,7 +19,15 @@ describe('architecture diff report', () => {
               area: 'core',
               purpose: 'Core platform.',
               owner: '0disoft',
-              risk_level: 'high'
+              risk_level: 'high',
+              agent_review: {
+                status: 'included',
+                playbook_repo: 'zdp-agent-review-playbooks',
+                group_id: 'group-01',
+                cadence: 'nightly',
+                run_scope: 'six-lens-raw-and-reducer',
+                output_policy: 'local_ignored'
+              }
             },
             {
               name: 'zdp-web-public',
@@ -29,7 +37,15 @@ describe('architecture diff report', () => {
               area: 'web',
               purpose: 'Public web.',
               owner: '0disoft',
-              risk_level: 'low'
+              risk_level: 'low',
+              agent_review: {
+                status: 'included',
+                playbook_repo: 'zdp-agent-review-playbooks',
+                group_id: 'group-02',
+                cadence: 'nightly',
+                run_scope: 'six-lens-raw-and-reducer',
+                output_policy: 'local_ignored'
+              }
             }
           ]
         },
@@ -56,7 +72,14 @@ describe('architecture diff report', () => {
               area: 'core',
               purpose: 'Core platform.',
               owner: 'platform',
-              risk_level: 'high'
+              risk_level: 'high',
+              agent_review: {
+                status: 'paused',
+                cadence: 'none',
+                run_scope: 'none',
+                output_policy: 'none',
+                reason: 'Review paused while ownership changes.'
+              }
             },
             {
               name: 'zdp-edge-workers',
@@ -66,7 +89,15 @@ describe('architecture diff report', () => {
               area: 'edge',
               purpose: 'Edge gateway.',
               owner: '0disoft',
-              risk_level: 'medium'
+              risk_level: 'medium',
+              agent_review: {
+                status: 'included',
+                playbook_repo: 'zdp-agent-review-playbooks',
+                group_id: 'group-03',
+                cadence: 'nightly',
+                run_scope: 'six-lens-raw-and-reducer',
+                output_policy: 'local_ignored'
+              }
             }
           ]
         },
@@ -119,6 +150,9 @@ describe('architecture diff report', () => {
     );
     expect(report.riskNotes).toContain(
       'repositories.zdp-core-platform: owner changed from "0disoft" to "platform"'
+    );
+    expect(report.riskNotes).toContain(
+      'repositories.zdp-core-platform: agent_review changed from {"cadence":"nightly","group_id":"group-01","output_policy":"local_ignored","playbook_repo":"zdp-agent-review-playbooks","run_scope":"six-lens-raw-and-reducer","status":"included"} to {"cadence":"none","output_policy":"none","reason":"Review paused while ownership changes.","run_scope":"none","status":"paused"}'
     );
     expect(report.riskNotes).toContain(
       'services.core-api: direct_datastore_access changed from ["core_postgres"] to ["core_postgres","audit_postgres"]'

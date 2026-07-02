@@ -25,6 +25,7 @@ import {
 } from './provider-rules.ts';
 import {
   buildRepositoryIndex,
+  type RepositoryAgentReview,
   type RepositoryCatalogRecord,
   type RepositoryIndex
 } from './repository-rules.ts';
@@ -86,6 +87,7 @@ export interface RepositoryGraphNode {
   readonly area: string | null;
   readonly kind: string | null;
   readonly repoStage: string | null;
+  readonly agentReview: RepositoryAgentReview | null;
 }
 
 export interface ServiceGraphNode {
@@ -187,7 +189,8 @@ function buildRepositoryNodes(
       status: record.status,
       area: record.area,
       kind: record.kind,
-      repoStage: record.repoStage
+      repoStage: record.repoStage,
+      agentReview: record.agentReview
     })
   );
 }

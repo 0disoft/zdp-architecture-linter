@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.109
+
+- `ZDP-REPO-REVIEW-001`을 추가해 `catalogs/repositories.yaml`의 `agent_review` 자동 리뷰 편입 계약을 검사한다.
+- 정규화 registry repository node에 `agentReview`를 포함하고, `list repos`에 `--agent-review-status <status>` 필터와 `agentReviewStatus` 출력을 추가했다.
+
 ## 0.39.96
 
 - `ZDP-AUTO-007`을 추가해 `automation.stale_bot.enabled`가 `true`인 deploy unit 저장소가 `bug`/`security` label을 exempt하지 않거나 보안 이슈 자동 종료를 허용하면 경고한다.

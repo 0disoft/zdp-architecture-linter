@@ -15,7 +15,8 @@ describe('architecture list report', () => {
       kind: 'repos',
       filters: {
         stage: 'deploy_unit',
-        area: 'core'
+        area: 'core',
+        agentReviewStatus: 'included'
       }
     });
 
@@ -24,7 +25,8 @@ describe('architecture list report', () => {
       kind: 'repos',
       filters: {
         stage: 'deploy_unit',
-        area: 'core'
+        area: 'core',
+        agentReviewStatus: 'included'
       },
       count: 1,
       items: [
@@ -34,7 +36,8 @@ describe('architecture list report', () => {
           kind: 'deploy_unit',
           repoStage: 'deploy_unit',
           owner: '0disoft',
-          riskLevel: 'high'
+          riskLevel: 'high',
+          agentReviewStatus: 'included'
         }
       ]
     });
@@ -78,7 +81,8 @@ describe('architecture list report', () => {
           kind: 'deploy_unit',
           repoStage: 'deploy_unit',
           owner: '0disoft',
-          riskLevel: 'high'
+          riskLevel: 'high',
+          agentReviewStatus: 'included'
         }
       ]
     });
@@ -103,7 +107,7 @@ describe('architecture list report', () => {
         'zdp-arch: repos',
         'filters: stage=deploy_unit',
         'count: 1',
-        '- zdp-core-platform area=core kind=deploy_unit repoStage=deploy_unit owner=0disoft riskLevel=high'
+        '- zdp-core-platform area=core kind=deploy_unit repoStage=deploy_unit owner=0disoft riskLevel=high agentReviewStatus=included'
       ].join('\n')
     );
     expect(servicesText).toBe(
@@ -128,7 +132,15 @@ function createListCatalogs() {
           area: 'core',
           purpose: 'Core platform.',
           owner: '0disoft',
-          risk_level: 'high'
+          risk_level: 'high',
+          agent_review: {
+            status: 'included',
+            playbook_repo: 'zdp-agent-review-playbooks',
+            group_id: 'group-01',
+            cadence: 'nightly',
+            run_scope: 'six-lens-raw-and-reducer',
+            output_policy: 'local_ignored'
+          }
         },
         {
           name: 'zdp-ai-memory',
@@ -138,7 +150,14 @@ function createListCatalogs() {
           area: 'ai',
           purpose: 'AI memory boundary.',
           owner: '0disoft',
-          risk_level: 'high'
+          risk_level: 'high',
+          agent_review: {
+            status: 'excluded',
+            cadence: 'none',
+            run_scope: 'none',
+            output_policy: 'none',
+            reason: 'Logical boundary is not reviewed directly.'
+          }
         }
       ]
     },
