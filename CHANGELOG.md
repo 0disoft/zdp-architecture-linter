@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.111
+
+- `ZDP-RUNTIME-001`이 `data-platform-contracts` one-shot contract check target을 요구한다.
+- runtime smoke contract가 analytics ingest promotion 전에 `zdp-data-platform`의 data contract checker, operational metrics contract, runtime metric label drift 증거를 유지하는지 검사한다.
+
 ## 0.39.110
 
 - `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 `contracts/operational-metrics.yaml` 존재와 Prometheus 운영 메트릭 계약을 중앙 linter에서도 검사한다.

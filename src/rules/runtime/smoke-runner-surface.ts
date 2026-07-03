@@ -127,6 +127,7 @@ export async function validateSmokeRunnerSurface(
               'platform-security-contracts',
               'platform-infra-contracts',
               'platform-observability-contracts',
+              'data-platform-contracts',
               'is plan-only',
               'malformed_json_response',
               'money-api',

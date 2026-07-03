@@ -55,6 +55,10 @@ const REQUIRED_PLATFORM_OBSERVABILITY_REQUIRED_BEFORE = [
   'observability-provider-connection',
   'production-runtime-template'
 ] as const;
+const REQUIRED_DATA_PLATFORM_REQUIRED_BEFORE = [
+  'analytics-ingest-promotion',
+  'production-runtime-template'
+] as const;
 
 export function validateSmokeTargetsContract(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
@@ -109,7 +113,8 @@ export function validateSmokeTargetsContract(value: unknown): readonly Diagnosti
       ...validateGenericContractCheckEntries(contractChecks),
       ...validatePlatformSecurityContractCheck(value),
       ...validatePlatformInfraContractCheck(value),
-      ...validatePlatformObservabilityContractCheck(value)
+      ...validatePlatformObservabilityContractCheck(value),
+      ...validateDataPlatformContractCheck(value)
     );
   }
 
@@ -1217,6 +1222,132 @@ function validatePlatformObservabilityContractCheck(
         {
           condition:
             'observability promotion relies on dashboard-only provider evidence',
+          enforcedBy: 'operator_review'
+        }
+      ]
+    })
+  ];
+}
+
+function validateDataPlatformContractCheck(value: unknown): readonly Diagnostic[] {
+  const contractChecks = readPath(value, 'contract_checks');
+
+  if (!Array.isArray(contractChecks)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks',
+        'Runtime smoke contract must declare a `contract_checks` array.'
+      )
+    ];
+  }
+
+  const target = contractChecks.find(
+    (entry) =>
+      isRecord(entry) &&
+      readStringField(entry, 'id') === 'data-platform-contracts'
+  );
+
+  if (!isRecord(target)) {
+    return [
+      createRuntimeDiagnostic(
+        SMOKE_TARGETS_FILE,
+        'contract_checks.data-platform-contracts',
+        'Runtime smoke contract must declare `data-platform-contracts` contract check target.'
+      )
+    ];
+  }
+
+  return [
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.repo',
+      field: 'repo',
+      expected: 'zdp-data-platform',
+      message:
+        'Runtime `data-platform-contracts` check target must reference repo `zdp-data-platform`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.service_id',
+      field: 'service_id',
+      expected: 'data-platform',
+      message:
+        'Runtime `data-platform-contracts` check target must declare service id `data-platform`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.process',
+      field: 'process',
+      expected: 'one-shot-checker',
+      message:
+        'Runtime `data-platform-contracts` check target must declare process `one-shot-checker`.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.command',
+      field: 'command',
+      expected: 'bun run contracts:check',
+      message:
+        'Runtime `data-platform-contracts` check target must run `bun run contracts:check`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.required_before',
+      field: 'required_before',
+      requiredEntries: REQUIRED_DATA_PLATFORM_REQUIRED_BEFORE
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.required_files',
+      field: 'required_files',
+      requiredEntries: [
+        'contracts/analytics-ingest.yaml',
+        'contracts/clickhouse-storage.yaml',
+        'contracts/deletion-anonymization.yaml',
+        'contracts/operational-metrics.yaml',
+        'scripts/check-data-contracts.ts'
+      ]
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.expected_evidence',
+      field: 'expected_evidence',
+      requiredEntries: [
+        'data platform contracts parse without diagnostics',
+        'architecture event catalog and schema compatibility checks pass',
+        'operational metrics contract and runtime metric labels stay in sync',
+        'checker does not require ClickHouse, queue consumers, collector, provider tokens, raw payloads, or customer data'
+      ]
+    }),
+    ...validateRequiredBlockedProductionConditions({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'contract_checks.data-platform-contracts.blocked_production_when',
+      field: 'blocked_production_when',
+      requiredEntries: [
+        {
+          condition: 'data platform contracts are missing or unparseable',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition: 'event catalog or schema compatibility fails',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition: 'operational metrics contract or runtime metric labels drift',
+          enforcedBy: 'owning_contract_checker'
+        },
+        {
+          condition:
+            'data platform promotion relies on live ClickHouse, collector, queue consumer, provider token, raw payload, or customer data evidence',
           enforcedBy: 'operator_review'
         }
       ]
