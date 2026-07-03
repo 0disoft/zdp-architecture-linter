@@ -13,6 +13,7 @@ const DATA_PLATFORM_CONTRACT_RULE_ID = 'ZDP-DATA-PLATFORM-001';
 const ANALYTICS_INGEST_FILE = 'contracts/analytics-ingest.yaml';
 const CLICKHOUSE_STORAGE_FILE = 'contracts/clickhouse-storage.yaml';
 const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
+const OPERATIONAL_METRICS_FILE = 'contracts/operational-metrics.yaml';
 const PACKAGE_FILE = 'package.json';
 const BUN_LOCK_FILE = 'bun.lock';
 const TSCONFIG_FILE = 'tsconfig.json';
@@ -119,6 +120,55 @@ const FORBIDDEN_DELETION_OWNERSHIP = [
   'final_consent_state'
 ] as const;
 
+const OPERATIONAL_METRICS = [
+  'ingest_requests_total',
+  'ingest_validation_failures_total',
+  'ingest_queue_depth',
+  'dead_letter_events_total',
+  'clickhouse_insert_failures_total',
+  'deletion_lag_seconds',
+  'anonymization_lag_seconds'
+] as const;
+
+const OPERATIONAL_METRIC_KINDS = ['counter', 'gauge', 'histogram'] as const;
+
+const ALLOWED_METRIC_LABELS = [
+  'service_id',
+  'event_name',
+  'outcome',
+  'reason_code',
+  'queue_name',
+  'worker',
+  'target'
+] as const;
+
+const FORBIDDEN_METRIC_LABELS = [
+  'user_id',
+  'anonymous_id',
+  'session_id',
+  'email',
+  'phone',
+  'name',
+  'address',
+  'authorization',
+  'authorization_header',
+  'cookie',
+  'cookies',
+  'secret',
+  'token',
+  'payment_id',
+  'payment_payload',
+  'prompt_body',
+  'form_body',
+  'mail_subject',
+  'message_body',
+  'customer_message_body',
+  'raw_path',
+  'raw_query',
+  'payload',
+  'raw_payload'
+] as const;
+
 export async function validateRepositoryDataPlatformContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -131,11 +181,17 @@ export async function validateRepositoryDataPlatformContract(input: {
     return [];
   }
 
-  const [analyticsIngest, clickhouseStorage, deletionAnonymization] =
+  const [
+    analyticsIngest,
+    clickhouseStorage,
+    deletionAnonymization,
+    operationalMetrics
+  ] =
     await Promise.all([
       readRequiredYamlContract(input.repositoryRoot, ANALYTICS_INGEST_FILE),
       readRequiredYamlContract(input.repositoryRoot, CLICKHOUSE_STORAGE_FILE),
-      readRequiredYamlContract(input.repositoryRoot, DELETION_ANONYMIZATION_FILE)
+      readRequiredYamlContract(input.repositoryRoot, DELETION_ANONYMIZATION_FILE),
+      readRequiredYamlContract(input.repositoryRoot, OPERATIONAL_METRICS_FILE)
     ]);
   const packageJson = await readRequiredJsonContract(input.repositoryRoot, PACKAGE_FILE);
 
@@ -143,6 +199,7 @@ export async function validateRepositoryDataPlatformContract(input: {
     ...analyticsIngest.diagnostics,
     ...clickhouseStorage.diagnostics,
     ...deletionAnonymization.diagnostics,
+    ...operationalMetrics.diagnostics,
     ...packageJson.diagnostics,
     ...(analyticsIngest.value === null
       ? []
@@ -153,8 +210,15 @@ export async function validateRepositoryDataPlatformContract(input: {
     ...(deletionAnonymization.value === null
       ? []
       : validateDeletionAnonymizationContract(deletionAnonymization.value)),
+    ...(operationalMetrics.value === null
+      ? []
+      : validateOperationalMetricsContract(operationalMetrics.value)),
     ...(packageJson.value === null ? [] : validatePackageScripts(packageJson.value)),
     ...validateRequiredLinterRule(input.repositoryServiceContract),
+    ...validateServiceOperationalMetrics(
+      input.repositoryServiceContract,
+      operationalMetrics.value
+    ),
     ...(await validateCheckerSurface(input.repositoryRoot))
   ];
 }
@@ -458,6 +522,194 @@ function validateDeletionAnonymizationContract(
   ];
 }
 
+function validateOperationalMetricsContract(value: unknown): readonly Diagnostic[] {
+  return [
+    ...validateExactValue({
+      value,
+      file: OPERATIONAL_METRICS_FILE,
+      path: 'telemetry.format',
+      expected: 'prometheus',
+      message:
+        'Data platform operational metrics must use Prometheus-compatible names and types.'
+    }),
+    ...validateExactValue({
+      value,
+      file: OPERATIONAL_METRICS_FILE,
+      path: 'telemetry.business_kpi_authority',
+      expected: false,
+      message:
+        'Data platform operational metrics must not be declared as product or business KPI authority.'
+    }),
+    ...validateExactValue({
+      value,
+      file: OPERATIONAL_METRICS_FILE,
+      path: 'telemetry.clickhouse_final_truth',
+      expected: false,
+      message:
+        'Data platform operational metrics must not make ClickHouse final platform truth.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: OPERATIONAL_METRICS_FILE,
+      path: 'labels.allowed',
+      field: 'labels.allowed',
+      requiredEntries: ALLOWED_METRIC_LABELS
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: OPERATIONAL_METRICS_FILE,
+      path: 'labels.forbidden',
+      field: 'labels.forbidden',
+      requiredEntries: FORBIDDEN_METRIC_LABELS
+    }),
+    ...validateOperationalMetricEntries(value)
+  ];
+}
+
+function validateOperationalMetricEntries(value: unknown): readonly Diagnostic[] {
+  const metrics = readPath(value, 'metrics');
+
+  if (!Array.isArray(metrics)) {
+    return [
+      createDataPlatformDiagnostic(
+        OPERATIONAL_METRICS_FILE,
+        'metrics',
+        'Data platform operational metrics contract must declare a `metrics` array.'
+      )
+    ];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+  const metricNames = readMetricNames(value);
+  const allowedLabels = readStringArrayPath(value, 'labels.allowed');
+
+  for (const requiredMetric of OPERATIONAL_METRICS) {
+    if (metricNames.includes(requiredMetric)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        OPERATIONAL_METRICS_FILE,
+        'metrics',
+        `Data platform operational metrics contract must include \`${requiredMetric}\`.`
+      )
+    );
+  }
+
+  for (const [index, metric] of metrics.entries()) {
+    if (!isRecord(metric)) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          `metrics.${index}`,
+          'Data platform operational metric entries must be YAML objects.'
+        )
+      );
+      continue;
+    }
+
+    const name = readStringPath(metric, 'name');
+    if (name === null || !isPrometheusMetricName(name)) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          `metrics.${index}.name`,
+          'Data platform operational metric names must be Prometheus-compatible snake_case identifiers.'
+        )
+      );
+    }
+
+    const kind = readStringPath(metric, 'kind');
+    if (
+      kind === null ||
+      !OPERATIONAL_METRIC_KINDS.includes(
+        kind as (typeof OPERATIONAL_METRIC_KINDS)[number]
+      )
+    ) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          `metrics.${index}.kind`,
+          'Data platform operational metric kind must be `counter`, `gauge`, or `histogram`.'
+        )
+      );
+    }
+
+    diagnostics.push(
+      ...validateMetricLabels({
+        metric,
+        field: 'required_labels',
+        path: `metrics.${index}.required_labels`,
+        allowedLabels
+      }),
+      ...validateMetricLabels({
+        metric,
+        field: 'optional_labels',
+        path: `metrics.${index}.optional_labels`,
+        allowedLabels
+      })
+    );
+  }
+
+  return diagnostics;
+}
+
+function validateMetricLabels(input: {
+  readonly metric: Record<string, unknown>;
+  readonly field: string;
+  readonly path: string;
+  readonly allowedLabels: readonly string[];
+}): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [
+    ...validateStringArrayItems({
+      value: input.metric,
+      file: OPERATIONAL_METRICS_FILE,
+      path: input.path,
+      field: input.field
+    })
+  ];
+  const labels = readStringArrayPath(input.metric, input.field);
+
+  for (const label of labels) {
+    if (!isPrometheusMetricName(label)) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          input.path,
+          `Data platform operational metric label \`${label}\` must be a Prometheus-compatible snake_case identifier.`
+        )
+      );
+    }
+
+    if (
+      FORBIDDEN_METRIC_LABELS.includes(
+        label as (typeof FORBIDDEN_METRIC_LABELS)[number]
+      )
+    ) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          input.path,
+          `Data platform operational metric label \`${label}\` is forbidden because it can expose sensitive or high-cardinality data.`
+        )
+      );
+    }
+
+    if (!input.allowedLabels.includes(label)) {
+      diagnostics.push(
+        createDataPlatformDiagnostic(
+          OPERATIONAL_METRICS_FILE,
+          input.path,
+          `Data platform operational metric label \`${label}\` must be declared in \`labels.allowed\` before use.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
 function validateRequiredLinterRule(
   repositoryServiceContract: unknown
 ): readonly Diagnostic[] {
@@ -477,6 +729,61 @@ function validateRequiredLinterRule(
       `Data platform service contract must require \`${DATA_PLATFORM_CONTRACT_RULE_ID}\`.`
     )
   ];
+}
+
+function validateServiceOperationalMetrics(
+  repositoryServiceContract: unknown,
+  operationalMetricsContract: unknown | null
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [
+    ...validateRequiredStringArrayEntries({
+      value: repositoryServiceContract,
+      file: 'service.yaml',
+      path: 'observability.operational_metrics',
+      field: 'observability.operational_metrics',
+      requiredEntries: OPERATIONAL_METRICS
+    })
+  ];
+
+  if (operationalMetricsContract === null) {
+    return diagnostics;
+  }
+
+  const serviceMetrics = readStringArrayPath(
+    repositoryServiceContract,
+    'observability.operational_metrics'
+  );
+  const contractMetrics = readMetricNames(operationalMetricsContract);
+
+  for (const metric of contractMetrics) {
+    if (serviceMetrics.includes(metric)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        'service.yaml',
+        'observability.operational_metrics',
+        `Data platform service contract must include operational metric \`${metric}\` from \`${OPERATIONAL_METRICS_FILE}\`.`
+      )
+    );
+  }
+
+  for (const metric of serviceMetrics) {
+    if (contractMetrics.includes(metric)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createDataPlatformDiagnostic(
+        'service.yaml',
+        'observability.operational_metrics',
+        `Data platform service contract operational metric \`${metric}\` must be declared in \`${OPERATIONAL_METRICS_FILE}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
 }
 
 function validatePackageScripts(value: unknown): readonly Diagnostic[] {
@@ -590,7 +897,13 @@ async function validateCheckerSurface(
               ANALYTICS_INGEST_FILE,
               CLICKHOUSE_STORAGE_FILE,
               DELETION_ANONYMIZATION_FILE,
+              OPERATIONAL_METRICS_FILE,
               'service.yaml',
+              'observability.operational_metrics',
+              'business_kpi_authority',
+              'clickhouse_final_truth',
+              'labels.allowed',
+              'labels.forbidden',
               'analytics.event.ingest',
               'FORBIDDEN_ENVELOPE_FIELDS',
               'payload_ref',
@@ -609,6 +922,9 @@ async function validateCheckerSurface(
               'export function assertAnalyticsQueueEnvelope',
               'export async function checkDataContracts',
               'async function validateArchitectureEventCompatibility',
+              'function validateOperationalMetricsContract',
+              'function validateServiceOperationalMetricSync',
+              'function validateGoRuntimeMetricSync',
               'function validateForbiddenEnvelopeFields',
               'function validateSupportedSchemaVersions'
             ]
@@ -655,6 +971,8 @@ async function validateCheckerSurface(
               'fails when analytics schema versions are invalid',
               'fails when ClickHouse is treated as final truth',
               'fails when deletion ownership boundaries drift',
+              'fails when operational metric contracts drift',
+              'fails when Go runtime operational metrics drift from the contract',
               'rejects queue envelopes with raw payloads or missing trace fields',
               'rejects nested sensitive fields in queue envelopes',
               'passes current repository contracts against architecture event schemas',
@@ -855,6 +1173,23 @@ function readStringArrayPath(value: unknown, path: string): readonly string[] {
   );
 }
 
+function readMetricNames(value: unknown): readonly string[] {
+  const metrics = readPath(value, 'metrics');
+
+  if (!Array.isArray(metrics)) {
+    return [];
+  }
+
+  return metrics.flatMap((metric) => {
+    if (!isRecord(metric)) {
+      return [];
+    }
+
+    const name = readStringField(metric, 'name');
+    return name === null ? [] : [name];
+  });
+}
+
 function readPath(value: unknown, path: string): unknown {
   let current = value;
 
@@ -869,6 +1204,14 @@ function readPath(value: unknown, path: string): unknown {
   return current;
 }
 
+function readStringPath(value: unknown, path: string): string | null {
+  const candidate = readPath(value, path);
+
+  return typeof candidate === 'string' && candidate.trim().length > 0
+    ? candidate.trim()
+    : null;
+}
+
 function readStringField(
   value: Record<string, unknown>,
   field: string
@@ -878,6 +1221,10 @@ function readStringField(
   return typeof candidate === 'string' && candidate.trim().length > 0
     ? candidate.trim()
     : null;
+}
+
+function isPrometheusMetricName(value: string): boolean {
+  return /^[a-z_][a-z0-9_]*$/.test(value);
 }
 
 function createDataPlatformDiagnostic(

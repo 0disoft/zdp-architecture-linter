@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.110
+
+- `ZDP-DATA-PLATFORM-001`이 `zdp-data-platform`의 `contracts/operational-metrics.yaml` 존재와 Prometheus 운영 메트릭 계약을 중앙 linter에서도 검사한다.
+- `service.yaml`의 `observability.operational_metrics`가 운영 메트릭 계약과 어긋나거나 repo-local checker가 운영 메트릭 drift 테스트/검증 표면을 잃으면 실패한다.
+
 ## 0.39.109
 
 - `ZDP-REPO-REVIEW-001`을 추가해 `catalogs/repositories.yaml`의 `agent_review` 자동 리뷰 편입 계약을 검사한다.

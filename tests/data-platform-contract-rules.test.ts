@@ -62,6 +62,14 @@ describe('data platform contract rules', () => {
         message:
           'Data platform repository must include `contracts/deletion-anonymization.yaml`.'
       });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-DATA-PLATFORM-001',
+        severity: 'error',
+        file: 'contracts/operational-metrics.yaml',
+        path: 'repository.root',
+        message:
+          'Data platform repository must include `contracts/operational-metrics.yaml`.'
+      });
     });
   });
 
@@ -258,6 +266,111 @@ fallback:
           path: 'fallback',
           message:
             'Data platform contract `contracts/deletion-anonymization.yaml` must include `suppress subject in query layer until batch anonymization catches up` in `fallback`.'
+        });
+      }
+    );
+  });
+
+  test('fails when operational metric contracts drift', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidDataPlatformFiles(),
+        'contracts/operational-metrics.yaml': `
+telemetry:
+  format: statsd
+  business_kpi_authority: true
+  clickhouse_final_truth: true
+labels:
+  allowed:
+    - service_id
+  forbidden:
+    - user_id
+metrics:
+  - name: ingest-requests-total
+    kind: counter
+    required_labels:
+      - service_id
+      - user_id
+`,
+        'service.yaml': ''
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryDataPlatformContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-data-platform'
+            },
+            observability: {
+              operational_metrics: [
+                'ingest_requests_total',
+                'orphan_metric_total'
+              ]
+            },
+            policy_gates: {
+              required_linter_rules: [
+                'ZDP-REPO-BASELINE-001',
+                'ZDP-DATA-PLATFORM-001'
+              ]
+            }
+          }
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'telemetry.format',
+          message:
+            'Data platform operational metrics must use Prometheus-compatible names and types.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'telemetry.business_kpi_authority',
+          message:
+            'Data platform operational metrics must not be declared as product or business KPI authority.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'telemetry.clickhouse_final_truth',
+          message:
+            'Data platform operational metrics must not make ClickHouse final platform truth.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'metrics',
+          message:
+            'Data platform operational metrics contract must include `ingest_requests_total`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'metrics.0.name',
+          message:
+            'Data platform operational metric names must be Prometheus-compatible snake_case identifiers.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'contracts/operational-metrics.yaml',
+          path: 'metrics.0.required_labels',
+          message:
+            'Data platform operational metric label `user_id` is forbidden because it can expose sensitive or high-cardinality data.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-DATA-PLATFORM-001',
+          severity: 'error',
+          file: 'service.yaml',
+          path: 'observability.operational_metrics',
+          message:
+            'Data platform service contract operational metric `orphan_metric_total` must be declared in `contracts/operational-metrics.yaml`.'
         });
       }
     );
@@ -570,6 +683,17 @@ function createDataPlatformServiceContract(): unknown {
     service: {
       repo: 'zdp-data-platform'
     },
+    observability: {
+      operational_metrics: [
+        'ingest_requests_total',
+        'ingest_validation_failures_total',
+        'ingest_queue_depth',
+        'dead_letter_events_total',
+        'clickhouse_insert_failures_total',
+        'deletion_lag_seconds',
+        'anonymization_lag_seconds'
+      ]
+    },
     policy_gates: {
       required_linter_rules: [
         'ZDP-REPO-BASELINE-001',
@@ -667,6 +791,94 @@ does_not_own:
   - final_consent_state
 fallback:
   - suppress subject in query layer until batch anonymization catches up
+`,
+    'contracts/operational-metrics.yaml': `
+telemetry:
+  format: prometheus
+  business_kpi_authority: false
+  clickhouse_final_truth: false
+labels:
+  allowed:
+    - service_id
+    - event_name
+    - outcome
+    - reason_code
+    - queue_name
+    - worker
+    - target
+  forbidden:
+    - user_id
+    - anonymous_id
+    - session_id
+    - email
+    - phone
+    - name
+    - address
+    - authorization
+    - authorization_header
+    - cookie
+    - cookies
+    - secret
+    - token
+    - payment_id
+    - payment_payload
+    - prompt_body
+    - form_body
+    - mail_subject
+    - message_body
+    - customer_message_body
+    - raw_path
+    - raw_query
+    - payload
+    - raw_payload
+metrics:
+  - name: ingest_requests_total
+    kind: counter
+    required_labels:
+      - service_id
+      - event_name
+      - outcome
+    optional_labels:
+      - reason_code
+  - name: ingest_validation_failures_total
+    kind: counter
+    required_labels:
+      - service_id
+      - event_name
+      - reason_code
+    optional_labels: []
+  - name: ingest_queue_depth
+    kind: gauge
+    required_labels:
+      - service_id
+      - queue_name
+    optional_labels: []
+  - name: dead_letter_events_total
+    kind: counter
+    required_labels:
+      - service_id
+      - queue_name
+      - reason_code
+    optional_labels: []
+  - name: clickhouse_insert_failures_total
+    kind: counter
+    required_labels:
+      - service_id
+      - event_name
+      - reason_code
+    optional_labels: []
+  - name: deletion_lag_seconds
+    kind: gauge
+    required_labels:
+      - service_id
+      - target
+    optional_labels: []
+  - name: anonymization_lag_seconds
+    kind: gauge
+    required_labels:
+      - service_id
+      - target
+    optional_labels: []
 `
   };
 }
@@ -729,11 +941,15 @@ export interface AnalyticsQueueEnvelope {
 const ANALYTICS_INGEST_FILE = 'contracts/analytics-ingest.yaml';
 const CLICKHOUSE_STORAGE_FILE = 'contracts/clickhouse-storage.yaml';
 const DELETION_ANONYMIZATION_FILE = 'contracts/deletion-anonymization.yaml';
+const OPERATIONAL_METRICS_FILE = 'contracts/operational-metrics.yaml';
 const SERVICE_FILE = 'service.yaml';
 const FORBIDDEN_ENVELOPE_FIELDS = [];
 const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
 export async function checkDataContracts(): Promise<void> {
   validateSupportedSchemaVersions();
+  validateOperationalMetricsContract();
+  validateServiceOperationalMetricSync();
+  validateGoRuntimeMetricSync();
   await validateArchitectureEventCompatibility();
 }
 export function validateAnalyticsQueueEnvelope(): void {
@@ -756,16 +972,39 @@ async function validateArchitectureEventCompatibility(): Promise<void> {
   void schemaVersion;
   void initialEvents;
 }
+function validateOperationalMetricsContract(): void {
+  const businessKpiAuthority = 'business_kpi_authority';
+  const clickhouseFinalTruth = 'clickhouse_final_truth';
+  const allowedLabels = 'labels.allowed';
+  const forbiddenLabels = 'labels.forbidden';
+  void OPERATIONAL_METRICS_FILE;
+  void businessKpiAuthority;
+  void clickhouseFinalTruth;
+  void allowedLabels;
+  void forbiddenLabels;
+}
+function validateServiceOperationalMetricSync(): void {
+  const serviceMetrics = 'observability.operational_metrics';
+  void SERVICE_FILE;
+  void serviceMetrics;
+}
+function validateGoRuntimeMetricSync(): void {
+  void OPERATIONAL_METRICS_FILE;
+}
 function validateForbiddenEnvelopeFields(): void {}
 function validateSupportedSchemaVersions(): void {}
 export {
   ANALYTICS_INGEST_FILE,
   CLICKHOUSE_STORAGE_FILE,
   DELETION_ANONYMIZATION_FILE,
+  OPERATIONAL_METRICS_FILE,
   SERVICE_FILE,
   FORBIDDEN_ENVELOPE_FIELDS,
   EVENT_CATALOG_FILE,
-  validateArchitectureEventCompatibility
+  validateArchitectureEventCompatibility,
+  validateOperationalMetricsContract,
+  validateServiceOperationalMetricSync,
+  validateGoRuntimeMetricSync
 };
 `,
     'src/analytics-ingest/runtime.ts': `
@@ -819,6 +1058,12 @@ test('fails when ClickHouse is treated as final truth', () => {
   expect(checkDataContracts).toBeDefined();
 });
 test('fails when deletion ownership boundaries drift', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when operational metric contracts drift', () => {
+  expect(checkDataContracts).toBeDefined();
+});
+test('fails when Go runtime operational metrics drift from the contract', () => {
   expect(checkDataContracts).toBeDefined();
 });
 test('rejects queue envelopes with raw payloads or missing trace fields', () => {
