@@ -8,6 +8,8 @@ import { loadRepositoryServiceContract } from './service-schema-validation.ts';
 import { validateArchitecture } from './validation.ts';
 
 const execFileAsync = promisify(execFile);
+const GIT_EXEC_MAX_BUFFER_BYTES = 50 * 1024 * 1024;
+const GIT_EXEC_TIMEOUT_MS = 30_000;
 
 const REQUIRED_ARCHITECTURE_FILES = [
   'ROADMAP.md',
@@ -328,7 +330,9 @@ async function runGit(
       repositoryRoot,
       args
     ), {
-      encoding: 'utf8'
+      encoding: 'utf8',
+      maxBuffer: GIT_EXEC_MAX_BUFFER_BYTES,
+      timeout: GIT_EXEC_TIMEOUT_MS
     });
 
     return {

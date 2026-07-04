@@ -321,16 +321,21 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'diff') {
-      const baseSnapshot = await loadArchitectureSnapshot({
-        architectureRoot: command.architectureRoot,
-        ref: command.base
-      });
-      const headSnapshot = await loadArchitectureSnapshot({
-        architectureRoot: command.architectureRoot,
-        ref: command.head
-      });
+      const snapshots: Awaited<ReturnType<typeof loadArchitectureSnapshot>>[] = [];
 
       try {
+        const baseSnapshot = await loadArchitectureSnapshot({
+          architectureRoot: command.architectureRoot,
+          ref: command.base
+        });
+        snapshots.push(baseSnapshot);
+
+        const headSnapshot = await loadArchitectureSnapshot({
+          architectureRoot: command.architectureRoot,
+          ref: command.head
+        });
+        snapshots.push(headSnapshot);
+
         const [
           baseCatalogs,
           headCatalogs,
@@ -361,7 +366,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
         return 0;
       } finally {
-        await Promise.all([baseSnapshot.cleanup(), headSnapshot.cleanup()]);
+        await Promise.all(snapshots.map((snapshot) => snapshot.cleanup()));
       }
     }
 

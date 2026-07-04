@@ -1,4 +1,5 @@
-import { writeFile } from 'node:fs/promises';
+import { readdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
@@ -103,6 +104,32 @@ repositories:
       'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]'
     );
   });
+
+  test('cleans a base snapshot when the head ref fails to load', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({}),
+      async ({ architectureRoot }) => {
+        await initGitRepository(architectureRoot);
+
+        const before = await listDiffSnapshotDirectories();
+        const result = await runCli([
+          'diff',
+          '--architecture',
+          architectureRoot,
+          '--base',
+          'HEAD',
+          '--head',
+          'refs/heads/does-not-exist',
+          '--json'
+        ]);
+        const after = await listDiffSnapshotDirectories();
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toBe('');
+        expect([...after].filter((entry) => !before.has(entry))).toEqual([]);
+      }
+    );
+  }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);
 });
 
 interface DiffCliReport {
@@ -141,4 +168,14 @@ async function runGit(
   if (exitCode !== 0) {
     throw new Error(`git ${args.join(' ')} failed: ${stderr}`);
   }
+}
+
+async function listDiffSnapshotDirectories(): Promise<Set<string>> {
+  const entries = await readdir(tmpdir(), { withFileTypes: true });
+
+  return new Set(
+    entries
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('zdp-arch-diff-'))
+      .map((entry) => entry.name)
+  );
 }

@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.113
+
+- `diff` 명령에서 head snapshot 생성이 실패해도 이미 만든 base snapshot 임시 디렉터리를 정리한다.
+- `doctor` 명령의 Git 호출에 명시적인 buffer와 timeout을 적용해 큰 작업 트리에서 기본 buffer 한계로 실패하지 않게 한다.
+
 ## 0.39.112
 
 - `ZDP-AUTO-008`을 추가해 `zdp-desktop-tauri`와 `zdp-desktop-wails`의 수동 desktop-shell evidence CI 계약을 검사한다.
