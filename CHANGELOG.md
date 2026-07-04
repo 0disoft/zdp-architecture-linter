@@ -1,5 +1,10 @@
 # 변경 내역
 
+## 0.39.112
+
+- `ZDP-AUTO-008`을 추가해 `zdp-desktop-tauri`와 `zdp-desktop-wails`의 수동 desktop-shell evidence CI 계약을 검사한다.
+- Tauri/Wails evidence workflow 이름, 짧은 보관 기간의 evidence artifact, Wails의 Tauri baseline checkout fallback, release/native activation으로 오해될 수 있는 트리거와 명령 drift를 경고한다.
+
 ## 0.39.111
 
 - `ZDP-RUNTIME-001`이 `data-platform-contracts` one-shot contract check target을 요구한다.

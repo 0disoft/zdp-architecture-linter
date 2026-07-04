@@ -188,6 +188,8 @@ fixtures/service-schema/fail/**
 
 0.39.96부터 `ZDP-AUTO-007`은 `automation.stale_bot.enabled`가 `true`인 deploy unit 저장소에서 `exempt_labels`가 `bug`와 `security`를 포함하지 않거나, `security_issue_auto_close_allowed`가 `false`가 아니면 warning으로 보고한다.
 
+0.39.112부터 `ZDP-AUTO-008`은 `zdp-desktop-tauri`와 `zdp-desktop-wails`의 수동 desktop-shell evidence CI 계약을 검사한다. `automation.ci.workflow_names`, 실제 GitHub Actions workflow, short-lived evidence artifact, Wails의 Tauri baseline checkout fallback, release/native activation으로 오해될 수 있는 트리거와 명령 drift를 warning으로 보고한다.
+
 0.39.97부터 `ZDP-XCUT-TIME-001`은 repository root의 `service.yaml`, `product-spec.md`, `BOUNDARY.md`, `RUNBOOK.md`, `contracts/**`, `schemas/**`에서 시간 계약의 첫 tripwire를 검사한다. `timestamp without time zone`, timestamp field의 모호한 `datetime` 타입, timestamp 예시의 non-UTC offset 또는 timezone 없는 ISO 값, `KST` 같은 local timezone label, locale formatting으로 만든 boundary timestamp, recurring/cron/wall-time 계약의 `timezone` 누락이 보이면 실패한다. 이 검사는 계약·스키마·소스에 드러난 명백한 drift를 막는 gate이며, 런타임 clock source나 모든 로그 formatter의 완전성 증명은 아니다.
 
 0.39.98부터 `ZDP-XCUT-ERROR-001`은 repository root의 `service.yaml`, `product-spec.md`, `openapi.*`, `swagger.*`, `contracts/**`, `schemas/**`에서 공개 API 오류 envelope의 첫 tripwire를 검사한다. 공개 API 저장소나 오류 계약 파일이 raw string `error`, top-level message-only 오류 예시, 또는 `error` 객체의 `code`, `message`, `request_id` 선언 누락을 보이면 실패한다. 이 검사는 계약·스키마에 드러난 명백한 drift를 막는 gate이며, 모든 런타임 handler의 오류 매핑 완전성 증명은 아니다.

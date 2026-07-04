@@ -12,6 +12,53 @@ const AUTO_RELEASE_HELPER_POLICY_RULE_ID = 'ZDP-AUTO-004';
 const AUTO_TEMPLATE_SECRET_WARNING_RULE_ID = 'ZDP-AUTO-005';
 const AUTO_AUTO_MERGE_GUARD_RULE_ID = 'ZDP-AUTO-006';
 const AUTO_STALE_BOT_SAFETY_RULE_ID = 'ZDP-AUTO-007';
+const AUTO_DESKTOP_SHELL_EVIDENCE_CI_RULE_ID = 'ZDP-AUTO-008';
+
+const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
+  'zdp-desktop-tauri': {
+    workflowName: 'Tauri Contract Evidence',
+    workflowPath: '.github/workflows/tauri-contract-evidence.yml',
+    requiredFragments: [
+      'name: Tauri Contract Evidence',
+      'workflow_dispatch:',
+      'permissions:',
+      'contents: read',
+      'runs-on: windows-latest',
+      'repository: 0disoft/zdp-design-system',
+      'bun scripts/collect-desktop-shell-evidence.ts --write',
+      'uses: actions/upload-artifact@v7',
+      'name: desktop-shell-evidence-summary',
+      'path: .task/desktop-shell-evidence/summary.json',
+      'retention-days: 3'
+    ],
+    forbiddenFragments: ['src-tauri', 'tauri build', 'cargo build'],
+    forbiddenTriggerPattern: /^\s*(push|pull_request|schedule|release)\s*:/mu
+  },
+  'zdp-desktop-wails': {
+    workflowName: 'Wails Windows Smoke',
+    workflowPath: '.github/workflows/wails-windows-smoke.yml',
+    requiredFragments: [
+      'name: Wails Windows Smoke',
+      'workflow_dispatch:',
+      'runs-on: windows-latest',
+      'ZDP_DESKTOP_TAURI_ROOT',
+      'ZDP_DESKTOP_TAURI_DEPLOY_KEY',
+      'ZDP_DESKTOP_TAURI_READ_TOKEN',
+      'repository: 0disoft/zdp-desktop-tauri',
+      'Checkout zdp-desktop-tauri with deploy key',
+      'Checkout zdp-desktop-tauri with token',
+      'bun scripts/collect-desktop-shell-evidence.ts --write',
+      'uses: actions/upload-artifact@v7',
+      'name: desktop-shell-evidence-summary',
+      'path: .task/desktop-shell-evidence/summary.json',
+      'name: wails-dev-smoke-receipt',
+      'path: .task/wails-dev-smoke/receipt.json',
+      'retention-days: 3'
+    ],
+    forbiddenFragments: ['gh release', 'upload-release-asset'],
+    forbiddenTriggerPattern: /^\s*release\s*:/mu
+  }
+} as const;
 
 const RENOVATE_CONFIG_PATHS = [
   'renovate.json',
@@ -135,7 +182,12 @@ export function validateRepositoryAutomationContract(input: {
       templates
     }),
     ...validateAutoMergeGuards(autoMerge),
-    ...validateStaleBotSafety(staleBot)
+    ...validateStaleBotSafety(staleBot),
+    ...validateDesktopShellEvidenceCi({
+      ci,
+      repoName,
+      repositoryRoot: input.repositoryRoot
+    })
   ];
 }
 
@@ -366,6 +418,56 @@ function validateStaleBotSafety(
   ];
 }
 
+function validateDesktopShellEvidenceCi(input: {
+  readonly ci: Record<string, unknown> | null;
+  readonly repoName: string | null;
+  readonly repositoryRoot: string | undefined;
+}): readonly Diagnostic[] {
+  const contract =
+    input.repoName === null
+      ? undefined
+      : DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS[
+          input.repoName as keyof typeof DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS
+        ];
+
+  if (contract === undefined) {
+    return [];
+  }
+
+  const workflowNames = readStringArray(input.ci?.workflow_names);
+  const serviceContractHasWorkflowName = workflowNames.includes(contract.workflowName);
+  const workflowPath =
+    input.repositoryRoot === undefined
+      ? null
+      : join(input.repositoryRoot, contract.workflowPath);
+  const workflowText =
+    workflowPath !== null && isFile(workflowPath)
+      ? readTextFile(workflowPath)
+      : null;
+  const repositoryWorkflowIsValid =
+    workflowText === null
+      ? input.repositoryRoot === undefined
+      : workflowTextIncludesAllFragments(workflowText, contract.requiredFragments) &&
+        !workflowTextIncludesAnyFragment(workflowText, contract.forbiddenFragments) &&
+        !contract.forbiddenTriggerPattern.test(workflowText);
+
+  if (serviceContractHasWorkflowName && repositoryWorkflowIsValid) {
+    return [];
+  }
+
+  const path = serviceContractHasWorkflowName
+    ? 'repository.root'
+    : 'automation.ci.workflow_names';
+
+  return [
+    createAutomationDiagnostic(
+      AUTO_DESKTOP_SHELL_EVIDENCE_CI_RULE_ID,
+      path,
+      'Desktop shell evidence CI should keep the manual Tauri/Wails evidence workflow, short-lived desktop-shell evidence artifact, and non-activation boundary aligned with the service contract.'
+    )
+  ];
+}
+
 function createAutomationDiagnostic(
   ruleId:
     | typeof AUTO_CI_CONTRACT_RULE_ID
@@ -374,7 +476,8 @@ function createAutomationDiagnostic(
     | typeof AUTO_RELEASE_HELPER_POLICY_RULE_ID
     | typeof AUTO_TEMPLATE_SECRET_WARNING_RULE_ID
     | typeof AUTO_AUTO_MERGE_GUARD_RULE_ID
-    | typeof AUTO_STALE_BOT_SAFETY_RULE_ID,
+    | typeof AUTO_STALE_BOT_SAFETY_RULE_ID
+    | typeof AUTO_DESKTOP_SHELL_EVIDENCE_CI_RULE_ID,
   path: string,
   message: string
 ): Diagnostic {
@@ -428,6 +531,20 @@ function templateTextIncludesForbiddenSubmissionWarnings(text: string): boolean 
     /(payment payload|payment data|card data|결제 payload|결제 데이터|카드 데이터)/u.test(normalized) &&
     /(customer raw data|raw customer data|customer data|고객 원문 데이터|고객 데이터)/u.test(normalized)
   );
+}
+
+function workflowTextIncludesAllFragments(
+  text: string,
+  fragments: readonly string[]
+): boolean {
+  return fragments.every((fragment) => text.includes(fragment));
+}
+
+function workflowTextIncludesAnyFragment(
+  text: string,
+  fragments: readonly string[]
+): boolean {
+  return fragments.some((fragment) => text.includes(fragment));
 }
 
 function hasRequiredForbiddenSubmissionClasses(

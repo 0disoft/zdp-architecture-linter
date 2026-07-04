@@ -26,6 +26,26 @@ const repositoryIndex = buildRepositoryIndex({
       purpose: 'Retrieval boundary.',
       owner: '0disoft',
       risk_level: 'high'
+    },
+    {
+      name: 'zdp-desktop-tauri',
+      status: 'reserved',
+      repo_stage: 'deploy_unit',
+      kind: 'deploy_unit',
+      area: 'frontend',
+      purpose: 'Tauri desktop shell boundary.',
+      owner: '0disoft',
+      risk_level: 'medium'
+    },
+    {
+      name: 'zdp-desktop-wails',
+      status: 'reserved',
+      repo_stage: 'deploy_unit',
+      kind: 'deploy_unit',
+      area: 'frontend',
+      purpose: 'Wails desktop shell boundary.',
+      owner: '0disoft',
+      risk_level: 'medium'
     }
   ]
 });
@@ -620,6 +640,230 @@ describe('repository automation contracts', () => {
       }
     ]);
   });
+
+  test('passes when Tauri desktop shell evidence CI matches its service contract', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/tauri-contract-evidence.yml': tauriContractEvidenceWorkflow()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            service: {
+              id: 'desktop-tauri',
+              repo: 'zdp-desktop-tauri'
+            },
+            automation: {
+              ci: {
+                required: false,
+                provider: 'github-actions',
+                workflow_names: ['Tauri Contract Evidence'],
+                required_status_checks: [],
+                missing_reason: 'Manual contract evidence workflow is present before product activation.',
+                private_dependency_token_required: false,
+                required_secrets: []
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('warns when Tauri desktop shell evidence CI can drift from the contract-only boundary', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/tauri-contract-evidence.yml': [
+          'name: Tauri Contract Evidence',
+          '"on":',
+          '  workflow_dispatch:',
+          '  push:',
+          'jobs:',
+          '  contract-evidence:',
+          '    runs-on: windows-latest',
+          '    steps:',
+          '      - run: tauri build'
+        ].join('\n')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            service: {
+              id: 'desktop-tauri',
+              repo: 'zdp-desktop-tauri'
+            },
+            automation: {
+              ci: {
+                required: false,
+                provider: 'github-actions',
+                workflow_names: ['Tauri Contract Evidence'],
+                required_status_checks: [],
+                missing_reason: 'Manual contract evidence workflow is present before product activation.',
+                private_dependency_token_required: false,
+                required_secrets: []
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-008',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'repository.root',
+            message:
+              'Desktop shell evidence CI should keep the manual Tauri/Wails evidence workflow, short-lived desktop-shell evidence artifact, and non-activation boundary aligned with the service contract.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('passes when Wails desktop shell evidence CI records Tauri baseline and smoke receipts', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/wails-windows-smoke.yml': wailsWindowsSmokeWorkflow()
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            service: {
+              id: 'desktop-wails',
+              repo: 'zdp-desktop-wails'
+            },
+            automation: {
+              ci: {
+                required: false,
+                provider: 'github-actions',
+                workflow_names: ['Wails Windows Smoke'],
+                required_status_checks: [],
+                missing_reason: 'Manual Windows smoke workflow is present before product activation.',
+                private_dependency_token_required: true,
+                required_secrets: [
+                  'ZDP_DESKTOP_TAURI_DEPLOY_KEY',
+                  'ZDP_DESKTOP_TAURI_READ_TOKEN'
+                ]
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('warns when Wails desktop shell evidence CI loses the Tauri checkout fallback', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/wails-windows-smoke.yml': [
+          'name: Wails Windows Smoke',
+          '"on":',
+          '  workflow_dispatch:',
+          'permissions:',
+          '  contents: read',
+          'jobs:',
+          '  windows-smoke:',
+          '    runs-on: windows-latest',
+          '    steps:',
+          '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
+          '      - uses: actions/upload-artifact@v7',
+          '        with:',
+          '          name: desktop-shell-evidence-summary',
+          '          path: .task/desktop-shell-evidence/summary.json',
+          '          retention-days: 3',
+          '      - uses: actions/upload-artifact@v7',
+          '        with:',
+          '          name: wails-dev-smoke-receipt',
+          '          path: .task/wails-dev-smoke/receipt.json',
+          '          retention-days: 3'
+        ].join('\n')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            service: {
+              id: 'desktop-wails',
+              repo: 'zdp-desktop-wails'
+            },
+            automation: {
+              ci: {
+                required: false,
+                provider: 'github-actions',
+                workflow_names: ['Wails Windows Smoke'],
+                required_status_checks: [],
+                missing_reason: 'Manual Windows smoke workflow is present before product activation.',
+                private_dependency_token_required: true,
+                required_secrets: [
+                  'ZDP_DESKTOP_TAURI_DEPLOY_KEY',
+                  'ZDP_DESKTOP_TAURI_READ_TOKEN'
+                ]
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([
+          {
+            ruleId: 'ZDP-AUTO-008',
+            severity: 'warning',
+            file: 'service.yaml',
+            path: 'repository.root',
+            message:
+              'Desktop shell evidence CI should keep the manual Tauri/Wails evidence workflow, short-lived desktop-shell evidence artifact, and non-activation boundary aligned with the service contract.'
+          }
+        ]);
+      }
+    );
+  });
+
+  test('warns when desktop shell service contract omits the evidence workflow name', () => {
+    const diagnostics = validateRepositoryAutomationContract({
+      repositoryIndex,
+      repositoryServiceContract: createServiceContract({
+        service: {
+          id: 'desktop-wails',
+          repo: 'zdp-desktop-wails'
+        },
+        automation: {
+          ci: {
+            required: false,
+            provider: 'github-actions',
+            workflow_names: [],
+            required_status_checks: [],
+            missing_reason: 'Manual Windows smoke workflow is present before product activation.',
+            private_dependency_token_required: true,
+            required_secrets: [
+              'ZDP_DESKTOP_TAURI_DEPLOY_KEY',
+              'ZDP_DESKTOP_TAURI_READ_TOKEN'
+            ]
+          }
+        }
+      })
+    });
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-AUTO-008',
+        severity: 'warning',
+        file: 'service.yaml',
+        path: 'automation.ci.workflow_names',
+        message:
+          'Desktop shell evidence CI should keep the manual Tauri/Wails evidence workflow, short-lived desktop-shell evidence artifact, and non-activation boundary aligned with the service contract.'
+      }
+    ]);
+  });
 });
 
 function createServiceContract(
@@ -666,5 +910,66 @@ function sensitiveSubmissionWarningText(): string {
     'Do not submit secrets, tokens, API keys, or credentials.',
     'Do not include payment payloads, payment data, or card data.',
     'Do not paste customer raw data or customer data.'
+  ].join('\n');
+}
+
+function tauriContractEvidenceWorkflow(): string {
+  return [
+    'name: Tauri Contract Evidence',
+    '"on":',
+    '  workflow_dispatch:',
+    'permissions:',
+    '  contents: read',
+    'jobs:',
+    '  contract-evidence:',
+    '    runs-on: windows-latest',
+    '    steps:',
+    '      - uses: actions/checkout@v7',
+    '      - uses: actions/checkout@v7',
+    '        with:',
+    '          repository: 0disoft/zdp-design-system',
+    '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
+    '      - uses: actions/upload-artifact@v7',
+    '        with:',
+    '          name: desktop-shell-evidence-summary',
+    '          path: .task/desktop-shell-evidence/summary.json',
+    '          retention-days: 3'
+  ].join('\n');
+}
+
+function wailsWindowsSmokeWorkflow(): string {
+  return [
+    'name: Wails Windows Smoke',
+    '"on":',
+    '  workflow_dispatch:',
+    'permissions:',
+    '  contents: read',
+    'jobs:',
+    '  windows-smoke:',
+    '    runs-on: windows-latest',
+    '    env:',
+    '      ZDP_DESKTOP_TAURI_ROOT: ${{ github.workspace }}/zdp-desktop-tauri',
+    '      ZDP_DESKTOP_TAURI_DEPLOY_KEY: ${{ secrets.ZDP_DESKTOP_TAURI_DEPLOY_KEY }}',
+    '      ZDP_DESKTOP_TAURI_READ_TOKEN: ${{ secrets.ZDP_DESKTOP_TAURI_READ_TOKEN }}',
+    '    steps:',
+    '      - name: Checkout zdp-desktop-tauri with deploy key',
+    '        uses: actions/checkout@v7',
+    '        with:',
+    '          repository: 0disoft/zdp-desktop-tauri',
+    '      - name: Checkout zdp-desktop-tauri with token',
+    '        uses: actions/checkout@v7',
+    '        with:',
+    '          repository: 0disoft/zdp-desktop-tauri',
+    '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
+    '      - uses: actions/upload-artifact@v7',
+    '        with:',
+    '          name: wails-dev-smoke-receipt',
+    '          path: .task/wails-dev-smoke/receipt.json',
+    '          retention-days: 3',
+    '      - uses: actions/upload-artifact@v7',
+    '        with:',
+    '          name: desktop-shell-evidence-summary',
+    '          path: .task/desktop-shell-evidence/summary.json',
+    '          retention-days: 3'
   ].join('\n');
 }
