@@ -9,9 +9,21 @@
 ## 읽는 순서
 
 1. `AGENTS.md`
-2. `README.md`
-3. 이 저장소의 관련 소스 파일
-4. `zdp-architecture`의 관련 원천 파일
+2. `service.yaml`
+3. `README.md`
+4. `BOUNDARY.md`
+5. `SECURITY.md`
+6. `RUNBOOK.md`
+7. `CHECKLIST.md`
+8. `VALIDATION.md`
+9. `.agents/README.md`
+10. `.agents/context-map.md`
+11. 작업 범위에 맞는 `.agents/checklists/*.md`
+12. 작업 범위에 맞는 `.agents/skills/*/SKILL.md`
+13. 작업 범위에 맞는 `.agents/validations/*.md`
+14. `docs/README.md`
+15. 이 저장소의 관련 `src/**`, `tests/**`, `fixtures/**`, `package.json`, `tsconfig.json`
+16. `zdp-architecture`의 관련 원천 파일
 
 주요 `zdp-architecture` 입력은 다음과 같다.
 
@@ -41,6 +53,7 @@
 - 구현이 번거롭다는 이유로 차단 규칙을 경고로 낮추지 않는다.
 - 카탈로그에서 읽을 수 있는 ZDP 저장소 목록을 코드에 하드코딩하지 않는다.
 - 생성물은 생성 원천과 명령이 문서화된 경우에만 추가한다.
+- Agent가 실행하는 검증은 `VALIDATION.md`에 있는 mustflow intent만 사용한다. Raw Bun, package-manager, CLI, registry 생성, watcher, install 명령은 root command contract에 eligible oneshot intent가 있을 때만 실행한다.
 
 ## 문서 규칙
 

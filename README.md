@@ -4,6 +4,19 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 
 정책의 원천은 `zdp-architecture` 문서 저장소다. 이 저장소는 그 원천을 읽어 검증 가능한 규칙으로 실행한다.
 
+## 문서 라우터
+
+이 저장소는 ssealed식 문서 구조를 ZDP linter 경계에 맞춰 얇게 반영한다. 새 작업자는 아래 순서로 읽는다.
+
+- `CHECKLIST.md`: 변경 유형별 리뷰 체크리스트 라우터
+- `VALIDATION.md`: mustflow intent 기준 검증 이름과 선택 기준
+- `.agents/context-map.md`: agent 작업 라우팅
+- `docs/cli/command-contract.md`: CLI 명령·옵션·출력 계약
+- `docs/cli/output-and-exit-codes.md`: JSON 출력과 exit code 계약
+- `docs/architecture/00-system-boundary.md`: 정책 원천과 linter 책임 경계
+- `docs/engineering/05-testing-standard.md`: 규칙·fixture·CLI 회귀 테스트 기준
+- `docs/ops/ci.md`, `docs/ops/release.md`, `docs/ops/rollback.md`: 운영 검증, 릴리스, 롤백 기준
+
 ## 공개 저장소 경계
 
 - 이 저장소를 GitHub public visibility로 전환하더라도 npm 공개 배포를 의미하지 않는다. `package.json`의 `private: true`는 유지한다.

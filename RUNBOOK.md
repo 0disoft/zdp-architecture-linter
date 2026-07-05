@@ -2,10 +2,12 @@
 
 ## 상태 확인
 
-- `bun run check`로 TypeScript 계약을 확인한다.
-- `bun test`로 규칙, fixture, CLI 출력 회귀를 확인한다.
-- `bun src/cli.ts validate --architecture ../../docs/zdp-architecture --json`으로 중앙 아키텍처 카탈로그가 현재 linter 기준을 통과하는지 확인한다.
-- 저장소 단위 검증은 `bun src/cli.ts validate --architecture ../../docs/zdp-architecture --repository <repo-path> --json`으로 실행한다.
+- `zdp_architecture_linter_typecheck`로 TypeScript 소스 타입 계약을 확인한다.
+- `zdp_architecture_linter_full_test`로 규칙, fixture, CLI 출력 회귀를 확인한다.
+- `zdp_architecture_validate_architecture_linter_repository`로 이 저장소 루트가 중앙 아키텍처 정책을 통과하는지 확인한다.
+- `zdp_architecture_validate_fast`로 중앙 `zdp-architecture` 카탈로그와 계약이 현재 linter 기준을 통과하는지 확인한다.
+- 저장소 단위 검증은 root mustflow command contract에 등록된 `zdp_architecture_validate_*_repository` intent를 사용한다.
+- Registry 출력 계약을 바꾸거나 `generated/registry.json` 동기화가 필요하면 `zdp_architecture_registry_check`로 확인한다.
 
 ## 변경 절차
 
@@ -18,7 +20,7 @@
 
 - 중앙 아키텍처 검증이 갑자기 실패하면 새 규칙이 원천 문서보다 넓게 잡는지 먼저 확인한다.
 - 저장소 검증이 `service.yaml` schema 단계에서 실패하면 baseline 규칙보다 schema/catalog 동기화 문제를 먼저 고친다.
-- CLI가 JSON을 깨뜨리면 마지막 정상 커밋의 `bun test` 결과와 현재 diff를 비교한다.
+- CLI가 JSON을 깨뜨리면 마지막 정상 커밋의 `zdp_architecture_linter_full_test` receipt와 현재 diff를 비교한다.
 
 ## 롤백
 
@@ -28,7 +30,8 @@
 
 ## 재검증
 
-- `bun run check`
-- `bun test`
-- `bun src/cli.ts validate --architecture ../../docs/zdp-architecture --json`
-- 필요 시 변경 대상 저장소별 `--repository` 검증
+- `zdp_architecture_linter_typecheck`
+- 변경 영역의 focused rules test intent
+- CLI 출력, fixture, 진단 ID, registry 출력 계약 변경 시 `zdp_architecture_linter_full_test`
+- `zdp_architecture_validate_architecture_linter_repository`
+- 필요 시 변경 대상 저장소별 `zdp_architecture_validate_*_repository` intent
