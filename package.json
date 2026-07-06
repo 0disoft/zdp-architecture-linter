@@ -1,6 +1,6 @@
 {
   "name": "@zdp/architecture-linter",
-  "version": "0.39.113",
+  "version": "0.39.114",
   "private": true,
   "type": "module",
   "bin": {

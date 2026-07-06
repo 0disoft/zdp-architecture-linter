@@ -2179,12 +2179,7 @@ fn rejects_forbidden_payload_reference_values_before_ledger_append() {}
     'src/commands/payment_webhook.rs': `
 const WEBHOOK_QUEUE_JOB_TYPE: &str = "money.payment_webhook.process";
 const WEBHOOK_COMMAND_SOURCE: &str = "payment-webhook-queue";
-const FORBIDDEN_WEBHOOK_REF_FRAGMENTS: &[&str] = &[
-    "authorization",
-    "raw_payment",
-    "secret",
-    "token",
-];
+use crate::sensitive::FORBIDDEN_MONEY_VALUE_FRAGMENTS;
 
 pub struct PaymentWebhookHandoffInput;
 pub struct PaymentWebhookCommandContext;
@@ -2221,6 +2216,7 @@ fn rejects_unverified_webhook_before_money_command_creation() {}
 fn requires_provider_event_id_as_webhook_idempotency_key() {}
 fn rejects_queue_handoff_that_does_not_match_webhook_trace_context() {}
 fn rejects_raw_payment_payload_references_before_command_handoff() {}
+fn rejects_canonical_money_sensitive_refs_before_command_handoff() {}
 fn webhook_handoff_does_not_create_ledger_append_command() {}
 `,
     'src/commands/payment_webhook_processing.rs': `
@@ -2301,12 +2297,7 @@ pub mod payment_webhook_processing;
 pub mod payment_outbox_delivery;
 `,
     'src/storage/payment_webhook_processing.rs': `
-const FORBIDDEN_STORAGE_VALUE_FRAGMENTS: &[&str] = &[
-    "authorization",
-    "raw_payment",
-    "secret",
-    "token",
-];
+use crate::sensitive::FORBIDDEN_MONEY_VALUE_FRAGMENTS;
 
 pub struct PaymentWebhookProcessingLookupKey;
 
@@ -2354,6 +2345,7 @@ fn plans_compare_and_swap_update_for_worker_transition_history_and_outbox() {}
 fn rejects_stale_or_cross_record_processing_transition_before_storage() {}
 fn rejects_history_or_outbox_that_does_not_match_processing_record() {}
 fn rejects_forbidden_payment_values_before_storage_port() {}
+fn rejects_canonical_money_sensitive_values_before_storage_port() {}
 `,
     'src/commands/payment_outbox_delivery.rs': `
 pub enum PaymentOutboxDeliveryStatus {

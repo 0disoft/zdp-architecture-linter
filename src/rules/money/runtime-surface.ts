@@ -249,11 +249,7 @@ export async function validateRuntimeSurface(
             '"money.payment_webhook.process"',
             'const WEBHOOK_COMMAND_SOURCE',
             '"payment-webhook-queue"',
-            'const FORBIDDEN_WEBHOOK_REF_FRAGMENTS',
-            '"authorization"',
-            '"raw_payment"',
-            '"secret"',
-            '"token"',
+            'FORBIDDEN_MONEY_VALUE_FRAGMENTS',
             'pub struct PaymentWebhookHandoffInput',
             'pub struct PaymentWebhookCommandContext',
             'pub struct WebhookQueueEnvelope',
@@ -276,6 +272,7 @@ export async function validateRuntimeSurface(
             'requires_provider_event_id_as_webhook_idempotency_key',
             'rejects_queue_handoff_that_does_not_match_webhook_trace_context',
             'rejects_raw_payment_payload_references_before_command_handoff',
+            'rejects_canonical_money_sensitive_refs_before_command_handoff',
             'webhook_handoff_does_not_create_ledger_append_command'
           ]
         })),
@@ -380,11 +377,7 @@ export async function validateRuntimeSurface(
           file: RUNTIME_STORAGE_PAYMENT_WEBHOOK_PROCESSING_FILE,
           source: storagePaymentWebhookProcessingSource.source,
           requiredFragments: [
-            'const FORBIDDEN_STORAGE_VALUE_FRAGMENTS',
-            '"authorization"',
-            '"raw_payment"',
-            '"secret"',
-            '"token"',
+            'FORBIDDEN_MONEY_VALUE_FRAGMENTS',
             'pub struct PaymentWebhookProcessingLookupKey',
             'pub enum PaymentWebhookProcessingPersistenceMode',
             'InsertNew',
@@ -412,7 +405,8 @@ export async function validateRuntimeSurface(
             'plans_compare_and_swap_update_for_worker_transition_history_and_outbox',
             'rejects_stale_or_cross_record_processing_transition_before_storage',
             'rejects_history_or_outbox_that_does_not_match_processing_record',
-            'rejects_forbidden_payment_values_before_storage_port'
+            'rejects_forbidden_payment_values_before_storage_port',
+            'rejects_canonical_money_sensitive_values_before_storage_port'
           ]
         })),
     ...(storagePaymentOutboxDeliverySource.source === null
