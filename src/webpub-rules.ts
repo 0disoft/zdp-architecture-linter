@@ -73,7 +73,7 @@ const REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS = [
 
 const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'public-site:',
-  'uses: actions/checkout@v7',
+  'uses: actions/checkout@',
   'path: projects/zdp-platforms/client-surfaces/zdp-web-public',
   'repository: 0disoft/zdp-platform-localization',
   'secrets.ZDP_CI_READ_TOKEN || github.token',
@@ -494,6 +494,33 @@ async function validateWebPublicOperationalGates(
   );
   const ciSource = await readOptionalTextFile(repositoryRoot, '.github/workflows/ci.yml');
   if (ciSource !== null) {
+    const actionReferences = [...ciSource.matchAll(/^\s*(?:-\s+)?uses:\s+([^\s#]+)/gm)].map(
+      (match) => match[1]
+    );
+    if (
+      actionReferences.length === 0 ||
+      !actionReferences.every((reference) => /@[0-9a-f]{40}$/.test(reference))
+    ) {
+      diagnostics.push(createWebpubDiagnostic(
+        '.github/workflows/ci.yml',
+        'github.workflow.ci',
+        'zdp-web-public CI must pin every external Action to a full 40-character commit SHA.'
+      ));
+    }
+
+    const checkoutCount = actionReferences.filter((reference) =>
+      reference.startsWith('actions/checkout@')
+    ).length;
+    const nonPersistentCheckoutCount =
+      ciSource.match(/^\s*persist-credentials:\s*false\s*$/gm)?.length ?? 0;
+    if (checkoutCount === 0 || nonPersistentCheckoutCount !== checkoutCount) {
+      diagnostics.push(createWebpubDiagnostic(
+        '.github/workflows/ci.yml',
+        'github.workflow.ci',
+        'zdp-web-public CI must set `persist-credentials: false` for every actions/checkout step.'
+      ));
+    }
+
     for (const snippet of FORBIDDEN_WEB_PUBLIC_CI_SNIPPETS) {
       if (ciSource.includes(snippet)) {
         diagnostics.push(createWebpubDiagnostic(

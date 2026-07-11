@@ -395,6 +395,40 @@ domain_status = candidate
     );
   });
 
+  test('fails when zdp-web-public CI uses mutable Actions or persists checkout credentials', async () => {
+    const files = createValidPublicWebRepositoryFiles();
+    files['.github/workflows/ci.yml'] = files['.github/workflows/ci.yml']
+      .replace(
+        'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+        'actions/checkout@v7'
+      )
+      .replace('          persist-credentials: false\n', '');
+
+    await withRepositoryRoot(files, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryWebpubContract({
+        repositoryRoot,
+        repositoryServiceContract: createPublicWebServiceContract()
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-WEBPUB-001',
+        severity: 'error',
+        file: '.github/workflows/ci.yml',
+        path: 'github.workflow.ci',
+        message:
+          'zdp-web-public CI must pin every external Action to a full 40-character commit SHA.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-WEBPUB-001',
+        severity: 'error',
+        file: '.github/workflows/ci.yml',
+        path: 'github.workflow.ci',
+        message:
+          'zdp-web-public CI must set `persist-credentials: false` for every actions/checkout step.'
+      });
+    });
+  });
+
   test('rejects design-system sibling checkout as registry package evidence', async () => {
     const files = createValidPublicWebRepositoryFiles();
     files['.github/workflows/ci.yml'] += '\nrepository: 0disoft/zdp-design-system\nbun run package:build\n';
@@ -494,24 +528,28 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       'jobs:',
       '  public-site:',
       '    steps:',
-      '      - uses: actions/checkout@v7',
+      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
       '        with:',
       '          path: projects/zdp-platforms/client-surfaces/zdp-web-public',
-      '      - uses: actions/checkout@v7',
+      '          persist-credentials: false',
+      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
       '        with:',
       '          repository: 0disoft/zdp-platform-localization',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-localization',
-      '      - uses: actions/checkout@v7',
+      '          persist-credentials: false',
+      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
       '        with:',
       '          repository: 0disoft/zdp-platform-devex',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-devex',
-      '      - uses: actions/checkout@v7',
+      '          persist-credentials: false',
+      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
       '        with:',
       '          repository: 0disoft/zdp-libs-ts',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/contracts/zdp-libs-ts',
+      '          persist-credentials: false',
       '      - run: bun install --frozen-lockfile',
       '      - run: bun install --no-save',
       '      - run: bun run check',

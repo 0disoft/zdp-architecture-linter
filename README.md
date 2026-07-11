@@ -285,7 +285,7 @@ fixtures/service-schema/fail/**
 
 0.39.10부터 `ZDP-XCUT-TERM-ADS-001`, `ZDP-XCUT-TERM-ADS-002`, `ZDP-XCUT-TERM-001`, `ZDP-XCUT-TERM-007`이 repository-level glossary/Term Sheet 계약을 검사한다. `service.yaml`, `glossary/terms`, `src/content/glossary-manifest.json` 중 하나가 용어 설명 표면을 선언하면 hover 광고 슬롯과 Term Sheet 광고 슬롯/provider는 error, `term_id` 누락과 generated manifest YAML source 누락은 warning으로 보고한다.
 
-0.39.12부터 `ZDP-WEBPUB-001`은 `zdp-web-public` localization canary가 home hero title과 CTA 메시지로 제한되고 static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 유지하는지 검사한다. `ZDP-APP-001`은 `zdp-web-apps`의 `contracts/app-shell.yaml`에서 `localization_canary` scope, 6개 app-shell message key, expansion review, rollback boundary, runtime feature flag 불필요 계약을 검사한다.
+0.39.12부터 `ZDP-WEBPUB-001`은 `zdp-web-public` localization canary가 home hero title과 CTA 메시지로 제한되고 static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 유지하는지 검사한다. 0.39.121부터 web-public CI의 모든 외부 Action을 full commit SHA로 고정하고 모든 checkout에서 `persist-credentials: false`를 요구한다. `ZDP-APP-001`은 `zdp-web-apps`의 `contracts/app-shell.yaml`에서 `localization_canary` scope, 6개 app-shell message key, expansion review, rollback boundary, runtime feature flag 불필요 계약을 검사한다.
 
 0.39.13부터 `ZDP-APP-001`은 `zdp-web-apps`의 GitHub Actions CI workflow가 private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, provider workspace install, app install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다. 0.39.120부터 외부 Action은 full commit SHA로 고정하고 모든 `actions/checkout` step은 `persist-credentials: false`로 credential persistence를 꺼야 한다.
 
