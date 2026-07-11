@@ -1,5 +1,25 @@
 # 변경 내역
 
+## Unreleased
+
+- 제품 로컬 개인정보를 선언한 service contract가 삭제 증거, 관리자 열람 감사, privacy 사람 검토를 빠뜨리면 `ZDP-DATA-006`으로 차단한다.
+
+## 0.39.118
+
+- 제품명 기반 bootstrap 저장소 `melamed`를 `product` area의 명시적 저장소 이름으로 검증하고 회귀 테스트를 추가했다.
+
+## 0.39.117
+
+- 제품명 기반 private vertical 저장소 `zdp-orchid-pass`를 `product` area의 명시적 저장소 이름으로 검증하고 회귀 테스트를 추가했다.
+
+## 0.39.116
+
+- 수동 실행 전용 데스크톱 셸 증거 워크플로에서 `pull_request_target`을 포함한 자동 트리거를 Tauri/Wails 모두 차단한다.
+
+## 0.39.115
+
+- `diff` snapshot 생성 경로의 Git 호출도 doctor 명령과 같은 hardened argv(`core.fsmonitor=false`, `core.hooksPath=`, `credential.helper=`)를 사용하도록 통일했다.
+
 ## 0.39.113
 
 - `diff` 명령에서 head snapshot 생성이 실패해도 이미 만든 base snapshot 임시 디렉터리를 정리한다.

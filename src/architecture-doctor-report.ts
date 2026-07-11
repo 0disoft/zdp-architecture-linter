@@ -4,8 +4,11 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
 import type { ValidationResult } from './diagnostics.ts';
+import { buildHardenedGitArgs } from './git-command.ts';
 import { loadRepositoryServiceContract } from './service-schema-validation.ts';
 import { validateArchitecture } from './validation.ts';
+
+export { buildHardenedGitArgs } from './git-command.ts';
 
 const execFileAsync = promisify(execFile);
 const GIT_EXEC_MAX_BUFFER_BYTES = 50 * 1024 * 1024;
@@ -351,23 +354,6 @@ async function runGit(
 
     throw error;
   }
-}
-
-export function buildHardenedGitArgs(
-  repositoryRoot: string,
-  args: readonly string[]
-): readonly string[] {
-  return [
-      '-c',
-      'core.fsmonitor=false',
-      '-c',
-      'core.hooksPath=',
-      '-c',
-      'credential.helper=',
-      '-C',
-      repositoryRoot,
-      ...args
-  ];
 }
 
 function formatError(error: unknown): string {

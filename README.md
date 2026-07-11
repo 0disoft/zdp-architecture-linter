@@ -1,5 +1,7 @@
 # zdp-architecture-linter
 
+제품 저장소가 제품 행동에 묶인 개인정보를 직접 소유하면 `ZDP-DATA-006`이 소유 datastore, 삭제 대상과 증거, 관리자 접근 감사, `human_review_required`의 `privacy` 항목을 검사한다.
+
 ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소다.
 
 정책의 원천은 `zdp-architecture` 문서 저장소다. 이 저장소는 그 원천을 읽어 검증 가능한 규칙으로 실행한다.

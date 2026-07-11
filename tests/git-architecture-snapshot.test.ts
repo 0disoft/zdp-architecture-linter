@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { join, normalize, resolve } from 'node:path';
-import { resolveSnapshotPath } from '../src/git-architecture-snapshot.ts';
+import {
+  buildSnapshotGitArgs,
+  resolveSnapshotPath
+} from '../src/git-architecture-snapshot.ts';
 
 describe('resolveSnapshotPath', () => {
   test('allows regular repository-relative paths', () => {
@@ -25,5 +28,20 @@ describe('resolveSnapshotPath', () => {
     expect(() =>
       resolveSnapshotPath('/tmp/snapshot', 'C:/Users/Public/pwned')
     ).toThrow('paths must be relative descendants of the snapshot root');
+  });
+
+  test('uses hardened git args for snapshot reads', () => {
+    expect(buildSnapshotGitArgs('/tmp/arch', ['show', 'HEAD:catalogs/services.yaml'])).toEqual([
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'core.hooksPath=',
+      '-c',
+      'credential.helper=',
+      '-C',
+      '/tmp/arch',
+      'show',
+      'HEAD:catalogs/services.yaml'
+    ]);
   });
 });

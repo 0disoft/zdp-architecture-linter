@@ -6,6 +6,7 @@ const DATASTORES_FILE = 'catalogs/datastores.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const SERVICE_DATA_CATALOG_RULE_ID = 'ZDP-DATA-003';
 const SERVICE_DATA_OWNERSHIP_RULE_ID = 'ZDP-DATA-005';
+const PRODUCT_LOCAL_PII_RULE_ID = 'ZDP-DATA-006';
 
 const EMPTY_SERVICE_DATA_CATALOG_POLICY: ServiceDataCatalogPolicy = {
   enabled: false,
@@ -15,7 +16,9 @@ const EMPTY_SERVICE_DATA_CATALOG_POLICY: ServiceDataCatalogPolicy = {
 
 const EMPTY_SERVICE_DATA_OWNERSHIP_POLICY: ServiceDataOwnershipPolicy = {
   enabled: false,
-  requiredFields: []
+  requiredFields: [],
+  productLocalPiiEnabled: false,
+  productLocalPiiRequiredFields: []
 };
 
 export interface DataClassRecord {
@@ -36,6 +39,8 @@ export interface ServiceDataCatalogPolicy {
 export interface ServiceDataOwnershipPolicy {
   readonly enabled: boolean;
   readonly requiredFields: readonly string[];
+  readonly productLocalPiiEnabled: boolean;
+  readonly productLocalPiiRequiredFields: readonly string[];
 }
 
 export function buildDataClassIndex(value: unknown): DataClassIndex {
@@ -111,13 +116,21 @@ export function buildServiceDataOwnershipPolicy(
     return EMPTY_SERVICE_DATA_OWNERSHIP_POLICY;
   }
 
+  const productLocalPiiRule = findRuleById(value.rules, PRODUCT_LOCAL_PII_RULE_ID);
+
   const assertions = isRecord(dataOwnershipRule.assertions)
     ? dataOwnershipRule.assertions
     : {};
 
   return {
     enabled: true,
-    requiredFields: readStringArray(assertions.require_fields)
+    requiredFields: readStringArray(assertions.require_fields),
+    productLocalPiiEnabled: productLocalPiiRule !== undefined,
+    productLocalPiiRequiredFields: readStringArray(
+      isRecord(productLocalPiiRule?.assertions)
+        ? productLocalPiiRule.assertions.require_fields
+        : []
+    )
   };
 }
 
@@ -397,8 +410,7 @@ function validateServiceDataOwnershipRecord(
 
   const servicePath = getServiceDiagnosticPath(value, index);
   const serviceName = getServiceName(value, index);
-
-  return policy.requiredFields.flatMap((field) =>
+  const diagnostics = policy.requiredFields.flatMap((field) =>
     hasUsableFieldAtPath(value, field)
       ? []
       : [
@@ -408,6 +420,57 @@ function validateServiceDataOwnershipRecord(
           )
         ]
   );
+
+  if (!isProductLocalPiiService(value) || !policy.productLocalPiiEnabled) {
+    return diagnostics;
+  }
+
+  diagnostics.push(
+    ...policy.productLocalPiiRequiredFields.flatMap((field) =>
+      hasRequiredProductPiiField(value, field)
+        ? []
+        : [
+            createProductLocalPiiDiagnostic(
+              `${servicePath}.${field}`,
+              `Product service \`${serviceName}\` stores PII and must set \`${field}\` to a usable privacy contract value.`
+            )
+          ]
+    )
+  );
+
+  if (!readStringArrayAtPath(value, 'human_review_required').includes('privacy')) {
+    diagnostics.push(
+      createProductLocalPiiDiagnostic(
+        `${servicePath}.human_review_required`,
+        `Product service \`${serviceName}\` stores PII and must include \`privacy\` in \`human_review_required\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
+function isProductLocalPiiService(value: Record<string, unknown>): boolean {
+  const piiLevel = readValueAtPath(value, 'data.pii_level');
+
+  return (
+    readValueAtPath(value, 'domain.type') === 'product' &&
+    typeof piiLevel === 'string' &&
+    piiLevel !== 'none'
+  );
+}
+
+function hasRequiredProductPiiField(
+  value: Record<string, unknown>,
+  path: string
+): boolean {
+  const candidate = readValueAtPath(value, path);
+
+  if (path.endsWith('.required') || path.endsWith('.evidence_required')) {
+    return candidate === true;
+  }
+
+  return hasUsableFieldAtPath(value, path);
 }
 
 function validateDataClassRecord(value: unknown, index: number): readonly Diagnostic[] {
@@ -658,6 +721,16 @@ function createServiceDataOwnershipDiagnostic(
 ): Diagnostic {
   return {
     ruleId: SERVICE_DATA_OWNERSHIP_RULE_ID,
+    severity: 'error',
+    file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function createProductLocalPiiDiagnostic(path: string, message: string): Diagnostic {
+  return {
+    ruleId: PRODUCT_LOCAL_PII_RULE_ID,
     severity: 'error',
     file: SERVICES_FILE,
     path,

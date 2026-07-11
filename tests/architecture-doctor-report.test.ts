@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  buildHardenedGitArgs,
   createArchitectureDoctorReport,
   formatArchitectureDoctorReportText
 } from '../src/architecture-doctor-report.ts';
+import { buildHardenedGitArgs } from '../src/git-command.ts';
 import {
   createMinimalArchitectureFiles,
   withArchitectureFiles

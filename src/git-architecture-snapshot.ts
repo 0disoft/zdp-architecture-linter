@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep, win32 } from 'node:path';
 import { promisify } from 'node:util';
+import { buildHardenedGitArgs } from './git-command.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -113,7 +114,7 @@ async function execGit(
   repositoryRoot: string,
   args: readonly string[]
 ): Promise<{ readonly stdout: Buffer; readonly stderr: Buffer }> {
-  const result = await execFileAsync('git', ['-C', repositoryRoot, ...args], {
+  const result = await execFileAsync('git', buildSnapshotGitArgs(repositoryRoot, args), {
     encoding: 'buffer',
     maxBuffer: 50 * 1024 * 1024
   });
@@ -122,4 +123,11 @@ async function execGit(
     stdout: result.stdout,
     stderr: result.stderr
   };
+}
+
+export function buildSnapshotGitArgs(
+  repositoryRoot: string,
+  args: readonly string[]
+): readonly string[] {
+  return buildHardenedGitArgs(repositoryRoot, args);
 }

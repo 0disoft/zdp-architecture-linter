@@ -32,6 +32,22 @@ const serviceDataOwnershipPolicy = buildServiceDataOwnershipPolicy({
       assertions: {
         require_fields: ['data.owner_domain', 'data.datastores']
       }
+    },
+    {
+      id: 'ZDP-DATA-006',
+      assertions: {
+        require_fields: [
+          'data.owner_domain',
+          'data.datastores',
+          'data.deletion.required',
+          'data.deletion.targets',
+          'data.deletion.evidence_required',
+          'audit.required',
+          'audit.events',
+          'audit.reason_required_for_admin_access',
+          'human_review_required'
+        ]
+      }
     }
   ]
 });
@@ -267,6 +283,68 @@ describe('service data ownership contracts', () => {
           'Service `core-api` declares data classes and must set `data.datastores`.'
       }
     ]);
+  });
+
+  test('passes when a product-local PII snapshot declares deletion, audit, and privacy review', () => {
+    const diagnostics = validateServiceDataOwnershipContracts(
+      {
+        services: [
+          {
+            id: 'local-product',
+            domain: { type: 'product' },
+            data: {
+              classes: ['local-inquiry'],
+              owner_domain: 'local-product',
+              datastores: ['local_postgres'],
+              pii_level: 'high',
+              deletion: {
+                required: true,
+                targets: ['local-inquiry'],
+                evidence_required: true
+              }
+            },
+            audit: {
+              required: true,
+              events: ['local.inquiry.sensitive-read'],
+              reason_required_for_admin_access: true
+            },
+            human_review_required: ['privacy']
+          }
+        ]
+      },
+      serviceDataOwnershipPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails closed when a product-local PII snapshot omits privacy controls', () => {
+    const diagnostics = validateServiceDataOwnershipContracts(
+      {
+        services: [
+          {
+            id: 'local-product',
+            domain: { type: 'product' },
+            data: {
+              classes: ['local-inquiry'],
+              owner_domain: 'local-product',
+              datastores: ['local_postgres'],
+              pii_level: 'high',
+              deletion: { required: false, targets: [], evidence_required: false }
+            },
+            audit: { required: false, events: [], reason_required_for_admin_access: false },
+            human_review_required: ['security']
+          }
+        ]
+      },
+      serviceDataOwnershipPolicy
+    );
+
+    expect(diagnostics.map(({ ruleId }) => ruleId).every((id) => id === 'ZDP-DATA-006')).toBe(true);
+    expect(diagnostics.map(({ path }) => path)).toContain(
+      'services[0:local-product].human_review_required'
+    );
+    expect(diagnostics).toHaveLength(6);
   });
 });
 

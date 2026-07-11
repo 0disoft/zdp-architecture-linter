@@ -8,7 +8,9 @@ import {
 const repositoryAreaRules = buildRepositoryAreaRules({
   repository_area_rules: {
     exact: {
-      'zdp-api-contracts': 'architecture'
+      'zdp-api-contracts': 'architecture',
+      'zdp-orchid-pass': 'product',
+      melamed: 'product'
     },
     prefixes: [
       { prefix: 'zdp-core-', area: 'core' },
@@ -283,6 +285,28 @@ describe('repository area prefix compatibility', () => {
             purpose: 'API and event contracts.',
             owner: '0disoft',
             risk_level: 'medium'
+          },
+          {
+            name: 'zdp-orchid-pass',
+            status: 'experiment',
+            repo_stage: 'conditional_deploy_unit',
+            kind: 'deploy_unit',
+            area: 'product',
+            purpose: 'QR-first store operations product.',
+            owner: '0disoft',
+            risk_level: 'high',
+            create_when: ['The private product repository owns the pilot contract.']
+          },
+          {
+            name: 'melamed',
+            status: 'experiment',
+            repo_stage: 'conditional_deploy_unit',
+            kind: 'deploy_unit',
+            area: 'product',
+            purpose: 'Bootstrap private vertical product.',
+            owner: '0disoft',
+            risk_level: 'medium',
+            create_when: ['The initial product contract and implementation will live here.']
           }
         ]
       },

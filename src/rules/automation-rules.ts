@@ -14,6 +14,9 @@ const AUTO_AUTO_MERGE_GUARD_RULE_ID = 'ZDP-AUTO-006';
 const AUTO_STALE_BOT_SAFETY_RULE_ID = 'ZDP-AUTO-007';
 const AUTO_DESKTOP_SHELL_EVIDENCE_CI_RULE_ID = 'ZDP-AUTO-008';
 
+const FORBIDDEN_AUTOMATIC_WORKFLOW_TRIGGER_PATTERN =
+  /^\s*(push|pull_request|pull_request_target|schedule|release)\s*:/mu;
+
 const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
   'zdp-desktop-tauri': {
     workflowName: 'Tauri Contract Evidence',
@@ -32,7 +35,7 @@ const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
       'retention-days: 3'
     ],
     forbiddenFragments: ['src-tauri', 'tauri build', 'cargo build'],
-    forbiddenTriggerPattern: /^\s*(push|pull_request|schedule|release)\s*:/mu
+    forbiddenTriggerPattern: FORBIDDEN_AUTOMATIC_WORKFLOW_TRIGGER_PATTERN
   },
   'zdp-desktop-wails': {
     workflowName: 'Wails Windows Smoke',
@@ -56,7 +59,7 @@ const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
       'retention-days: 3'
     ],
     forbiddenFragments: ['gh release', 'upload-release-asset'],
-    forbiddenTriggerPattern: /^\s*release\s*:/mu
+    forbiddenTriggerPattern: FORBIDDEN_AUTOMATIC_WORKFLOW_TRIGGER_PATTERN
   }
 } as const;
 
