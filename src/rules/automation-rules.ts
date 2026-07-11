@@ -13,6 +13,7 @@ const AUTO_TEMPLATE_SECRET_WARNING_RULE_ID = 'ZDP-AUTO-005';
 const AUTO_AUTO_MERGE_GUARD_RULE_ID = 'ZDP-AUTO-006';
 const AUTO_STALE_BOT_SAFETY_RULE_ID = 'ZDP-AUTO-007';
 const AUTO_DESKTOP_SHELL_EVIDENCE_CI_RULE_ID = 'ZDP-AUTO-008';
+const AUTO_WORKFLOW_SUPPLY_CHAIN_RULE_ID = 'ZDP-AUTO-009';
 
 const FORBIDDEN_AUTOMATIC_WORKFLOW_TRIGGER_PATTERN =
   /^\s*(push|pull_request|pull_request_target|schedule|release)\s*:/mu;
@@ -29,7 +30,7 @@ const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
       'runs-on: windows-latest',
       'repository: 0disoft/zdp-design-system',
       'bun scripts/collect-desktop-shell-evidence.ts --write',
-      'uses: actions/upload-artifact@v7',
+      'uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
       'name: desktop-shell-evidence-summary',
       'path: .task/desktop-shell-evidence/summary.json',
       'retention-days: 3'
@@ -51,7 +52,7 @@ const DESKTOP_SHELL_EVIDENCE_WORKFLOW_CONTRACTS = {
       'Checkout zdp-desktop-tauri with deploy key',
       'Checkout zdp-desktop-tauri with token',
       'bun scripts/collect-desktop-shell-evidence.ts --write',
-      'uses: actions/upload-artifact@v7',
+      'uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
       'name: desktop-shell-evidence-summary',
       'path: .task/desktop-shell-evidence/summary.json',
       'name: wails-dev-smoke-receipt',
@@ -186,12 +187,65 @@ export function validateRepositoryAutomationContract(input: {
     }),
     ...validateAutoMergeGuards(autoMerge),
     ...validateStaleBotSafety(staleBot),
+    ...validateWorkflowSupplyChain(input.repositoryRoot),
     ...validateDesktopShellEvidenceCi({
       ci,
       repoName,
       repositoryRoot: input.repositoryRoot
     })
   ];
+}
+
+function validateWorkflowSupplyChain(repositoryRoot: string | undefined): readonly Diagnostic[] {
+  if (repositoryRoot === undefined) {
+    return [];
+  }
+
+  const diagnostics: Diagnostic[] = [];
+
+  for (const workflowPath of collectWorkflowFiles(repositoryRoot)) {
+    const workflowText = readTextFile(join(repositoryRoot, workflowPath));
+    const actionReferences = [
+      ...workflowText.matchAll(/^\s*(?:-\s+)?uses:\s+([^\s#]+)/gm)
+    ].map((match) => match[1] ?? '');
+    const mutableReferences = actionReferences.filter(
+      (reference) =>
+        !reference.startsWith('./') &&
+        !reference.startsWith('docker://') &&
+        !/@[0-9a-f]{40}$/.test(reference)
+    );
+    const checkoutCount = actionReferences.filter((reference) =>
+      reference.startsWith('actions/checkout@')
+    ).length;
+    const nonPersistentCheckoutCount =
+      workflowText.match(/^\s*persist-credentials:\s*false\s*$/gm)?.length ?? 0;
+
+    if (mutableReferences.length === 0 && checkoutCount === nonPersistentCheckoutCount) {
+      continue;
+    }
+
+    const reasons: string[] = [];
+
+    if (mutableReferences.length > 0) {
+      reasons.push(`mutable external references: ${mutableReferences.join(', ')}`);
+    }
+
+    if (checkoutCount !== nonPersistentCheckoutCount) {
+      reasons.push(
+        `checkout credential persistence disabled for ${nonPersistentCheckoutCount}/${checkoutCount} steps`
+      );
+    }
+
+    diagnostics.push({
+      ruleId: AUTO_WORKFLOW_SUPPLY_CHAIN_RULE_ID,
+      severity: 'warning',
+      file: workflowPath,
+      path: 'github.workflow.supply-chain',
+      message: `GitHub Actions workflows should pin external Actions and reusable workflows to full commit SHAs and set \`persist-credentials: false\` for every checkout; ${reasons.join('; ')}.`
+    });
+  }
+
+  return diagnostics;
 }
 
 function validateCiContract(ci: Record<string, unknown> | null): readonly Diagnostic[] {
@@ -520,6 +574,20 @@ function collectTemplateFilesFromDirectory(directory: string): readonly string[]
   return readdirSync(directory)
     .map((entry) => join(directory, entry))
     .filter((path) => isFile(path) && hasTemplateExtension(path) && !isIssueTemplateConfig(path));
+}
+
+function collectWorkflowFiles(root: string): readonly string[] {
+  const workflowDirectory = join(root, '.github/workflows');
+
+  if (!isDirectory(workflowDirectory)) {
+    return [];
+  }
+
+  return readdirSync(workflowDirectory)
+    .filter((entry) => entry.toLowerCase().endsWith('.yml') || entry.toLowerCase().endsWith('.yaml'))
+    .filter((entry) => isFile(join(workflowDirectory, entry)))
+    .map((entry) => `.github/workflows/${entry}`)
+    .sort();
 }
 
 function templateFilesMissWarning(paths: readonly string[]): boolean {

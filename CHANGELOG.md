@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.122
+
+- `ZDP-AUTO-009`를 추가해 모든 GitHub Actions workflow의 외부 Action/reusable workflow를 full commit SHA로 고정하고 모든 checkout에서 credential persistence를 끄도록 경고한다.
+- linter 자체 CI와 write-capable labeler도 full SHA pin 및 non-persistent checkout 계약으로 강화했다.
+
 ## 0.39.121
 
 - `ZDP-WEBPUB-001`이 public web CI의 모든 외부 Action을 full commit SHA로 고정하고 모든 checkout에서 credential persistence를 끄도록 강화했다.

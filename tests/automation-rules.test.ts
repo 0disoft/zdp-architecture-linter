@@ -132,6 +132,83 @@ describe('repository automation contracts', () => {
     );
   });
 
+  test('passes when workflows pin external Actions and disable checkout credentials', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/ci.yml': [
+          'name: CI',
+          'steps:',
+          '  - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+          '    with:',
+          '      persist-credentials: false',
+          '  - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6',
+          '  - uses: ./local-action',
+          '  - uses: docker://alpine:3.22'
+        ].join('\n')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                provider: 'github-actions',
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('warns when workflows use mutable Actions or persist checkout credentials', async () => {
+    await withRepositoryRoot(
+      {
+        '.github/workflows/ci.yml': [
+          'name: CI',
+          'steps:',
+          '  - uses: actions/checkout@v7',
+          '  - uses: oven-sh/setup-bun@main'
+        ].join('\n')
+      },
+      async (repositoryRoot) => {
+        const diagnostics = validateRepositoryAutomationContract({
+          repositoryRoot,
+          repositoryIndex,
+          repositoryServiceContract: createServiceContract({
+            automation: {
+              ci: {
+                required: true,
+                provider: 'github-actions',
+                workflow_names: ['CI'],
+                required_status_checks: ['CI'],
+                private_dependency_token_required: false,
+                required_secrets: []
+              }
+            }
+          })
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTO-009',
+          severity: 'warning',
+          file: '.github/workflows/ci.yml',
+          path: 'github.workflow.supply-chain',
+          message:
+            'GitHub Actions workflows should pin external Actions and reusable workflows to full commit SHAs and set `persist-credentials: false` for every checkout; mutable external references: actions/checkout@v7, oven-sh/setup-bun@main; checkout credential persistence disabled for 0/1 steps.'
+        });
+      }
+    );
+  });
+
   test('skips non-deploy-unit repository service contracts', () => {
     const diagnostics = validateRepositoryAutomationContract({
       repositoryIndex,
@@ -869,12 +946,12 @@ describe('repository automation contracts', () => {
           '    runs-on: windows-latest',
           '    steps:',
           '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
-          '      - uses: actions/upload-artifact@v7',
+          '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
           '        with:',
           '          name: desktop-shell-evidence-summary',
           '          path: .task/desktop-shell-evidence/summary.json',
           '          retention-days: 3',
-          '      - uses: actions/upload-artifact@v7',
+          '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
           '        with:',
           '          name: wails-dev-smoke-receipt',
           '          path: .task/wails-dev-smoke/receipt.json',
@@ -1017,12 +1094,15 @@ function tauriContractEvidenceWorkflow(): string {
     '  contract-evidence:',
     '    runs-on: windows-latest',
     '    steps:',
-    '      - uses: actions/checkout@v7',
-    '      - uses: actions/checkout@v7',
+    '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
     '        with:',
+    '          persist-credentials: false',
+    '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+    '        with:',
+    '          persist-credentials: false',
     '          repository: 0disoft/zdp-design-system',
     '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
-    '      - uses: actions/upload-artifact@v7',
+    '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     '        with:',
     '          name: desktop-shell-evidence-summary',
     '          path: .task/desktop-shell-evidence/summary.json',
@@ -1046,20 +1126,22 @@ function wailsWindowsSmokeWorkflow(): string {
     '      ZDP_DESKTOP_TAURI_READ_TOKEN: ${{ secrets.ZDP_DESKTOP_TAURI_READ_TOKEN }}',
     '    steps:',
     '      - name: Checkout zdp-desktop-tauri with deploy key',
-    '        uses: actions/checkout@v7',
+    '        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
     '        with:',
+    '          persist-credentials: false',
     '          repository: 0disoft/zdp-desktop-tauri',
     '      - name: Checkout zdp-desktop-tauri with token',
-    '        uses: actions/checkout@v7',
+    '        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
     '        with:',
+    '          persist-credentials: false',
     '          repository: 0disoft/zdp-desktop-tauri',
     '      - run: bun scripts/collect-desktop-shell-evidence.ts --write',
-    '      - uses: actions/upload-artifact@v7',
+    '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     '        with:',
     '          name: wails-dev-smoke-receipt',
     '          path: .task/wails-dev-smoke/receipt.json',
     '          retention-days: 3',
-    '      - uses: actions/upload-artifact@v7',
+    '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     '        with:',
     '          name: desktop-shell-evidence-summary',
     '          path: .task/desktop-shell-evidence/summary.json',
