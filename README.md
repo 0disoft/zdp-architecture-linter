@@ -289,7 +289,7 @@ fixtures/service-schema/fail/**
 
 0.39.13부터 `ZDP-APP-001`은 `zdp-web-apps`의 GitHub Actions CI workflow가 private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v7`, provider workspace install, app install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
 
-0.39.14부터 `ZDP-WEBPUB-001`은 `zdp-web-public`의 GitHub Actions CI workflow가 sibling `zdp-design-system`과 `zdp-platform-localization` checkout용 token boundary, `actions/checkout@v7`, design-system package build, public site install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
+0.39.14에서 `ZDP-WEBPUB-001`은 `zdp-web-public`의 GitHub Actions CI에 sibling `zdp-design-system`과 `zdp-platform-localization` checkout, design-system package build, public site check/build 계약을 처음 도입했다. 0.39.119부터 공개 `zdp-design-system`은 npm registry package range, Bun lock SHA-512, 실제 설치 버전으로 검증하며 sibling checkout과 `package:build`는 오히려 실패한다. private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v7`, provider workspace install, public site install, `bun run check`, `bun run build` 계약은 계속 유지한다.
 
 0.39.15부터 `ZDP-WEBPUB-001`은 fresh CI의 local file dependency consumer install이 lockfile을 쓰려고 실패하지 않도록 `zdp-web-public` workflow의 public site install step이 `bun install --no-save`를 쓰는지도 검사한다.
 
