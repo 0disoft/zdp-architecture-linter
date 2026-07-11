@@ -30,8 +30,10 @@ export const REQUIRED_AUDIT_FORBIDDEN_VALUES = [
 ] as const;
 
 const REQUIRED_CORE_CI_WORKFLOW_SNIPPETS = [
-  'actions/checkout@v7',
-  'dtolnay/rust-toolchain@stable',
+  'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+  'persist-credentials: false',
+  'dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30',
+  'toolchain: stable',
   'components: rustfmt',
   'cargo fmt --check',
   'cargo check --locked --all-targets',

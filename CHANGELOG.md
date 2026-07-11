@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.123
+
+- `ZDP-CORE-001`의 Rust CI 필수 계약을 `ZDP-AUTO-009`와 맞춰 checkout과 rust-toolchain Action을 full SHA로 고정하고 checkout credential persistence 및 명시적 stable toolchain 설정을 요구하도록 갱신했다.
+
 ## 0.39.122
 
 - `ZDP-AUTO-009`를 추가해 모든 GitHub Actions workflow의 외부 Action/reusable workflow를 full commit SHA로 고정하고 모든 checkout에서 credential persistence를 끄도록 경고한다.

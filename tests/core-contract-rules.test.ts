@@ -211,7 +211,7 @@ jobs:
           file: '.github/workflows/ci.yml',
           path: 'ci.workflow',
           message:
-            'Core platform CI workflow must include `actions/checkout@v7`.'
+            'Core platform CI workflow must include `actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-CORE-001',
@@ -2293,10 +2293,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: stable
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --check
