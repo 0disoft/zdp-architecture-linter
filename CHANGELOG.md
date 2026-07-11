@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## 0.39.120
+
 - 제품 로컬 개인정보를 선언한 service contract가 삭제 증거, 관리자 열람 감사, privacy 사람 검토를 빠뜨리면 `ZDP-DATA-006`으로 차단한다.
+- `ZDP-APP-001`이 app shell CI의 모든 외부 Action을 full commit SHA로 고정하고 모든 checkout에서 credential persistence를 끄도록 강화했다.
+- mutable Action ref와 checkout credential persistence를 각각 차단하는 회귀 테스트를 추가했다.
 
 ## 0.39.119
 

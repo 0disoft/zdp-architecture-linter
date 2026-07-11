@@ -340,6 +340,46 @@ jobs:
     );
   });
 
+  test('fails when app shell CI uses mutable Actions or persists checkout credentials', async () => {
+    const files = createValidAppShellFiles();
+    const insecureWorkflow = files['.github/workflows/ci.yml']
+      .replace(
+        'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+        'actions/checkout@v7'
+      )
+      .replace('          persist-credentials: false\n', '');
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        '.github/workflows/ci.yml': insecureWorkflow
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'App shell CI workflow must pin every external Action to a full 40-character commit SHA.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: '.github/workflows/ci.yml',
+          path: 'ci.workflow',
+          message:
+            'App shell CI workflow must set `persist-credentials: false` for every actions/checkout step.'
+        });
+      }
+    );
+  });
+
   test('fails when app shell localization canary expands without review contract', async () => {
     await withRepositoryRoot(
       {
@@ -611,17 +651,19 @@ jobs:
       ZDP_CORE_API_BASE_URL: http://127.0.0.1:3001
     steps:
       - name: Checkout web apps
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           path: projects/zdp-platforms/client-surfaces/zdp-web-apps
+          persist-credentials: false
       - name: Checkout localization platform
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: 0disoft/zdp-platform-localization
           token: \${{ secrets.ZDP_CI_READ_TOKEN || github.token }}
           path: projects/zdp-platforms/platform/zdp-platform-localization
+          persist-credentials: false
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
       - name: Install localization platform dependencies
         working-directory: projects/zdp-platforms/platform/zdp-platform-localization
         run: bun install --frozen-lockfile

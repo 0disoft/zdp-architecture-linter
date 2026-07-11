@@ -92,12 +92,12 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
 ] as const;
 
 const REQUIRED_CI_WORKFLOW_SNIPPETS = [
-  'actions/checkout@v7',
+  'actions/checkout@',
   '0disoft/zdp-platform-localization',
   'secrets.ZDP_CI_READ_TOKEN || github.token',
   'projects/zdp-platforms/platform/zdp-platform-localization',
   'projects/zdp-platforms/client-surfaces',
-  'oven-sh/setup-bun@v2',
+  'oven-sh/setup-bun@',
   'Install localization platform dependencies',
   'Install web apps dependencies',
   'bun install --frozen-lockfile',
@@ -546,6 +546,36 @@ async function validateCiWorkflowIncludes(
         '.github/workflows/ci.yml',
         'ci.workflow',
         `App shell CI workflow must include \`${snippet}\`.`
+      )
+    );
+  }
+
+  const actionReferences = [...source.matchAll(/^\s*(?:-\s+)?uses:\s+([^\s#]+)/gm)].map(
+    (match) => match[1]
+  );
+  if (
+    actionReferences.length === 0 ||
+    !actionReferences.every((reference) => /@[0-9a-f]{40}$/.test(reference))
+  ) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        '.github/workflows/ci.yml',
+        'ci.workflow',
+        'App shell CI workflow must pin every external Action to a full 40-character commit SHA.'
+      )
+    );
+  }
+
+  const checkoutCount = actionReferences.filter((reference) =>
+    reference.startsWith('actions/checkout@')
+  ).length;
+  const nonPersistentCheckoutCount = source.match(/^\s*persist-credentials:\s*false\s*$/gm)?.length ?? 0;
+  if (checkoutCount === 0 || nonPersistentCheckoutCount !== checkoutCount) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        '.github/workflows/ci.yml',
+        'ci.workflow',
+        'App shell CI workflow must set `persist-credentials: false` for every actions/checkout step.'
       )
     );
   }

@@ -287,7 +287,7 @@ fixtures/service-schema/fail/**
 
 0.39.12부터 `ZDP-WEBPUB-001`은 `zdp-web-public` localization canary가 home hero title과 CTA 메시지로 제한되고 static Astro copy rollback boundary와 runtime feature flag 불필요 계약을 유지하는지 검사한다. `ZDP-APP-001`은 `zdp-web-apps`의 `contracts/app-shell.yaml`에서 `localization_canary` scope, 6개 app-shell message key, expansion review, rollback boundary, runtime feature flag 불필요 계약을 검사한다.
 
-0.39.13부터 `ZDP-APP-001`은 `zdp-web-apps`의 GitHub Actions CI workflow가 private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v7`, provider workspace install, app install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다.
+0.39.13부터 `ZDP-APP-001`은 `zdp-web-apps`의 GitHub Actions CI workflow가 private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, provider workspace install, app install, `bun run check`, `bun run build` 계약을 유지하는지도 검사한다. 0.39.120부터 외부 Action은 full commit SHA로 고정하고 모든 `actions/checkout` step은 `persist-credentials: false`로 credential persistence를 꺼야 한다.
 
 0.39.14에서 `ZDP-WEBPUB-001`은 `zdp-web-public`의 GitHub Actions CI에 sibling `zdp-design-system`과 `zdp-platform-localization` checkout, design-system package build, public site check/build 계약을 처음 도입했다. 0.39.119부터 공개 `zdp-design-system`은 npm registry package range, Bun lock SHA-512, 실제 설치 버전으로 검증하며 sibling checkout과 `package:build`는 오히려 실패한다. private `zdp-platform-localization` checkout용 `ZDP_CI_READ_TOKEN`, `actions/checkout@v7`, provider workspace install, public site install, `bun run check`, `bun run build` 계약은 계속 유지한다.
 
