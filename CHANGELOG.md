@@ -4,6 +4,11 @@
 
 - 제품 로컬 개인정보를 선언한 service contract가 삭제 증거, 관리자 열람 감사, privacy 사람 검토를 빠뜨리면 `ZDP-DATA-006`으로 차단한다.
 
+## 0.39.119
+
+- `ZDP-WEBPUB-001`이 공개 `zdp-design-system`을 sibling checkout/build하지 않고 npm registry package range, lock integrity, 설치 버전으로 검증하도록 CI 계약을 갱신했다.
+- web-public CI에 design-system checkout 또는 `package:build`가 다시 들어오면 실패하는 회귀 테스트를 추가했다.
+
 ## 0.39.118
 
 - 제품명 기반 bootstrap 저장소 `melamed`를 `product` area의 명시적 저장소 이름으로 검증하고 회귀 테스트를 추가했다.

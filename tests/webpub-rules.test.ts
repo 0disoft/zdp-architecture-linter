@@ -381,7 +381,7 @@ domain_status = candidate
           file: '.github/workflows/ci.yml',
           path: 'github.workflow.ci',
           message:
-            'zdp-web-public CI workflow must install sibling providers and run public site check/build; missing `public-site:`.'
+            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `public-site:`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-WEBPUB-001',
@@ -389,10 +389,31 @@ domain_status = candidate
           file: '.github/workflows/ci.yml',
           path: 'github.workflow.ci',
           message:
-            'zdp-web-public CI workflow must install sibling providers and run public site check/build; missing `secrets.ZDP_CI_READ_TOKEN || github.token`.'
+            'zdp-web-public CI workflow must install private sibling providers and run public site check/build; missing `secrets.ZDP_CI_READ_TOKEN || github.token`.'
         });
       }
     );
+  });
+
+  test('rejects design-system sibling checkout as registry package evidence', async () => {
+    const files = createValidPublicWebRepositoryFiles();
+    files['.github/workflows/ci.yml'] += '\nrepository: 0disoft/zdp-design-system\nbun run package:build\n';
+
+    await withRepositoryRoot(files, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryWebpubContract({
+        repositoryRoot,
+        repositoryServiceContract: createPublicWebServiceContract()
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-WEBPUB-001',
+        severity: 'error',
+        file: '.github/workflows/ci.yml',
+        path: 'github.workflow.ci',
+        message:
+          'zdp-web-public CI must consume the published design-system package from the registry instead of sibling checkout/build; remove `repository: 0disoft/zdp-design-system`.'
+      });
+    });
   });
 });
 
@@ -478,11 +499,6 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       '          path: projects/zdp-platforms/client-surfaces/zdp-web-public',
       '      - uses: actions/checkout@v7',
       '        with:',
-      '          repository: 0disoft/zdp-design-system',
-      '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
-      '          path: projects/zdp-platforms/client-surfaces/zdp-design-system',
-      '      - uses: actions/checkout@v7',
-      '        with:',
       '          repository: 0disoft/zdp-platform-localization',
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-localization',
@@ -497,7 +513,6 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/contracts/zdp-libs-ts',
       '      - run: bun install --frozen-lockfile',
-      '      - run: bun run package:build',
       '      - run: bun install --no-save',
       '      - run: bun run check',
       '      - run: bun run build'

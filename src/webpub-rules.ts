@@ -75,8 +75,6 @@ const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'public-site:',
   'uses: actions/checkout@v7',
   'path: projects/zdp-platforms/client-surfaces/zdp-web-public',
-  'repository: 0disoft/zdp-design-system',
-  'path: projects/zdp-platforms/client-surfaces/zdp-design-system',
   'repository: 0disoft/zdp-platform-localization',
   'secrets.ZDP_CI_READ_TOKEN || github.token',
   'path: projects/zdp-platforms/platform/zdp-platform-localization',
@@ -85,10 +83,15 @@ const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'repository: 0disoft/zdp-libs-ts',
   'path: projects/zdp-platforms/contracts/zdp-libs-ts',
   'bun install --frozen-lockfile',
-  'bun run package:build',
   'bun install --no-save',
   'bun run check',
   'bun run build'
+] as const;
+
+const FORBIDDEN_WEB_PUBLIC_CI_SNIPPETS = [
+  'repository: 0disoft/zdp-design-system',
+  'path: projects/zdp-platforms/client-surfaces/zdp-design-system',
+  'bun run package:build'
 ] as const;
 
 const WEB_PUBLIC_OPERATIONAL_GATE_SERVICE_TRIGGER_SNIPPETS = [
@@ -486,9 +489,21 @@ async function validateWebPublicOperationalGates(
       path: 'github.workflow.ci',
       snippets: REQUIRED_WEB_PUBLIC_CI_SNIPPETS,
       description:
-        'zdp-web-public CI workflow must install sibling providers and run public site check/build'
+        'zdp-web-public CI workflow must install private sibling providers and run public site check/build'
     }))
   );
+  const ciSource = await readOptionalTextFile(repositoryRoot, '.github/workflows/ci.yml');
+  if (ciSource !== null) {
+    for (const snippet of FORBIDDEN_WEB_PUBLIC_CI_SNIPPETS) {
+      if (ciSource.includes(snippet)) {
+        diagnostics.push(createWebpubDiagnostic(
+          '.github/workflows/ci.yml',
+          'github.workflow.ci',
+          `zdp-web-public CI must consume the published design-system package from the registry instead of sibling checkout/build; remove \`${snippet}\`.`
+        ));
+      }
+    }
+  }
 
   return diagnostics;
 }
