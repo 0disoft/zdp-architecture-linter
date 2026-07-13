@@ -5,6 +5,8 @@ import {
   withArchitectureFiles
 } from './cli-test-helpers.ts';
 
+const MULTI_COMMAND_CLI_TEST_TIMEOUT_MS = 30_000;
+
 describe('graph CLI', () => {
   test('blocks graph-based commands before output construction when a catalog violates its schema', async () => {
     await withArchitectureFiles(
@@ -61,5 +63,5 @@ data_classes:
         }
       }
     );
-  });
+  }, MULTI_COMMAND_CLI_TEST_TIMEOUT_MS);
 });

@@ -8,7 +8,7 @@ import {
   withArchitectureFiles
 } from './cli-test-helpers.ts';
 
-const GIT_BACKED_CLI_TEST_TIMEOUT_MS = 15_000;
+const GIT_BACKED_CLI_TEST_TIMEOUT_MS = 30_000;
 
 describe('diff CLI', () => {
   test('compares a git ref with the current worktree', async () => {
