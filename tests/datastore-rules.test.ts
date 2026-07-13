@@ -389,6 +389,32 @@ describe('service datastore references', () => {
       }
     ]);
   });
+
+  test('fails when direct datastore access contains a non-string entry', () => {
+    const diagnostics = validateServiceDatastoreReferences(
+      {
+        services: [
+          {
+            id: 'core-api',
+            direct_datastore_access: [42]
+          }
+        ]
+      },
+      buildDatastoreIndex({
+        datastores: [{ id: 'core_postgres', owner_repo: 'zdp-core-platform' }]
+      })
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-REF-002',
+        severity: 'error',
+        file: 'catalogs/services.yaml',
+        path: 'services[0:core-api].direct_datastore_access[0]',
+        message: 'Direct datastore access entry must be a non-empty datastore id.'
+      }
+    ]);
+  });
 });
 
 function createRepository(
