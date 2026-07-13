@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { basename, dirname, relative, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const GENERATED_DIRECTORY = 'generated';
 const GENERATED_BOUNDARY_FILE = 'README.md';
+const RENAME_RETRY_DELAYS_MS = [5, 20, 50, 100] as const;
 
 export interface GeneratedOutputWriteResult {
   readonly path: string;
@@ -57,7 +59,7 @@ async function writeFileAtomically(
     await temporaryFile.sync();
     await temporaryFile.close();
     temporaryFile = undefined;
-    await rename(temporaryPath, outputPath);
+    await renameWithTransientRetry(temporaryPath, outputPath);
   } catch (error) {
     if (temporaryFile !== undefined) {
       await temporaryFile.close().catch(() => undefined);
@@ -65,6 +67,36 @@ async function writeFileAtomically(
     await rm(temporaryPath, { force: true }).catch(() => undefined);
     throw error;
   }
+}
+
+async function renameWithTransientRetry(
+  sourcePath: string,
+  destinationPath: string
+): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(sourcePath, destinationPath);
+      return;
+    } catch (error) {
+      const retryDelay = RENAME_RETRY_DELAYS_MS[attempt];
+
+      if (retryDelay === undefined || !isTransientRenameError(error)) {
+        throw error;
+      }
+
+      await delay(retryDelay);
+    }
+  }
+}
+
+function isTransientRenameError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return false;
+  }
+
+  const code = error.code;
+
+  return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
 }
 
 export async function checkGeneratedArchitectureFile(input: {
