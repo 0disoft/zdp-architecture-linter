@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.39.125
+
+- `ZDP-DATA-007`을 추가해 `catalogs/data-classes.yaml`이 `schemas/data-class.schema.json`을 통과하지 못하면 semantic validation과 graph 기반 명령으로 진행하지 않도록 fail-closed 처리했다.
+- repository, data class, event catalog schema를 공통 preflight로 묶고 `graph`, `pack`, `list`, `normalize`가 schema-invalid catalog에서 산출물을 만들지 못하도록 회귀 테스트를 추가했다.
+
+## 0.39.124
+
+- `pack`과 `normalize` 생성 파일을 대상 디렉터리의 임시 파일에 완전히 기록하고 동기화한 뒤 최종 경로로 교체해, 쓰기 실패가 기존 정상 파일을 부분 산출물로 덮어쓰지 않도록 강화했다.
+- 동일한 생성 경로에 동시 쓰기가 발생해도 최종 파일이 한 writer의 완전한 내용만 가지며 실패한 임시 파일이 정리되는 회귀 테스트를 추가했다.
+
 ## 0.39.123
 
 - `ZDP-CORE-001`의 Rust CI 필수 계약을 `ZDP-AUTO-009`와 맞춰 checkout과 rust-toolchain Action을 full SHA로 고정하고 checkout credential persistence 및 명시적 stable toolchain 설정을 요구하도록 갱신했다.
