@@ -51,6 +51,7 @@ import { validateEventSchemaReferences } from './event-schema-validation.ts';
 import { validateFixtureExpectations } from './fixture-validation.ts';
 import { validateRepositoryServiceFixtureExpectations } from './repository-service-fixture-validation.ts';
 import {
+  buildProviderCatalogWebhookPolicy,
   buildProviderContractPolicy,
   buildProviderWebhookPolicy,
   validateExternalProviderCatalog,
@@ -271,6 +272,9 @@ export async function validateArchitecture(
   );
   const providerContractPolicy = buildProviderContractPolicy(catalogs.providerRules);
   const providerWebhookPolicy = buildProviderWebhookPolicy(catalogs.providerRules);
+  const providerCatalogWebhookPolicy = buildProviderCatalogWebhookPolicy(
+    catalogs.providerRules
+  );
   const serviceDataCatalogPolicy = buildServiceDataCatalogPolicy(
     catalogs.dataAccessRules
   );
@@ -466,7 +470,10 @@ export async function validateArchitecture(
       ...validateDataClassDeletionEventReferences(catalogs.dataClasses, eventIndex),
       ...validateCostBudgetCatalog(catalogs.costBudgets),
       ...validateSloTierCatalog(catalogs.sloTiers, repositoryIndex, serviceIndex),
-      ...validateExternalProviderCatalog(catalogs.externalProviders),
+      ...validateExternalProviderCatalog(
+        catalogs.externalProviders,
+        providerCatalogWebhookPolicy
+      ),
       ...validateServiceRepositoryReferences(catalogs.services, repositoryIndex),
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),

@@ -4,6 +4,7 @@ const EXTERNAL_PROVIDERS_FILE = 'catalogs/external-providers.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const PROVIDER_CONTRACT_RULE_ID = 'ZDP-PROVIDER-001';
 const PROVIDER_WEBHOOK_RULE_ID = 'ZDP-PROVIDER-002';
+const PROVIDER_CATALOG_WEBHOOK_RULE_ID = 'ZDP-PROVIDER-003';
 
 const EMPTY_PROVIDER_CONTRACT_POLICY: ProviderContractPolicy = {
   enabled: false,
@@ -13,6 +14,12 @@ const EMPTY_PROVIDER_CONTRACT_POLICY: ProviderContractPolicy = {
 const EMPTY_PROVIDER_WEBHOOK_POLICY: ProviderWebhookPolicy = {
   enabled: false,
   requiredWebhookFields: []
+};
+
+const EMPTY_PROVIDER_CATALOG_WEBHOOK_POLICY: ProviderCatalogWebhookPolicy = {
+  enabled: false,
+  providerCategories: [],
+  requiredWebhookIntakeFields: []
 };
 
 export interface ExternalProviderRecord {
@@ -32,6 +39,12 @@ export interface ProviderContractPolicy {
 export interface ProviderWebhookPolicy {
   readonly enabled: boolean;
   readonly requiredWebhookFields: readonly string[];
+}
+
+export interface ProviderCatalogWebhookPolicy {
+  readonly enabled: boolean;
+  readonly providerCategories: readonly string[];
+  readonly requiredWebhookIntakeFields: readonly string[];
 }
 
 export function buildExternalProviderIndex(value: unknown): ExternalProviderIndex {
@@ -112,7 +125,41 @@ export function buildProviderWebhookPolicy(value: unknown): ProviderWebhookPolic
   };
 }
 
-export function validateExternalProviderCatalog(value: unknown): readonly Diagnostic[] {
+export function buildProviderCatalogWebhookPolicy(
+  value: unknown
+): ProviderCatalogWebhookPolicy {
+  if (!isRecord(value) || !Array.isArray(value.rules)) {
+    return EMPTY_PROVIDER_CATALOG_WEBHOOK_POLICY;
+  }
+
+  const providerRule = findRuleById(
+    value.rules,
+    PROVIDER_CATALOG_WEBHOOK_RULE_ID
+  );
+
+  if (providerRule === undefined) {
+    return EMPTY_PROVIDER_CATALOG_WEBHOOK_POLICY;
+  }
+
+  const condition = isRecord(providerRule.condition) ? providerRule.condition : {};
+  const assertions = isRecord(providerRule.assertions)
+    ? providerRule.assertions
+    : {};
+  const requiredWebhookIntakeFields = readStringArray(assertions.require_fields)
+    .map((field) => parseProviderWebhookIntakeField(field))
+    .filter((field): field is string => field !== null);
+
+  return {
+    enabled: true,
+    providerCategories: readStringArray(condition.any_category),
+    requiredWebhookIntakeFields
+  };
+}
+
+export function validateExternalProviderCatalog(
+  value: unknown,
+  policy: ProviderCatalogWebhookPolicy = EMPTY_PROVIDER_CATALOG_WEBHOOK_POLICY
+): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
       createProviderDiagnostic(
@@ -131,7 +178,7 @@ export function validateExternalProviderCatalog(value: unknown): readonly Diagno
   }
 
   return providers.flatMap((provider, index) =>
-    validateProviderRecord(provider, index)
+    validateProviderRecord(provider, index, policy)
   );
 }
 
@@ -227,7 +274,11 @@ export function validateServiceProviderWebhooks(
   );
 }
 
-function validateProviderRecord(value: unknown, index: number): readonly Diagnostic[] {
+function validateProviderRecord(
+  value: unknown,
+  index: number,
+  policy: ProviderCatalogWebhookPolicy
+): readonly Diagnostic[] {
   if (!isRecord(value)) {
     return [
       createProviderDiagnostic(
@@ -249,7 +300,44 @@ function validateProviderRecord(value: unknown, index: number): readonly Diagnos
     ];
   }
 
-  return [];
+  if (!providerMatchesCatalogWebhookPolicy(value, policy)) {
+    return [];
+  }
+
+  const webhookIntake = value.webhook_intake;
+
+  if (!isRecord(webhookIntake)) {
+    return [
+      createProviderCatalogWebhookDiagnostic(
+        `${providerPath}.webhook_intake`,
+        'PSP provider entry must declare a `webhook_intake` policy object.'
+      )
+    ];
+  }
+
+  return policy.requiredWebhookIntakeFields.flatMap((field) =>
+    readValueAtPath(webhookIntake, field) === true
+      ? []
+      : [
+          createProviderCatalogWebhookDiagnostic(
+            `${providerPath}.webhook_intake.${field}`,
+            `PSP provider webhook intake field \`${field}\` must be set to true.`
+          )
+        ]
+  );
+}
+
+function providerMatchesCatalogWebhookPolicy(
+  value: Record<string, unknown>,
+  policy: ProviderCatalogWebhookPolicy
+): boolean {
+  if (!policy.enabled || policy.providerCategories.length === 0) {
+    return false;
+  }
+
+  const categories = readStringArray(value.categories);
+
+  return categories.some((category) => policy.providerCategories.includes(category));
 }
 
 function validateServiceExternalDependencyRecord(
@@ -526,6 +614,14 @@ function parseProviderWebhookField(field: string): string | null {
     : null;
 }
 
+function parseProviderWebhookIntakeField(field: string): string | null {
+  const prefix = 'providers[].webhook_intake.';
+
+  return field.startsWith(prefix) && field.length > prefix.length
+    ? field.slice(prefix.length)
+    : null;
+}
+
 function findRuleById(
   rules: readonly unknown[],
   ruleId: string
@@ -589,6 +685,19 @@ function createServiceProviderWebhookDiagnostic(
     ruleId: PROVIDER_WEBHOOK_RULE_ID,
     severity: 'error',
     file: SERVICES_FILE,
+    path,
+    message
+  };
+}
+
+function createProviderCatalogWebhookDiagnostic(
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: PROVIDER_CATALOG_WEBHOOK_RULE_ID,
+    severity: 'error',
+    file: EXTERNAL_PROVIDERS_FILE,
     path,
     message
   };

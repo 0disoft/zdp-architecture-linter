@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildProviderCatalogWebhookPolicy,
   buildProviderContractPolicy,
   buildExternalProviderIndex,
   buildProviderWebhookPolicy,
@@ -38,6 +39,25 @@ const providerWebhookPolicy = buildProviderWebhookPolicy({
   ]
 });
 
+const providerCatalogWebhookPolicy = buildProviderCatalogWebhookPolicy({
+  rules: [
+    {
+      id: 'ZDP-PROVIDER-003',
+      condition: {
+        any_category: ['psp', 'psp-router']
+      },
+      assertions: {
+        require_fields: [
+          'providers[].webhook_intake.signature_verification_required',
+          'providers[].webhook_intake.replay_handling_required',
+          'providers[].webhook_intake.event_id_deduplication_required',
+          'providers[].webhook_intake.provider_contract_evidence_required'
+        ]
+      }
+    }
+  ]
+});
+
 describe('external provider catalog', () => {
   test('passes when providers have ids', () => {
     const diagnostics = validateExternalProviderCatalog({
@@ -68,6 +88,109 @@ describe('external provider catalog', () => {
         file: 'catalogs/external-providers.yaml',
         path: 'providers[0].id',
         message: 'External provider entry is missing required field `id`.'
+      }
+    ]);
+  });
+
+  test('passes PSP providers with complete webhook intake policy', () => {
+    const diagnostics = validateExternalProviderCatalog(
+      {
+        providers: [
+          {
+            id: 'example-psp',
+            categories: ['payment-processor', 'psp'],
+            webhook_intake: {
+              signature_verification_required: true,
+              replay_handling_required: true,
+              event_id_deduplication_required: true,
+              provider_contract_evidence_required: true
+            }
+          }
+        ]
+      },
+      providerCatalogWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('does not require webhook intake policy from non-PSP providers', () => {
+    const diagnostics = validateExternalProviderCatalog(
+      {
+        providers: [
+          {
+            id: 'example-email',
+            categories: ['transactional-email']
+          }
+        ]
+      },
+      providerCatalogWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test('fails when a PSP provider omits webhook intake policy', () => {
+    const diagnostics = validateExternalProviderCatalog(
+      {
+        providers: [
+          {
+            id: 'example-psp',
+            categories: ['psp']
+          }
+        ]
+      },
+      providerCatalogWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-PROVIDER-003',
+        severity: 'error',
+        file: 'catalogs/external-providers.yaml',
+        path: 'providers[0:example-psp].webhook_intake',
+        message: 'PSP provider entry must declare a `webhook_intake` policy object.'
+      }
+    ]);
+  });
+
+  test('fails when a PSP provider disables required webhook intake controls', () => {
+    const diagnostics = validateExternalProviderCatalog(
+      {
+        providers: [
+          {
+            id: 'example-psp',
+            categories: ['psp-router'],
+            webhook_intake: {
+              signature_verification_required: false,
+              replay_handling_required: true,
+              event_id_deduplication_required: false,
+              provider_contract_evidence_required: true
+            }
+          }
+        ]
+      },
+      providerCatalogWebhookPolicy
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-PROVIDER-003',
+        severity: 'error',
+        file: 'catalogs/external-providers.yaml',
+        path:
+          'providers[0:example-psp].webhook_intake.signature_verification_required',
+        message:
+          'PSP provider webhook intake field `signature_verification_required` must be set to true.'
+      },
+      {
+        ruleId: 'ZDP-PROVIDER-003',
+        severity: 'error',
+        file: 'catalogs/external-providers.yaml',
+        path:
+          'providers[0:example-psp].webhook_intake.event_id_deduplication_required',
+        message:
+          'PSP provider webhook intake field `event_id_deduplication_required` must be set to true.'
       }
     ]);
   });

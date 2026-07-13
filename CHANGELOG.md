@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.39.126
+
+- `ZDP-PROVIDER-003`을 추가해 `psp` 또는 `psp-router` 외부 제공자 후보가 서명 검증, 재처리, provider event id 멱등성, 최신 공식 계약 증거를 요구하는 `webhook_intake` 정책을 잃으면 실패하도록 했다.
+- `ZDP-PROVIDER-004`와 `schemas/external-provider.schema.json` preflight를 추가해 외부 제공자 카탈로그의 shape와 PSP 조건부 필수 필드를 fail-closed 검증한다.
+- Windows에서 동일 generated output을 동시에 교체할 때 발생할 수 있는 일시적 `EPERM`/`EACCES`/`EBUSY` rename 경쟁만 제한적으로 재시도해 atomic write를 안정화했다.
+
 ## 0.39.125
 
 - `ZDP-DATA-007`을 추가해 `catalogs/data-classes.yaml`이 `schemas/data-class.schema.json`을 통과하지 못하면 semantic validation과 graph 기반 명령으로 진행하지 않도록 fail-closed 처리했다.

@@ -4,6 +4,7 @@ import {
 } from './catalog-loader.ts';
 import { validateDataClassCatalogSchema } from './data-class-schema-validation.ts';
 import { validateEventCatalogSchema } from './event-schema-validation.ts';
+import { validateExternalProviderCatalogSchema } from './external-provider-schema-validation.ts';
 import {
   hasErrors,
   type ValidationResult
@@ -44,6 +45,10 @@ export async function validateArchitectureCatalogSchemas(input: {
       validateEventCatalogSchema({
         architectureRoot: input.architectureRoot,
         value: input.catalogs.events
+      }),
+      validateExternalProviderCatalogSchema({
+        architectureRoot: input.architectureRoot,
+        value: input.catalogs.externalProviders
       })
     ])
   ).flat();
