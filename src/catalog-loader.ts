@@ -40,7 +40,9 @@ export interface DatastoresCatalog {
 }
 
 export interface DataClassesCatalog {
+  readonly schema_version?: unknown;
   readonly data_classes?: unknown;
+  readonly deletion_pipeline?: unknown;
 }
 
 export interface CostBudgetsCatalog {

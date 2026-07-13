@@ -72,6 +72,11 @@ export function createMinimalArchitectureFiles(
       type: 'object',
       additionalProperties: true
     }),
+    'schemas/data-class.schema.json': JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: true
+    }),
     'ROADMAP.md': '# Roadmap\n',
     'docs/26-eighteen-month-roadmap.md': '# Eighteen month roadmap\n',
     'catalogs/repositories.yaml': 'repositories: []\n',

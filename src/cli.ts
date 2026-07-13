@@ -2,6 +2,10 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadArchitectureCatalogs } from './catalog-loader.ts';
+import {
+  catalogSchemaPreflightFailed,
+  loadArchitectureCatalogSchemaPreflight
+} from './catalog-schema-validation.ts';
 import { loadArchitectureGraph } from './architecture-graph-loader.ts';
 import {
   createArchitectureDoctorReport,
@@ -185,9 +189,19 @@ async function main(argv: readonly string[]): Promise<number> {
 
   try {
     if (command.name === 'graph') {
+      const preflight = await loadArchitectureCatalogSchemaPreflight(
+        command.architectureRoot
+      );
+
+      if (catalogSchemaPreflightFailed(preflight)) {
+        printResult(preflight.validation, command.json);
+        return 1;
+      }
+
       const graph = await loadArchitectureGraph({
         architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot
+        repositoryRoot: command.repositoryRoot,
+        catalogs: preflight.catalogs
       });
       const report = createArchitectureGraphReport(graph);
 
@@ -241,8 +255,18 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'pack') {
+      const preflight = await loadArchitectureCatalogSchemaPreflight(
+        command.architectureRoot
+      );
+
+      if (catalogSchemaPreflightFailed(preflight)) {
+        printResult(preflight.validation, command.json);
+        return 1;
+      }
+
       const graph = await loadArchitectureGraph({
-        architectureRoot: command.architectureRoot
+        architectureRoot: command.architectureRoot,
+        catalogs: preflight.catalogs
       });
       const report = createArchitecturePackReport({
         graph,
@@ -386,14 +410,25 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'normalize') {
+      const preflight = await loadArchitectureCatalogSchemaPreflight(
+        command.architectureRoot
+      );
+
+      if (catalogSchemaPreflightFailed(preflight)) {
+        printResult(preflight.validation, command.json);
+        return 1;
+      }
+
       const [graph, result] = await Promise.all([
         loadArchitectureGraph({
           architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot
+          repositoryRoot: command.repositoryRoot,
+          catalogs: preflight.catalogs
         }),
         validateArchitecture({
           architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot
+          repositoryRoot: command.repositoryRoot,
+          catalogSchemaPreflight: preflight
         })
       ]);
       const report = createArchitectureNormalizeReport({
@@ -481,8 +516,18 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'list') {
+      const preflight = await loadArchitectureCatalogSchemaPreflight(
+        command.architectureRoot
+      );
+
+      if (catalogSchemaPreflightFailed(preflight)) {
+        printResult(preflight.validation, command.json);
+        return 1;
+      }
+
       const graph = await loadArchitectureGraph({
-        architectureRoot: command.architectureRoot
+        architectureRoot: command.architectureRoot,
+        catalogs: preflight.catalogs
       });
       const report =
         command.listKind === 'repos'
