@@ -214,19 +214,19 @@ function buildRepositoryServiceContractEdges(
   }
 
   const from = endpoint('service', serviceId);
+  const canonicalRepoReferences = readStringReferences(service, 'repo').map(
+    ({ value: repoId, path }) => ({
+      value: repoId,
+      path: joinPath('service', path)
+    })
+  );
+  const repoReferences =
+    canonicalRepoReferences.length > 0
+      ? canonicalRepoReferences
+      : readStringReferences(value, 'repo');
 
   return [
-    ...readStringReferences(service, 'repo').map(({ value: repoId, path }) =>
-      edge({
-        type: 'service-owned-by-repository',
-        from,
-        to: endpoint('repository', repoId),
-        file: 'service.yaml',
-        path: joinPath('service', path),
-        source: 'repository-service-contract'
-      })
-    ),
-    ...readStringReferences(value, 'repo').map(({ value: repoId, path }) =>
+    ...repoReferences.map(({ value: repoId, path }) =>
       edge({
         type: 'service-owned-by-repository',
         from,

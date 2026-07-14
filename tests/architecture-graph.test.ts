@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildArchitectureGraph } from '../src/architecture-graph.ts';
+import { buildArchitectureGraphEdges } from '../src/architecture-graph-edges.ts';
 
 describe('architecture graph', () => {
   test('builds indexes and graph nodes from architecture catalogs', () => {
@@ -364,6 +365,93 @@ describe('architecture graph', () => {
         to: { kind: 'datastore', id: 'core_postgres' },
         file: 'service.yaml',
         path: 'dependencies.datastores[0]',
+        source: 'repository-service-contract'
+      }
+    ]);
+  });
+
+  test('uses the canonical service repo when the legacy root alias is also present', () => {
+    const edges = buildArchitectureGraphEdges({
+      catalogs: {
+        repositories: {},
+        splitTriggers: {},
+        services: {},
+        datastores: {},
+        dataClasses: {},
+        events: {},
+        externalProviders: {},
+        repositoryRules: {},
+        moneyRules: {},
+        providerRules: {},
+        aiDataAccessRules: {},
+        dataAccessRules: {},
+        tierRules: {}
+      },
+      repositoryServiceContract: {
+        repo: 'zdp-legacy-platform',
+        service: {
+          id: 'core-api',
+          repo: 'zdp-core-platform'
+        }
+      }
+    });
+
+    expect(
+      edges.filter(
+        (edge) =>
+          edge.source === 'repository-service-contract' &&
+          edge.type === 'service-owned-by-repository'
+      )
+    ).toEqual([
+      {
+        type: 'service-owned-by-repository',
+        from: { kind: 'service', id: 'core-api' },
+        to: { kind: 'repository', id: 'zdp-core-platform' },
+        file: 'service.yaml',
+        path: 'service.repo',
+        source: 'repository-service-contract'
+      }
+    ]);
+  });
+
+  test('falls back to the legacy root repo when the canonical field is absent', () => {
+    const edges = buildArchitectureGraphEdges({
+      catalogs: {
+        repositories: {},
+        splitTriggers: {},
+        services: {},
+        datastores: {},
+        dataClasses: {},
+        events: {},
+        externalProviders: {},
+        repositoryRules: {},
+        moneyRules: {},
+        providerRules: {},
+        aiDataAccessRules: {},
+        dataAccessRules: {},
+        tierRules: {}
+      },
+      repositoryServiceContract: {
+        repo: 'zdp-legacy-platform',
+        service: {
+          id: 'core-api'
+        }
+      }
+    });
+
+    expect(
+      edges.filter(
+        (edge) =>
+          edge.source === 'repository-service-contract' &&
+          edge.type === 'service-owned-by-repository'
+      )
+    ).toEqual([
+      {
+        type: 'service-owned-by-repository',
+        from: { kind: 'service', id: 'core-api' },
+        to: { kind: 'repository', id: 'zdp-legacy-platform' },
+        file: 'service.yaml',
+        path: 'repo',
         source: 'repository-service-contract'
       }
     ]);

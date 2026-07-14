@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.127
+
+- repository `service.yaml` graph가 canonical `service.repo`와 레거시 루트 `repo`를 동시에 ownership edge로 만들지 않고, canonical 필드가 없을 때만 레거시 값을 fallback으로 사용하도록 정리했다.
+
 ## 0.39.126
 
 - `ZDP-PROVIDER-003`을 추가해 `psp` 또는 `psp-router` 외부 제공자 후보가 서명 검증, 재처리, provider event id 멱등성, 최신 공식 계약 증거를 요구하는 `webhook_intake` 정책을 잃으면 실패하도록 했다.
