@@ -439,10 +439,16 @@ test('libs placeholder', () => {});
         'package.json': `
 {
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    }
   },
-  "types": "./src/not-index.ts",
+  "types": "./dist/not-index.d.ts",
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
     "test": "bun test",
@@ -471,16 +477,16 @@ test('placeholder', () => {});
           ruleId: 'ZDP-LIBS-001',
           severity: 'error',
           file: 'package.json',
-          path: 'exports["./env-contract"]',
+          path: 'exports["./env-contract"].import',
           message:
-            'Libs package must export `./env-contract` from `./src/env-contract/index.ts`.'
+            'Libs package must export `./env-contract` import from `./dist/env-contract/index.js`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
           severity: 'error',
           file: 'package.json',
           path: 'types',
-          message: 'Libs package must point `types` at `./src/index.ts`.'
+          message: 'Libs package must point `types` at `./dist/index.d.ts`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
@@ -488,7 +494,7 @@ test('placeholder', () => {});
           file: 'src/index.ts',
           path: 'source',
           message:
-            "Libs checker source must include `from './env-contract/index'`."
+            "Libs checker source must include `from './env-contract/index.js'`."
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
@@ -736,14 +742,14 @@ function createValidLibsCheckerFiles(): Record<string, string> {
     'package.json': `
 {
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts",
-    "./env-contract": "./src/env-contract/index.ts",
-    "./event-contracts": "./src/event-contracts/index.ts",
-    "./error": "./src/error/index.ts",
-    "./i18n-contract": "./src/i18n-contract/index.ts"
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema/index.d.ts", "import": "./dist/schema/index.js" },
+    "./env-contract": { "types": "./dist/env-contract/index.d.ts", "import": "./dist/env-contract/index.js" },
+    "./event-contracts": { "types": "./dist/event-contracts/index.d.ts", "import": "./dist/event-contracts/index.js" },
+    "./error": { "types": "./dist/error/index.d.ts", "import": "./dist/error/index.js" },
+    "./i18n-contract": { "types": "./dist/i18n-contract/index.d.ts", "import": "./dist/i18n-contract/index.js" }
   },
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
     "test": "bun test",
@@ -871,11 +877,11 @@ const cases = [
 export { cases };
 `,
     'src/index.ts': `
-export { defineSchemaMetadata } from './schema/index';
-export { defineEnvContractMetadata } from './env-contract/index';
-export { defineEventContractMetadata } from './event-contracts/index';
-export { defineZdpErrorContract } from './error/index';
-export { defineI18nMessageContract } from './i18n-contract/index';
+export { defineSchemaMetadata } from './schema/index.js';
+export { defineEnvContractMetadata } from './env-contract/index.js';
+export { defineEventContractMetadata } from './event-contracts/index.js';
+export { defineZdpErrorContract } from './error/index.js';
+export { defineI18nMessageContract } from './i18n-contract/index.js';
 `,
     'src/schema/index.ts': `
 const SCHEMA_GENERATION_TARGETS = [];

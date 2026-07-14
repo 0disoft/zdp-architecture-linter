@@ -53,12 +53,21 @@ const REQUIRED_LIBS_CHECKER_FILES = [
 const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
 
 const REQUIRED_PACKAGE_EXPORTS = {
-  '.': './src/index.ts',
-  './schema': './src/schema/index.ts',
-  './env-contract': './src/env-contract/index.ts',
-  './event-contracts': './src/event-contracts/index.ts',
-  './error': './src/error/index.ts',
-  './i18n-contract': './src/i18n-contract/index.ts'
+  '.': { import: './dist/index.js', types: './dist/index.d.ts' },
+  './schema': { import: './dist/schema/index.js', types: './dist/schema/index.d.ts' },
+  './env-contract': {
+    import: './dist/env-contract/index.js',
+    types: './dist/env-contract/index.d.ts'
+  },
+  './event-contracts': {
+    import: './dist/event-contracts/index.js',
+    types: './dist/event-contracts/index.d.ts'
+  },
+  './error': { import: './dist/error/index.js', types: './dist/error/index.d.ts' },
+  './i18n-contract': {
+    import: './dist/i18n-contract/index.js',
+    types: './dist/i18n-contract/index.d.ts'
+  }
 } as const;
 
 const REQUIRED_PACKAGES = [
@@ -655,29 +664,32 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
 function validatePackageExports(value: unknown): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
-  for (const [exportPath, expectedTarget] of Object.entries(REQUIRED_PACKAGE_EXPORTS)) {
-    const actual = readPackageExportTarget(value, exportPath);
+  for (const [exportPath, expectedTargets] of Object.entries(REQUIRED_PACKAGE_EXPORTS)) {
+    for (const condition of ['import', 'types'] as const) {
+      const actual = readPackageExportCondition(value, exportPath, condition);
+      const expectedTarget = expectedTargets[condition];
 
-    if (actual === expectedTarget) {
-      continue;
+      if (actual === expectedTarget) {
+        continue;
+      }
+
+      diagnostics.push(
+        createLibsDiagnostic(
+          PACKAGE_FILE,
+          `exports["${exportPath}"].${condition}`,
+          `Libs package must export \`${exportPath}\` ${condition} from \`${expectedTarget}\`.`
+        )
+      );
     }
-
-    diagnostics.push(
-      createLibsDiagnostic(
-        PACKAGE_FILE,
-        `exports["${exportPath}"]`,
-        `Libs package must export \`${exportPath}\` from \`${expectedTarget}\`.`
-      )
-    );
   }
 
   const typesTarget = readPath(value, 'types');
-  if (typesTarget !== './src/index.ts') {
+  if (typesTarget !== './dist/index.d.ts') {
     diagnostics.push(
       createLibsDiagnostic(
         PACKAGE_FILE,
         'types',
-        'Libs package must point `types` at `./src/index.ts`.'
+        'Libs package must point `types` at `./dist/index.d.ts`.'
       )
     );
   }
@@ -829,11 +841,11 @@ async function validateCheckerSurface(
           file: PUBLIC_ROOT_EXPORT_FILE,
           source: publicRootSource.source,
           requiredFragments: [
-            "from './schema/index'",
-            "from './env-contract/index'",
-            "from './event-contracts/index'",
-            "from './error/index'",
-            "from './i18n-contract/index'"
+            "from './schema/index.js'",
+            "from './env-contract/index.js'",
+            "from './event-contracts/index.js'",
+            "from './error/index.js'",
+            "from './i18n-contract/index.js'"
           ]
         })),
     ...(publicSchemaSource.source === null
@@ -1121,15 +1133,25 @@ function readPath(value: unknown, path: string): unknown {
   return current;
 }
 
-function readPackageExportTarget(value: unknown, exportPath: string): string | null {
+function readPackageExportCondition(
+  value: unknown,
+  exportPath: string,
+  condition: 'import' | 'types'
+): string | null {
   if (!isRecord(value) || !isRecord(value.exports)) {
     return null;
   }
 
   const candidate = value.exports[exportPath];
 
-  return typeof candidate === 'string' && candidate.trim().length > 0
-    ? candidate.trim()
+  if (!isRecord(candidate)) {
+    return null;
+  }
+
+  const target = candidate[condition];
+
+  return typeof target === 'string' && target.trim().length > 0
+    ? target.trim()
     : null;
 }
 
