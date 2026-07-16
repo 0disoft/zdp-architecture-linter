@@ -199,6 +199,41 @@ describe('architecture diff report', () => {
     expect(text).toContain('## risk notes');
     expect(text).toContain('- none');
   });
+
+  test('uses normalized catalog ids as diff identity', () => {
+    const report = createArchitectureDiffReport({
+      baseCatalogs: createCatalogs({
+        services: {
+          services: [
+            {
+              id: ' core-api ',
+              repo: 'zdp-core-platform',
+              tier: 'tier1'
+            }
+          ]
+        }
+      }),
+      headCatalogs: createCatalogs({
+        services: {
+          services: [
+            {
+              id: 'core-api',
+              repo: 'zdp-core-platform',
+              tier: 'tier1'
+            }
+          ]
+        }
+      }),
+      baseDiagnostics: [],
+      headDiagnostics: []
+    });
+
+    expect(report.changes.services).toEqual({
+      added: [],
+      removed: [],
+      changed: ['core-api']
+    });
+  });
 });
 
 function createCatalogs(

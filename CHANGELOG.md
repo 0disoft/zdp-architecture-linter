@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.130
+
+- architecture diff가 catalog ID의 앞뒤 공백을 canonical identity에서 제거해 같은 service/datastore를 added+removed로 오분류하지 않으면서, 원문 교정은 changed 항목으로 유지하도록 했다.
+
 ## 0.39.129
 
 - Valkey·Redis 계열의 bounded runtime state를 카탈로그에서 숨기지 않도록 `key-value-store` datastore kind와 regression coverage를 추가했다.

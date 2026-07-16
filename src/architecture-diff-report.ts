@@ -133,7 +133,13 @@ function getCollection(value: unknown, idField: string): readonly CollectionItem
 
     const id = item[idField];
 
-    return typeof id === 'string' ? [{ id, value: item }] : [];
+    if (typeof id !== 'string') {
+      return [];
+    }
+
+    const normalizedId = id.trim();
+
+    return normalizedId.length > 0 ? [{ id: normalizedId, value: item }] : [];
   });
 }
 
