@@ -68,6 +68,8 @@ const REQUIRED_ROUTE_FIELDS = [
   'error_codes'
 ] as const;
 
+const REQUIRED_NO_CONTENT_SUCCESS_STATUSES = [204] as const;
+
 const REQUIRED_FORBIDDEN_ROUTE_SHAPES = [
   'raw_customer_payload',
   'raw_provider_error',
@@ -487,6 +489,13 @@ function validateRouteContract(value: unknown): readonly Diagnostic[] {
       path: 'route_contract.forbidden_shapes',
       field: 'route_contract.forbidden_shapes',
       requiredEntries: REQUIRED_FORBIDDEN_ROUTE_SHAPES
+    }),
+    ...validateRequiredNumberArrayEntries({
+      value,
+      file: ROUTE_CONTRACT_FILE,
+      path: 'route_contract.no_content_success_statuses',
+      field: 'route_contract.no_content_success_statuses',
+      requiredEntries: REQUIRED_NO_CONTENT_SUCCESS_STATUSES
     })
   ];
 }
@@ -746,17 +755,53 @@ function validateAuthRouteMetadata(input: {
     );
   }
 
-  for (const field of ['request_schema_ref', 'response_schema_ref'] as const) {
-    const value = readStringField(input.route, field);
-
-    if (value?.startsWith(`${CORE_AUTH_SESSION_SCHEMA_FILE}#`) === true) {
-      continue;
-    }
-
+  const requestSchemaRef = readStringField(input.route, 'request_schema_ref');
+  if (requestSchemaRef?.startsWith(`${CORE_AUTH_SESSION_SCHEMA_FILE}#`) !== true) {
     diagnostics.push(
       createAuthRouteDiagnostic(
         API_CATALOG_FILE,
-        `${path}.${field}`,
+        `${path}.request_schema_ref`,
+        `Core auth/session route \`${input.operationId}\` must reference \`${CORE_AUTH_SESSION_SCHEMA_FILE}\`.`
+      )
+    );
+  }
+
+  const successStatuses = readNumberArrayField(input.route, 'success_statuses');
+  const hasNoContentStatus = successStatuses.includes(204);
+  const hasBodyStatus = successStatuses.some((status) => status !== 204);
+  const hasResponseSchemaField = Object.hasOwn(
+    input.route,
+    'response_schema_ref'
+  );
+  const responseSchemaRef = readStringField(input.route, 'response_schema_ref');
+
+  if (hasNoContentStatus && hasBodyStatus) {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.success_statuses`,
+        `Core auth/session route \`${input.operationId}\` must not mix 204 with body-bearing success statuses.`
+      )
+    );
+  }
+
+  if (hasNoContentStatus) {
+    if (!hasResponseSchemaField || input.route.response_schema_ref !== null) {
+      diagnostics.push(
+        createAuthRouteDiagnostic(
+          API_CATALOG_FILE,
+          `${path}.response_schema_ref`,
+          `Core auth/session route \`${input.operationId}\` with 204 success must set \`response_schema_ref\` to null.`
+        )
+      );
+    }
+  } else if (
+    responseSchemaRef?.startsWith(`${CORE_AUTH_SESSION_SCHEMA_FILE}#`) !== true
+  ) {
+    diagnostics.push(
+      createAuthRouteDiagnostic(
+        API_CATALOG_FILE,
+        `${path}.response_schema_ref`,
         `Core auth/session route \`${input.operationId}\` must reference \`${CORE_AUTH_SESSION_SCHEMA_FILE}\`.`
       )
     );
@@ -898,6 +943,7 @@ async function validateCheckerSurface(
           source: validatorSource.source,
           requiredFragments: [
             'REQUIRED_ROUTE_FIELDS',
+            'NO_CONTENT_SUCCESS_STATUSES',
             'FORBIDDEN_ROUTE_SHAPES',
             'ALLOWED_SESSION_EFFECTS',
             'REQUIRED_ERROR_FIELDS',
@@ -914,8 +960,12 @@ async function validateCheckerSurface(
             'FORBIDDEN_SDK_VALUES',
             'API_ROUTE_REQUIRED_FIELD_MISSING',
             'API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING',
+            'API_ROUTE_NO_CONTENT_SUCCESS_STATUS_MISSING',
             'API_CATALOG_ROUTE_FIELD_MISSING',
             'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE',
+            'API_CATALOG_ROUTE_NO_CONTENT_SCHEMA_FORBIDDEN',
+            'API_CATALOG_ROUTE_RESPONSE_SCHEMA_REQUIRED',
+            'API_CATALOG_ROUTE_SUCCESS_BODY_MODE_AMBIGUOUS',
             'API_ERROR_FORBIDDEN_FIELD_MISSING',
             'API_WEBHOOK_REQUIRED_CONTROL_MISSING',
             'API_SDK_GENERATION_SOURCE_CONTRACT_MISSING',
@@ -933,6 +983,7 @@ async function validateCheckerSurface(
           requiredFragments: [
             'fails when route contracts stop requiring authorization hooks',
             'fails when route contracts allow screen-shaped payloads',
+            'enforces explicit bodyless contracts for 204 responses',
             'keeps core auth session routes explicit in the API catalog',
             'fails when error envelopes stop carrying trace identifiers',
             'fails when error envelopes stop forbidding provider secrets',
@@ -1079,6 +1130,33 @@ function validateRequiredStringArrayEntries(input: {
   return diagnostics;
 }
 
+function validateRequiredNumberArrayEntries(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field: string;
+  readonly requiredEntries: readonly number[];
+}): readonly Diagnostic[] {
+  const entries = readNumberArrayPath(input.value, input.field);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const requiredEntry of input.requiredEntries) {
+    if (entries.includes(requiredEntry)) {
+      continue;
+    }
+
+    diagnostics.push(
+      createApiContractsDiagnostic(
+        input.file,
+        input.path,
+        `API contract \`${input.file}\` must include \`${requiredEntry}\` in \`${input.field}\`.`
+      )
+    );
+  }
+
+  return diagnostics;
+}
+
 function validateAuthRequiredStringArrayEntries(input: {
   readonly value: unknown;
   readonly file: string;
@@ -1157,6 +1235,33 @@ function readStringArrayPath(value: unknown, path: string): readonly string[] {
 
   return candidate.flatMap((entry) =>
     typeof entry === 'string' && entry.trim().length > 0 ? [entry.trim()] : []
+  );
+}
+
+function readNumberArrayPath(value: unknown, path: string): readonly number[] {
+  const candidate = readPath(value, path);
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.filter(
+    (entry): entry is number => typeof entry === 'number' && Number.isInteger(entry)
+  );
+}
+
+function readNumberArrayField(
+  value: Record<string, unknown>,
+  field: string
+): readonly number[] {
+  const candidate = value[field];
+
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.filter(
+    (entry): entry is number => typeof entry === 'number' && Number.isInteger(entry)
   );
 }
 

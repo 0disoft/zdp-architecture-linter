@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.132
+
+- `ZDP-AUTH-ROUTE-001`이 `204 No Content` auth route의 명시적 `response_schema_ref: null`을 허용하고, body-bearing 성공 상태와 혼합하거나 204에 response schema를 붙이는 계약은 계속 차단한다.
+- `ZDP-API-CONTRACTS-001`이 route contract의 `no_content_success_statuses`와 API checker의 204 bodyless 회귀 증거를 요구한다.
+
 ## 0.39.131
 
 - `diff`의 `--base`와 `--head`가 Git option으로 해석될 수 있는 revision을 Git 실행 전에 거부한다.

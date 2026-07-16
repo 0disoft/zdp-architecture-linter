@@ -441,6 +441,64 @@ routes:
     );
   });
 
+  test('enforces bodyless 204 auth route response contracts', async () => {
+    const validFiles = createValidApiContractFiles();
+    const catalog = validFiles['contracts/apis/catalog.yaml'];
+    if (catalog === undefined) {
+      throw new Error('Expected a valid API catalog fixture.');
+    }
+
+    await withRepositoryRoot(
+      {
+        ...validFiles,
+        'contracts/apis/catalog.yaml': catalog.replace(
+          '    response_schema_ref: null',
+          '    response_schema_ref: contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureResponse'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryApiContractsContract({
+          repositoryRoot,
+          repositoryServiceContract: createApiContractsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes.core.auth.sessions.revoke_current.response_schema_ref',
+          message:
+            'Core auth/session route `core.auth.sessions.revoke_current` with 204 success must set `response_schema_ref` to null.'
+        });
+      }
+    );
+
+    await withRepositoryRoot(
+      {
+        ...validFiles,
+        'contracts/apis/catalog.yaml': catalog.replace(
+          '    success_statuses:\n      - 204',
+          '    success_statuses:\n      - 200\n      - 204'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryApiContractsContract({
+          repositoryRoot,
+          repositoryServiceContract: createApiContractsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-AUTH-ROUTE-001',
+          severity: 'error',
+          file: 'contracts/apis/catalog.yaml',
+          path: 'routes.core.auth.sessions.revoke_current.success_statuses',
+          message:
+            'Core auth/session route `core.auth.sessions.revoke_current` must not mix 204 with body-bearing success statuses.'
+        });
+      }
+    );
+  });
+
   test('fails when core auth session schema bundle allows sensitive payload values', async () => {
     await withRepositoryRoot(
       {
@@ -688,6 +746,8 @@ route_contract:
     - screen_component_payload
     - provider_specific_id_as_primary_id
     - raw_storage_url
+  no_content_success_statuses:
+    - 204
 `,
     'contracts/error-envelope.yaml': `
 error_envelope:
@@ -857,26 +917,26 @@ schema_bundle:
 
 function createAuthSessionRouteCatalogFixture(): string {
   return [
-    ['core.auth.registrations.create', 'none'],
-    ['core.auth.sessions.create', 'issue'],
-    ['core.auth.sessions.refresh', 'refresh'],
-    ['core.auth.sessions.revoke_current', 'revoke'],
-    ['core.auth.recovery_requests.create', 'none'],
-    ['core.auth.passkey_challenges.create', 'none'],
-    ['core.auth.passkey_assertions.verify', 'issue'],
-    ['core.auth.oauth_callbacks.accept', 'issue']
+    ['core.auth.registrations.create', 'none', 201],
+    ['core.auth.sessions.create', 'issue', 201],
+    ['core.auth.sessions.refresh', 'refresh', 200],
+    ['core.auth.sessions.revoke_current', 'revoke', 204],
+    ['core.auth.recovery_requests.create', 'none', 202],
+    ['core.auth.passkey_challenges.create', 'none', 201],
+    ['core.auth.passkey_assertions.verify', 'issue', 201],
+    ['core.auth.oauth_callbacks.accept', 'issue', 201]
   ]
     .map(
-      ([operationId, sessionEffect]) => `  - operation_id: ${operationId}
+      ([operationId, sessionEffect, successStatus]) => `  - operation_id: ${operationId}
     service_id: core-api
     resource: auth_session
     action: create
     method: POST
     path: /v1/auth/session-fixture
     success_statuses:
-      - 201
+      - ${successStatus}
     request_schema_ref: contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureRequest
-    response_schema_ref: contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureResponse
+    response_schema_ref: ${successStatus === 204 ? 'null' : 'contracts/apis/core-api/auth-session.yaml#AuthSessionFixtureResponse'}
     auth_required: false
     permission_check: core.identity.public_auth_entrypoint
     audit_event: core.identity.fixture
@@ -950,6 +1010,7 @@ export interface ApiContractDiagnostic {
 `,
     'src/api-contracts/validator.ts': `
 const REQUIRED_ROUTE_FIELDS = [];
+const NO_CONTENT_SUCCESS_STATUSES = [204];
 const FORBIDDEN_ROUTE_SHAPES = [];
 const ALLOWED_SESSION_EFFECTS = [];
 const REQUIRED_ERROR_FIELDS = [];
@@ -966,8 +1027,12 @@ const FORBIDDEN_SDK_OWNERSHIP = [];
 const FORBIDDEN_SDK_VALUES = [];
 const API_ROUTE_REQUIRED_FIELD_MISSING = 'API_ROUTE_REQUIRED_FIELD_MISSING';
 const API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING = 'API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING';
+const API_ROUTE_NO_CONTENT_SUCCESS_STATUS_MISSING = 'API_ROUTE_NO_CONTENT_SUCCESS_STATUS_MISSING';
 const API_CATALOG_ROUTE_FIELD_MISSING = 'API_CATALOG_ROUTE_FIELD_MISSING';
 const API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE = 'API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE';
+const API_CATALOG_ROUTE_NO_CONTENT_SCHEMA_FORBIDDEN = 'API_CATALOG_ROUTE_NO_CONTENT_SCHEMA_FORBIDDEN';
+const API_CATALOG_ROUTE_RESPONSE_SCHEMA_REQUIRED = 'API_CATALOG_ROUTE_RESPONSE_SCHEMA_REQUIRED';
+const API_CATALOG_ROUTE_SUCCESS_BODY_MODE_AMBIGUOUS = 'API_CATALOG_ROUTE_SUCCESS_BODY_MODE_AMBIGUOUS';
 const API_ERROR_FORBIDDEN_FIELD_MISSING = 'API_ERROR_FORBIDDEN_FIELD_MISSING';
 const API_WEBHOOK_REQUIRED_CONTROL_MISSING = 'API_WEBHOOK_REQUIRED_CONTROL_MISSING';
 const API_SDK_GENERATION_SOURCE_CONTRACT_MISSING = 'API_SDK_GENERATION_SOURCE_CONTRACT_MISSING';
@@ -977,6 +1042,7 @@ const API_SDK_FORBIDDEN_OWNERSHIP_MISSING = 'API_SDK_FORBIDDEN_OWNERSHIP_MISSING
 const API_SDK_FORBIDDEN_VALUE_MISSING = 'API_SDK_FORBIDDEN_VALUE_MISSING';
 export {
   REQUIRED_ROUTE_FIELDS,
+  NO_CONTENT_SUCCESS_STATUSES,
   FORBIDDEN_ROUTE_SHAPES,
   ALLOWED_SESSION_EFFECTS,
   REQUIRED_ERROR_FIELDS,
@@ -993,8 +1059,12 @@ export {
   FORBIDDEN_SDK_VALUES,
   API_ROUTE_REQUIRED_FIELD_MISSING,
   API_ROUTE_ALLOWED_SESSION_EFFECT_MISSING,
+  API_ROUTE_NO_CONTENT_SUCCESS_STATUS_MISSING,
   API_CATALOG_ROUTE_FIELD_MISSING,
   API_CATALOG_ROUTE_CREDENTIAL_POLICY_INCOMPLETE,
+  API_CATALOG_ROUTE_NO_CONTENT_SCHEMA_FORBIDDEN,
+  API_CATALOG_ROUTE_RESPONSE_SCHEMA_REQUIRED,
+  API_CATALOG_ROUTE_SUCCESS_BODY_MODE_AMBIGUOUS,
   API_ERROR_FORBIDDEN_FIELD_MISSING,
   API_WEBHOOK_REQUIRED_CONTROL_MISSING,
   API_SDK_GENERATION_SOURCE_CONTRACT_MISSING,
@@ -1008,6 +1078,7 @@ export {
 const cases = [
   'fails when route contracts stop requiring authorization hooks',
   'fails when route contracts allow screen-shaped payloads',
+  'enforces explicit bodyless contracts for 204 responses',
   'keeps core auth session routes explicit in the API catalog',
   'fails when error envelopes stop carrying trace identifiers',
   'fails when error envelopes stop forbidding provider secrets',

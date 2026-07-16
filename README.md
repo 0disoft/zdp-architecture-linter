@@ -170,6 +170,8 @@ fixtures/service-schema/fail/**
 
 0.39.63부터 `ZDP-API-CONTRACTS-001`과 `ZDP-AUTH-ROUTE-001`은 API 계약의 `raw_customer_payload`, `authorization_header`, `cookie_header`, `refresh_token_plaintext`, `stack_trace` 금지값, `route-catalog-contract-only` catalog status, SDK source contract의 auth/session schema bundle 포함 여부를 최신 `zdp-api-contracts` 기준으로 검사한다.
 
+0.39.132부터 `ZDP-AUTH-ROUTE-001`은 `204 No Content` auth route가 `response_schema_ref: null`을 명시하는지 검사하고, 204와 body-bearing 성공 상태의 혼합 또는 204 response schema 선언을 거부한다. `ZDP-API-CONTRACTS-001`은 `no_content_success_statuses`와 API checker의 bodyless response 회귀 증거도 확인한다.
+
 0.39.18부터 `ZDP-APP-001`은 `zdp-web-apps` auth route promotion 계약이 `zdp-api-contracts/contracts/apis/catalog.yaml`의 core-api auth/session operation 목록을 명시하되, live core runtime handoff와 product reviewer approval 전에는 route를 열지 않는 상태를 유지하는지 검사한다.
 
 0.39.19부터 `ZDP-CORE-001`은 `zdp-core-platform` auth/session runtime handoff 계약이 `contracted_no_live_handler`, catalog source, 8개 auth/session operation, request/trace/idempotency/audit/session-store/credential-vault handoff, promotion blocker, plaintext refresh token 금지선을 유지하는지 검사한다.
