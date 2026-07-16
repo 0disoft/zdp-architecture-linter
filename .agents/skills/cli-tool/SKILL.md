@@ -18,7 +18,7 @@ description: Use this when changing zdp-architecture-linter CLI commands, flags,
 
 ## Procedure
 
-1. Identify the CLI command and mode: `validate`, `graph`, `explain`, `pack`, `check-split`, `diff`, `doctor`, `normalize`, or `list`.
+1. Identify the CLI command and mode: `validate`, `graph`, `explain`, `compliance`, `pack`, `check-split`, `diff`, `doctor`, `normalize`, or `list`.
 2. Read the parser and output path in `src/cli.ts` plus the matching report or validation module.
 3. Preserve JSON output as machine-readable automation output. Do not include generated file contents, existing source contents, secrets, customer payload, or private incident detail.
 4. Add or update tests for success, failure, and `--json` behavior.

@@ -103,6 +103,7 @@ zdp-arch validate --architecture <path> --json
 zdp-arch graph --architecture <path> --json
 zdp-arch graph --architecture <path> --repository <path> --json
 zdp-arch explain --architecture <path> --repository <path> --json
+zdp-arch compliance --architecture <path> --repository <path> --json
 zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] --json
 zdp-arch check-split --architecture <path> --json
 zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] --json
@@ -111,6 +112,8 @@ zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/
 zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] --json
 zdp-arch list services --architecture <path> [--repo <repo>] --json
 ```
+
+`compliance`는 선택한 저장소의 계약 선언, 정적 검증, 구현 증거, live 증거를 분리해 읽기 전용으로 보고한다. 정적 검증 통과만으로 구현 또는 live 상태를 추정하지 않으며, 해당 증거 어댑터가 없는 첫 버전은 두 상태를 `unknown`으로 반환한다. error diagnostic이나 `service.yaml` 누락은 report-only라는 이유로 성공 처리하지 않는다.
 
 ## 입력 원천
 
@@ -312,6 +315,7 @@ bun src/cli.ts validate --architecture <zdp-architecture-path> --repository <rep
 bun src/cli.ts graph --architecture <zdp-architecture-path> --json
 bun src/cli.ts graph --architecture <zdp-architecture-path> --repository <repo-path> --json
 bun src/cli.ts explain --architecture <zdp-architecture-path> --repository <repo-path> --json
+bun src/cli.ts compliance --architecture <zdp-architecture-path> --repository <repo-path> --json
 bun src/cli.ts pack --architecture <zdp-architecture-path> --repo <repo> --task <task> --json
 bun src/cli.ts pack --architecture <zdp-architecture-path> --repo <repo> --task <task> --out generated/llm/task-pack.md --json
 bun src/cli.ts pack --architecture <zdp-architecture-path> --repo <repo> --task <task> --out generated/llm/task-pack.md --check --json

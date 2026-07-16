@@ -37,6 +37,12 @@ import {
   formatDiagnosticExplainReportText
 } from './diagnostic-explain-report.ts';
 import {
+  createContractComplianceReport,
+  createContractComplianceFailureReport,
+  formatContractComplianceReportText,
+  type ContractComplianceReport
+} from './contract-compliance-report.ts';
+import {
   formatDiagnostic,
   hasErrors,
   type ValidationResult
@@ -46,12 +52,14 @@ import {
   writeGeneratedArchitectureFile
 } from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
+import { loadRepositoryServiceContract } from './service-schema-validation.ts';
 import { validateArchitecture } from './validation.ts';
 
 type ParsedCommand =
   | ParsedValidateCommand
   | ParsedGraphCommand
   | ParsedExplainCommand
+  | ParsedComplianceCommand
   | ParsedPackCommand
   | ParsedCheckSplitCommand
   | ParsedDiffCommand
@@ -119,6 +127,13 @@ interface ParsedExplainCommand {
   readonly json: boolean;
 }
 
+interface ParsedComplianceCommand {
+  readonly name: 'compliance';
+  readonly architectureRoot: string;
+  readonly repositoryRoot: string;
+  readonly json: boolean;
+}
+
 interface ParsedCheckSplitCommand {
   readonly name: 'check-split';
   readonly architectureRoot: string;
@@ -174,7 +189,7 @@ interface ParsedListCommand {
 
 /**
  * mf:anchor zdp.architecture-linter.cli-dispatch
- * purpose: Locate the CLI command dispatcher that routes validate, graph, explain, pack, diff, doctor, normalize, and list flows.
+ * purpose: Locate the CLI command dispatcher that routes validate, graph, explain, compliance, pack, diff, doctor, normalize, and list flows.
  * search: CLI dispatch, zdp-arch command, validate graph normalize, generated output, command parsing
  * invariant: CLI commands preserve explicit architecture and repository roots before invoking validation or generated-output writes.
  * risk: config, data_consistency
@@ -237,6 +252,46 @@ async function main(argv: readonly string[]): Promise<number> {
       }
 
       return hasErrors(result) ? 1 : 0;
+    }
+
+    if (command.name === 'compliance') {
+      let report: ContractComplianceReport;
+      try {
+        const [serviceContract, validation] = await Promise.all([
+          loadRepositoryServiceContract(command.repositoryRoot),
+          validateArchitecture({
+            architectureRoot: command.architectureRoot,
+            repositoryRoot: command.repositoryRoot
+          })
+        ]);
+        report = createContractComplianceReport({
+          repositoryRoot: command.repositoryRoot,
+          serviceContractDeclared: serviceContract !== null,
+          validation
+        });
+      } catch {
+        const failure = createContractComplianceFailureReport({
+          repositoryRoot: command.repositoryRoot
+        });
+
+        if (command.json) {
+          console.log(JSON.stringify(failure, null, 2));
+        } else {
+          console.error(
+            'zdp-arch compliance: repository or architecture input is unreadable or invalid'
+          );
+        }
+
+        return 1;
+      }
+
+      if (command.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatContractComplianceReportText(report));
+      }
+
+      return report.status === 'failed' ? 1 : 0;
     }
 
     if (command.name === 'check-split') {
@@ -583,6 +638,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     commandName !== 'validate' &&
     commandName !== 'graph' &&
     commandName !== 'explain' &&
+    commandName !== 'compliance' &&
     commandName !== 'pack' &&
     commandName !== 'check-split' &&
     commandName !== 'diff' &&
@@ -674,6 +730,24 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     };
   }
 
+  if (commandName === 'compliance') {
+    if (positionals.length > 0) {
+      return null;
+    }
+
+    const repositoryRoot = readOptionalResolvedPath(parsed.values.repository);
+    if (repositoryRoot === undefined) {
+      return null;
+    }
+
+    return {
+      name: 'compliance',
+      architectureRoot: resolve(architecture),
+      repositoryRoot,
+      json: parsed.values.json === true
+    };
+  }
+
   if (positionals.length > 0) {
     return null;
   }
@@ -751,6 +825,7 @@ function printUsage(): void {
       '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
       '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
       '  zdp-arch check-split --architecture <path> [--json]',
       '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',

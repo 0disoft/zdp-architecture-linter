@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.128
+
+- report-only `compliance` 명령을 추가해 `service.yaml` 선언, 정적 검증, 구현 증거, live 증거를 분리하고 근거 없는 구현·운영 완료 판정을 `unknown`으로 유지한다.
+- compliance JSON schema `zdp.architecture.contract-compliance-report.v1`과 validation error를 숨기지 않는 exit code 계약을 추가한다.
+
 ## 0.39.127
 
 - repository `service.yaml` graph가 canonical `service.repo`와 레거시 루트 `repo`를 동시에 ownership edge로 만들지 않고, canonical 필드가 없을 때만 레거시 값을 fallback으로 사용하도록 정리했다.
