@@ -60,6 +60,20 @@ describe('architecture normalize report', () => {
         externalProviders: {
           providers: []
         },
+        supportSourceAdapters: {
+          schema_version: '1',
+          adapters: [{
+            id: 'melamed-support-v1',
+            status: 'candidate',
+            owner_repo: 'melamed',
+            product_id: 'melamed',
+            source_service: 'melamed-platform',
+            case_kinds: ['customer-inquiry'],
+            projection_schema_versions: [1],
+            admin_api_versions: [1],
+            activation: { state: 'blocked' }
+          }]
+        },
         repositoryRules: {},
         moneyRules: {},
         providerRules: {},
@@ -91,6 +105,7 @@ describe('architecture normalize report', () => {
       dataClasses: 0,
       events: 0,
       externalProviders: 0,
+      supportSourceAdapters: 1,
       edges: 3
     });
     expect(report.repositories[0]?.id).toBe('zdp-core-platform');
@@ -110,6 +125,17 @@ describe('architecture normalize report', () => {
     expect(report.services[0]?.status).toBe('experiment');
     expect(report.datastores[0]?.id).toBe('core_postgres');
     expect(report.datastores[0]?.status).toBe('active');
+    expect(report.supportSourceAdapters).toEqual([{
+      id: 'melamed-support-v1',
+      status: 'candidate',
+      ownerRepo: 'melamed',
+      productId: 'melamed',
+      sourceService: 'melamed-platform',
+      caseKinds: ['customer-inquiry'],
+      projectionSchemaVersions: [1],
+      adminApiVersions: [1],
+      activationState: 'blocked'
+    }]);
     expect(report.edges.map((edge) => edge.type)).toEqual([
       'service-owned-by-repository',
       'service-accesses-datastore',
@@ -132,7 +158,8 @@ describe('architecture normalize report', () => {
         dataClasses: 4,
         events: 5,
         externalProviders: 6,
-        edges: 7
+        supportSourceAdapters: 7,
+        edges: 8
       },
       repositories: [],
       services: [],
@@ -140,6 +167,7 @@ describe('architecture normalize report', () => {
       dataClasses: [],
       events: [],
       externalProviders: [],
+      supportSourceAdapters: [],
       edges: [],
       validation: {
         diagnostics: 1,
@@ -158,7 +186,8 @@ describe('architecture normalize report', () => {
         'dataClasses: 4',
         'events: 5',
         'externalProviders: 6',
-        'edges: 7',
+        'supportSourceAdapters: 7',
+        'edges: 8',
         'diagnostics: 1 (0 errors, 1 warnings)'
       ].join('\n')
     );

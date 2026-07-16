@@ -10,6 +10,7 @@ import {
   type ValidationResult
 } from './diagnostics.ts';
 import { validateRepositoryCatalogSchema } from './repository-schema-validation.ts';
+import { validateSupportSourceAdapterCatalogSchema } from './support-source-registry-validation.ts';
 
 export interface ArchitectureCatalogSchemaPreflight {
   readonly catalogs: ArchitectureCatalogs;
@@ -49,6 +50,10 @@ export async function validateArchitectureCatalogSchemas(input: {
       validateExternalProviderCatalogSchema({
         architectureRoot: input.architectureRoot,
         value: input.catalogs.externalProviders
+      }),
+      validateSupportSourceAdapterCatalogSchema({
+        architectureRoot: input.architectureRoot,
+        value: input.catalogs.supportSourceAdapters
       })
     ])
   ).flat();

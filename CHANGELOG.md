@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.133
+
+- `ZDP-SUPPORT-REGISTRY-001`부터 `005`까지 추가해 support source adapter schema, runtime registration fixture, exact organization binding, adapter 참조와 지원 contract version을 검증한다.
+
 ## 0.39.132
 
 - `ZDP-AUTH-ROUTE-001`이 `204 No Content` auth route의 명시적 `response_schema_ref: null`을 허용하고, body-bearing 성공 상태와 혼합하거나 204에 response schema를 붙이는 계약은 계속 차단한다.

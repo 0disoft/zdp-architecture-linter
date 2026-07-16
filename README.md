@@ -27,6 +27,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 
 ## 목표
 
+- `catalogs/support-source-adapters.yaml`의 논리 adapter 계약과 환경별 support source registration fixture를 검증하고, wildcard 조직·미등록 adapter·지원하지 않는 version을 차단한다.
 - `service.yaml`이 `schemas/service.schema.json`을 따르는지 검사한다.
 - `catalogs/events.yaml`이 `schemas/event.schema.json`을 따르는지 검사한다.
 - 이벤트 `schema_ref`가 `schemas/events/*.json` 아래의 실제 JSON Schema 파일을 가리키고, 해당 파일의 `$id`가 참조 경로와 일치하는지 검사한다.
