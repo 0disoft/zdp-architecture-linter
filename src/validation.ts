@@ -143,6 +143,7 @@ import { validateRepositoryPerformanceContract } from './xcut-perf-rules.ts';
 import { validateRepositorySecurityHeaderContract } from './xcut-secheader-rules.ts';
 import { validateRepositoryAssetContract } from './xcut-asset-rules.ts';
 import { validateRepositoryLlmsContract } from './xcut-llms-rules.ts';
+import { validateSupportSourceRegistrationFixtures } from './support-source-registry-validation.ts';
 
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
@@ -340,6 +341,11 @@ export async function validateArchitecture(
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
     input.architectureRoot
   );
+  const supportSourceRegistrationFixtureDiagnostics =
+    await validateSupportSourceRegistrationFixtures({
+      architectureRoot: input.architectureRoot,
+      catalog: catalogs.supportSourceAdapters
+    });
   const repositoryServiceDiagnostics =
     input.repositoryRoot === undefined
       ? []
@@ -563,6 +569,7 @@ export async function validateArchitecture(
       ...fixtureDiagnostics,
       ...repositoryServiceFixtureDiagnostics,
       ...serviceSchemaDiagnostics,
+      ...supportSourceRegistrationFixtureDiagnostics,
       ...repositoryBaselineDiagnostics,
       ...repositoryMarkdownDiagnostics,
       ...repositoryContractDiagnostics,

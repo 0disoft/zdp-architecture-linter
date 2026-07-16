@@ -13,6 +13,7 @@ export interface ArchitectureCatalogs {
   readonly sloTiers?: SloTiersCatalog;
   readonly events: EventsCatalog;
   readonly externalProviders: ExternalProvidersCatalog;
+  readonly supportSourceAdapters?: SupportSourceAdaptersCatalog;
   readonly repositoryRules: RepositoryRulesCatalog;
   readonly moneyRules: MoneyRulesCatalog;
   readonly providerRules: ProviderRulesCatalog;
@@ -62,6 +63,11 @@ export interface EventsCatalog {
 
 export interface ExternalProvidersCatalog {
   readonly providers?: unknown;
+}
+
+export interface SupportSourceAdaptersCatalog {
+  readonly schema_version?: unknown;
+  readonly adapters?: unknown;
 }
 
 export interface RepositoryRulesCatalog {
@@ -148,6 +154,12 @@ export async function loadArchitectureCatalogs(
       architectureRoot,
       'catalogs/external-providers.yaml'
     ),
+    supportSourceAdapters:
+      await loadOptionalYamlFile<SupportSourceAdaptersCatalog | undefined>(
+        architectureRoot,
+        'catalogs/support-source-adapters.yaml',
+        undefined
+      ),
     repositoryRules: await loadYamlFile<RepositoryRulesCatalog>(
       architectureRoot,
       'rules/repository.rules.yaml'

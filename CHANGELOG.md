@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.128
+
+- `ZDP-SUPPORT-REGISTRY-001`부터 `005`까지 추가해 support source adapter schema, runtime registration fixture, exact organization binding, adapter 참조와 지원 contract version을 검증한다.
+
 ## 0.39.127
 
 - repository `service.yaml` graph가 canonical `service.repo`와 레거시 루트 `repo`를 동시에 ownership edge로 만들지 않고, canonical 필드가 없을 때만 레거시 값을 fallback으로 사용하도록 정리했다.
