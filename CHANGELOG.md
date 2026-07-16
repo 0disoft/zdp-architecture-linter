@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.129
+
+- Valkey·Redis 계열의 bounded runtime state를 카탈로그에서 숨기지 않도록 `key-value-store` datastore kind와 regression coverage를 추가했다.
+
 ## 0.39.128
 
 - report-only `compliance` 명령을 추가해 `service.yaml` 선언, 정적 검증, 구현 증거, live 증거를 분리하고 근거 없는 구현·운영 완료 판정을 `unknown`으로 유지한다.

@@ -8,6 +8,7 @@ const DATASTORES_FILE = 'catalogs/datastores.yaml';
 const SERVICES_FILE = 'catalogs/services.yaml';
 const ALLOWED_DATASTORE_KINDS = new Set([
   'clickhouse',
+  'key-value-store',
   'postgresql',
   'search-engine',
   'secure-storage',
