@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const GENERATED_DIRECTORY = 'generated';
@@ -31,9 +31,11 @@ export async function writeGeneratedArchitectureFile(input: {
   readonly outputPath: string;
   readonly contents: string;
 }): Promise<GeneratedOutputWriteResult> {
-  const { outputPath } = await resolveGeneratedOutputPath(input);
+  const { outputPath, generatedRoot } = await resolveGeneratedOutputPath(input);
   const outputDirectory = dirname(outputPath);
+  await assertGeneratedPathHasNoLinks(generatedRoot, outputDirectory);
   await mkdir(outputDirectory, { recursive: true });
+  await assertGeneratedPathHasNoLinks(generatedRoot, outputDirectory);
   await writeFileAtomically(outputPath, input.contents);
 
   return {
@@ -104,8 +106,10 @@ export async function checkGeneratedArchitectureFile(input: {
   readonly outputPath: string;
   readonly contents: string;
 }): Promise<GeneratedOutputCheckResult> {
-  const { outputPath } = await resolveGeneratedOutputPath(input);
+  const { outputPath, generatedRoot } = await resolveGeneratedOutputPath(input);
   let currentContents: string;
+
+  await assertGeneratedPathHasNoLinks(generatedRoot, dirname(outputPath));
 
   try {
     currentContents = await readFile(outputPath, 'utf8');
@@ -149,8 +153,39 @@ function isInsideDirectory(candidatePath: string, directoryPath: string): boolea
   return (
     relativePath.length > 0 &&
     !relativePath.startsWith('..') &&
+    !isAbsolute(relativePath) &&
     !relativePath.includes(':')
   );
+}
+
+async function assertGeneratedPathHasNoLinks(
+  generatedRoot: string,
+  candidateDirectory: string
+): Promise<void> {
+  const relativeDirectory = relative(generatedRoot, candidateDirectory);
+  const segments =
+    relativeDirectory.length === 0 ? [] : relativeDirectory.split(sep);
+  let currentPath = generatedRoot;
+
+  for (const segment of ['', ...segments]) {
+    if (segment.length > 0) {
+      currentPath = resolve(currentPath, segment);
+    }
+
+    try {
+      if ((await lstat(currentPath)).isSymbolicLink()) {
+        throw new Error(
+          'Generated output path must not traverse symbolic links or junctions.'
+        );
+      }
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  }
 }
 
 async function assertGeneratedBoundary(generatedRoot: string): Promise<void> {
@@ -161,4 +196,12 @@ async function assertGeneratedBoundary(generatedRoot: string): Promise<void> {
       `Generated output requires \`${GENERATED_DIRECTORY}/${GENERATED_BOUNDARY_FILE}\` boundary file.`
     );
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT'
+  );
 }

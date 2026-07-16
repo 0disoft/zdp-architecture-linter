@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join, normalize, resolve } from 'node:path';
 import {
+  assertSafeSnapshotRef,
   buildSnapshotGitArgs,
   resolveSnapshotPath
 } from '../src/git-architecture-snapshot.ts';
@@ -43,5 +44,22 @@ describe('resolveSnapshotPath', () => {
       'show',
       'HEAD:catalogs/services.yaml'
     ]);
+  });
+
+  test('accepts revision expressions that cannot become Git options', () => {
+    expect(() => assertSafeSnapshotRef('HEAD~1')).not.toThrow();
+    expect(() => assertSafeSnapshotRef('refs/heads/main')).not.toThrow();
+  });
+
+  test('rejects option-like and control-character Git revisions', () => {
+    for (const ref of [
+      '--output=outside.txt',
+      '-p',
+      ' HEAD',
+      'HEAD\n-p',
+      'HEAD\t-p'
+    ]) {
+      expect(() => assertSafeSnapshotRef(ref)).toThrow('Unsafe Git revision');
+    }
   });
 });

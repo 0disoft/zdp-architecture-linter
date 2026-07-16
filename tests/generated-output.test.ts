@@ -4,6 +4,7 @@ import {
   readFile,
   readdir,
   rm,
+  symlink,
   writeFile
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -83,6 +84,40 @@ describe('generated output writes', () => {
       'keep me\n'
     );
     expect(await listTemporaryOutputs(architectureRoot)).toEqual([]);
+  });
+
+  test('rejects UNC output paths outside the generated boundary', async () => {
+    const architectureRoot = await createArchitectureRoot();
+
+    await expect(
+      writeGeneratedArchitectureFile({
+        architectureRoot,
+        outputPath: '\\\\server\\share\\registry.json',
+        contents: 'outside contents\n'
+      })
+    ).rejects.toThrow('must stay under `generated/`');
+  });
+
+  test('rejects generated output through a symbolic link or junction', async () => {
+    const architectureRoot = await createArchitectureRoot();
+    const externalRoot = await mkdtemp(join(tmpdir(), 'zdp-generated-external-'));
+    temporaryRoots.push(externalRoot);
+    await symlink(
+      externalRoot,
+      join(architectureRoot, 'generated', 'escaped'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+
+    await expect(
+      writeGeneratedArchitectureFile({
+        architectureRoot,
+        outputPath: 'generated/escaped/registry.json',
+        contents: 'outside contents\n'
+      })
+    ).rejects.toThrow('must not traverse symbolic links or junctions');
+    await expect(
+      readFile(join(externalRoot, 'registry.json'), 'utf8')
+    ).rejects.toBeDefined();
   });
 });
 

@@ -28,10 +28,13 @@ Status: Active
 | `list repos` | repository catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 | `list services` | service catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 
+`diff`의 `--base`와 `--head`는 비어 있지 않고 앞뒤 또는 제어 공백이 없으며 `-`로 시작하지 않는 Git revision이어야 한다. 현재 작업 트리를 뜻하는 `worktree`는 `--head`에서만 허용한다.
+
 ## Side effect policy
 
 - `validate`, `graph`, `explain`, `compliance`, `check-split`, `diff`, `doctor`, `list`는 source tree를 수정하지 않는다.
 - `pack`과 `normalize`는 명시적인 output path가 있을 때만 쓴다.
+- generated output path는 architecture root의 `generated/` 아래에 있어야 하며 symbolic link 또는 junction을 경유할 수 없다.
 - generated output은 source of truth가 아니다. `zdp-architecture`의 docs, schemas, catalogs, rules, fixtures가 source다.
 
 `compliance`는 `--repository`를 필수로 받는다. `service.yaml` 선언과 validation 결과는 현재 입력에서 계산하지만, 구현 증거 adapter와 revision/environment에 묶인 live evidence adapter가 없는 상태를 통과로 추정하지 않고 `unknown`으로 남긴다. report-only는 무변경을 뜻하며 validation error를 성공 exit code에 숨긴다는 뜻이 아니다.

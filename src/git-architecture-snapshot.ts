@@ -23,6 +23,7 @@ export async function loadArchitectureSnapshot(input: {
     };
   }
 
+  assertSafeSnapshotRef(input.ref);
   const snapshotRoot = await mkdtemp(join(tmpdir(), 'zdp-arch-diff-'));
 
   try {
@@ -47,6 +48,19 @@ export async function loadArchitectureSnapshot(input: {
   } catch (error) {
     await rm(snapshotRoot, { recursive: true, force: true });
     throw error;
+  }
+}
+
+export function assertSafeSnapshotRef(ref: string): void {
+  if (
+    ref.length === 0 ||
+    ref !== ref.trim() ||
+    ref.startsWith('-') ||
+    /[\u0000-\u001F\u007F]/.test(ref)
+  ) {
+    throw new Error(
+      'Unsafe Git revision: refs must be non-empty, free of surrounding or control whitespace, and must not start with `-`.'
+    );
   }
 }
 

@@ -105,6 +105,24 @@ repositories:
     );
   });
 
+  test('rejects option-like base refs before invoking Git', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({}),
+      async ({ architectureRoot }) => {
+        const result = await runCli([
+          'diff',
+          '--architecture',
+          architectureRoot,
+          '--base=-p'
+        ]);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toContain('Unsafe Git revision');
+      }
+    );
+  });
+
   test('cleans a base snapshot when the head ref fails to load', async () => {
     await withArchitectureFiles(
       createMinimalArchitectureFiles({}),

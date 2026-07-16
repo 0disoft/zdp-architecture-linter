@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.131
+
+- `diff`의 `--base`와 `--head`가 Git option으로 해석될 수 있는 revision을 Git 실행 전에 거부한다.
+- generated output 경계 검사가 Windows absolute path와 symlink·junction 우회를 차단한다.
+
 ## 0.39.130
 
 - architecture diff가 catalog ID의 앞뒤 공백을 canonical identity에서 제거해 같은 service/datastore를 added+removed로 오분류하지 않으면서, 원문 교정은 changed 항목으로 유지하도록 했다.
