@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.39.134
+
+- architecture workflow가 고정한 linter SHA와 로컬 검증기 HEAD가 다르면 validation 전에 실패하는 pinned-linter 검증 경로를 추가했다.
+
 ## 0.39.133
 
 - `ZDP-SUPPORT-REGISTRY-001`부터 `005`까지 추가해 support source adapter schema, runtime registration fixture, exact organization binding, adapter 참조와 지원 contract version을 검증한다.
