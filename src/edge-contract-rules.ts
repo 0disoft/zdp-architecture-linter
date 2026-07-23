@@ -117,6 +117,13 @@ const REQUIRED_ANALYTICS_FORBIDDEN_DECISIONS = [
   'consent truth'
 ] as const;
 
+const REQUIRED_ANALYTICS_ACTIVATION_GATES = [
+  'configured Cloudflare Queue producer binding',
+  'successful producer send',
+  'downstream queue consumer',
+  'durable downstream idempotency and conflict handling'
+] as const;
+
 export async function validateRepositoryEdgeContract(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
@@ -413,6 +420,29 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
     ...validateExactValue({
       value,
       file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.runtime_activation.status',
+      expected: 'blocked',
+      message:
+        'Edge analytics ingress runtime must remain blocked until producer and consumer durability are implemented.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.runtime_activation.current_response_status',
+      expected: 503,
+      message:
+        'Edge analytics ingress must fail closed with 503 before durable queue handoff activation.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.runtime_activation.accepted_response_requires',
+      field: 'analytics_ingress.runtime_activation.accepted_response_requires',
+      requiredEntries: REQUIRED_ANALYTICS_ACTIVATION_GATES
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
       path: 'analytics_ingress.direct_clickhouse_write',
       expected: 'forbidden',
       message:
@@ -467,7 +497,8 @@ function validateAnalyticsTestSurface(source: string): readonly Diagnostic[] {
     file: EDGE_APP_TEST_FILE,
     source,
     requiredFragments: [
-      'accepts an allowlisted analytics event and builds a queue handoff envelope',
+      'fails closed for an allowlisted analytics event until durable queue handoff exists',
+      'analytics_queue_unavailable',
       'rejects analytics events with schema_version that data runtime will reject',
       'rejects analytics events whose idempotency key would fail data runtime consistency',
       'invalid_schema_version',

@@ -295,6 +295,14 @@ analytics_ingress:
           ruleId: 'ZDP-EDGE-001',
           severity: 'error',
           file: 'contracts/analytics-ingress.yaml',
+          path: 'analytics_ingress.runtime_activation.current_response_status',
+          message:
+            'Edge analytics ingress must fail closed with 503 before durable queue handoff activation.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-EDGE-001',
+          severity: 'error',
+          file: 'contracts/analytics-ingress.yaml',
           path: 'analytics_ingress.direct_clickhouse_write',
           message:
             'Edge analytics ingress must forbid direct ClickHouse writes.'
@@ -482,6 +490,14 @@ analytics_ingress:
     queue: analytics-events
     dead_letter_queue: analytics-events-dlq
     runtime_validator: zdp-data-platform/src/analytics-ingest/runtime.ts
+  runtime_activation:
+    status: blocked
+    current_response_status: 503
+    accepted_response_requires:
+      - configured Cloudflare Queue producer binding
+      - successful producer send
+      - downstream queue consumer
+      - durable downstream idempotency and conflict handling
   direct_clickhouse_write: forbidden
   final_truth_owner: zdp-data-platform
   forbidden_in_logs:
@@ -522,7 +538,8 @@ export function precheckAnalyticsIngress(input: { payload: { schema_version: unk
 `,
     'tests/app.test.ts': `
 const tests = [
-  'accepts an allowlisted analytics event and builds a queue handoff envelope',
+  'fails closed for an allowlisted analytics event until durable queue handoff exists',
+  'analytics_queue_unavailable',
   'rejects analytics events with schema_version that data runtime will reject',
   'rejects analytics events whose idempotency key would fail data runtime consistency',
   'invalid_schema_version',
