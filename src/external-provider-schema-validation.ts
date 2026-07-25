@@ -1,9 +1,8 @@
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import Ajv2020 from 'ajv/dist/2020.js';
-import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 import type { ExternalProvidersCatalog } from './catalog-loader.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import { compileJsonSchemaFile } from './json-schema-validator-cache.ts';
 
 const EXTERNAL_PROVIDER_SCHEMA_FILE = 'schemas/external-provider.schema.json';
 const EXTERNAL_PROVIDER_CATALOG_FILE = 'catalogs/external-providers.yaml';
@@ -35,17 +34,9 @@ export async function validateExternalProviderCatalogSchema(input: {
 async function compileExternalProviderSchema(
   architectureRoot: string
 ): Promise<ValidateFunction> {
-  const source = await readFile(
-    join(architectureRoot, EXTERNAL_PROVIDER_SCHEMA_FILE),
-    'utf8'
-  );
-  const schema = JSON.parse(source) as AnySchema;
-  const ajv = new Ajv2020({
-    allErrors: true,
-    strict: false
+  return compileJsonSchemaFile({
+    absolutePath: join(architectureRoot, EXTERNAL_PROVIDER_SCHEMA_FILE)
   });
-
-  return ajv.compile(schema);
 }
 
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {

@@ -3,6 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
 import type { Diagnostic } from './diagnostics.ts';
+import { compileJsonSchemaFile } from './json-schema-validator-cache.ts';
 
 const EVENT_SCHEMA_FILE = 'schemas/event.schema.json';
 const EVENT_CATALOG_FILE = 'catalogs/events.yaml';
@@ -81,14 +82,9 @@ export async function validateEventSchemaReferences(input: {
 async function compileEventSchema(
   architectureRoot: string
 ): Promise<ValidateFunction> {
-  const source = await readFile(join(architectureRoot, EVENT_SCHEMA_FILE), 'utf8');
-  const schema = JSON.parse(source) as AnySchema;
-  const ajv = new Ajv2020({
-    allErrors: true,
-    strict: false
+  return compileJsonSchemaFile({
+    absolutePath: join(architectureRoot, EVENT_SCHEMA_FILE)
   });
-
-  return ajv.compile(schema);
 }
 
 function validateSchemaRefPath(

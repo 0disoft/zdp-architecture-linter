@@ -1,6 +1,6 @@
 {
   "name": "@zdp/architecture-linter",
-  "version": "0.39.135",
+  "version": "0.39.136",
   "private": true,
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "check:tsgo": "tsgo --noEmit",
+    "profile:validation": "bun scripts/profile-validation-performance.ts",
     "test": "bun test",
     "validate:architecture": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture",
     "validate:self": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture --repository ."

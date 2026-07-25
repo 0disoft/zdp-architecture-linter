@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.136
+
+- architecture catalog 입력 20개를 동시에 읽되 실패 시 기존 canonical file order의 첫 오류를 유지하도록 loader를 개선했다.
+- JSON Schema source가 동일할 때 compiled AJV validator를 재사용하고, 같은 경로의 source 변경은 즉시 재컴파일하는 64-entry bounded cache와 성능 계측 intent를 추가했다.
+
 ## 0.39.135
 
 - core, privacy, money, connectors, credential-vault, runtime 규칙의 record/path/repository/error primitive를 공용 contract value helper로 통합하고 기존 `service.repo` 및 `ENOENT` 의미를 회귀 테스트로 고정했다.

@@ -10,6 +10,8 @@ Status: Active
 | --- | --- | --- |
 | `typecheck` | TypeScript 소스 타입 검증 | `zdp_architecture_linter_typecheck` |
 | `full-test` | 전체 Bun test suite | `zdp_architecture_linter_full_test` |
+| `validation-performance-profile` | catalog load와 schema validation의 cold/warm 로컬 시간 계측 | `zdp_architecture_linter_profile_validation_performance` |
+| `validation-performance-test` | catalog 병렬 load 오류 순서와 schema cache 무효화 집중 검증 | `zdp_architecture_linter_performance_regression_test` |
 | `self-architecture-validation` | 이 저장소 루트가 중앙 아키텍처 정책을 통과하는지 확인 | `zdp_architecture_validate_architecture_linter_repository` |
 | `architecture-fast-validation` | 중앙 `zdp-architecture` 전체 카탈로그/계약 빠른 검증 | `zdp_architecture_validate_fast` |
 | `registry-check` | 생성 registry가 현재 원천과 일치하는지 확인 | `zdp_architecture_registry_check` |
@@ -25,6 +27,7 @@ Status: Active
 
 - 문서 라우터나 agent instruction만 바뀌면 `self-architecture-validation`을 우선 실행하고, root 문서 정책이 바뀌었으면 `architecture-fast-validation`도 실행한다.
 - TypeScript 구현만 바뀌면 `typecheck`와 변경 영역의 focused rules test를 먼저 실행한다.
+- catalog load나 schema compile/cache 경계가 바뀌면 `validation-performance-test`를 실행하고, 최적화 전후 비교가 필요할 때 같은 호스트에서 `validation-performance-profile`을 실행한다.
 - 새 규칙 ID, 진단 조건, fixture expectation, CLI 출력이 바뀌면 `full-test`까지 실행한다.
 - `generated/registry.json`을 갱신하거나 registry 출력 계약이 바뀌면 `registry-check`를 실행한다.
 - release, package metadata, public CLI contract가 바뀌면 `full-test`, `self-architecture-validation`, package surface 검증 가능 여부를 함께 보고한다.

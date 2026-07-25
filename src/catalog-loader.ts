@@ -112,89 +112,130 @@ export interface TokenRulesCatalog {
 export async function loadArchitectureCatalogs(
   architectureRoot: string
 ): Promise<ArchitectureCatalogs> {
-  return {
-    repositories: await loadYamlFile<RepositoriesCatalog>(
+  const [
+    repositories,
+    splitTriggers,
+    repositoryRoadmap,
+    extendedRoadmap,
+    services,
+    datastores,
+    dataClasses,
+    costBudgets,
+    sloTiers,
+    events,
+    externalProviders,
+    supportSourceAdapters,
+    repositoryRules,
+    moneyRules,
+    providerRules,
+    aiDataAccessRules,
+    dataAccessRules,
+    tierRules,
+    apiRules,
+    tokenRules
+  ] = await settleInCanonicalOrder([
+    loadYamlFile<RepositoriesCatalog>(
       architectureRoot,
       'catalogs/repositories.yaml'
     ),
-    splitTriggers: await loadOptionalYamlFile<SplitTriggersCatalog>(
+    loadOptionalYamlFile<SplitTriggersCatalog>(
       architectureRoot,
       'catalogs/split-triggers.yaml',
       { split_triggers: [] }
     ),
-    repositoryRoadmapText: [
-      await loadTextFile(architectureRoot, 'ROADMAP.md'),
-      await loadTextFile(architectureRoot, 'docs/26-eighteen-month-roadmap.md')
-    ].join('\n'),
-    services: await loadYamlFile<ServicesCatalog>(
-      architectureRoot,
-      'catalogs/services.yaml'
-    ),
-    datastores: await loadYamlFile<DatastoresCatalog>(
+    loadTextFile(architectureRoot, 'ROADMAP.md'),
+    loadTextFile(architectureRoot, 'docs/26-eighteen-month-roadmap.md'),
+    loadYamlFile<ServicesCatalog>(architectureRoot, 'catalogs/services.yaml'),
+    loadYamlFile<DatastoresCatalog>(
       architectureRoot,
       'catalogs/datastores.yaml'
     ),
-    dataClasses: await loadYamlFile<DataClassesCatalog>(
+    loadYamlFile<DataClassesCatalog>(
       architectureRoot,
       'catalogs/data-classes.yaml'
     ),
-    costBudgets: await loadYamlFile<CostBudgetsCatalog>(
+    loadYamlFile<CostBudgetsCatalog>(
       architectureRoot,
       'catalogs/cost-budgets.yaml'
     ),
-    sloTiers: await loadYamlFile<SloTiersCatalog>(
-      architectureRoot,
-      'catalogs/slo-tiers.yaml'
-    ),
-    events: await loadYamlFile<EventsCatalog>(
-      architectureRoot,
-      'catalogs/events.yaml'
-    ),
-    externalProviders: await loadYamlFile<ExternalProvidersCatalog>(
+    loadYamlFile<SloTiersCatalog>(architectureRoot, 'catalogs/slo-tiers.yaml'),
+    loadYamlFile<EventsCatalog>(architectureRoot, 'catalogs/events.yaml'),
+    loadYamlFile<ExternalProvidersCatalog>(
       architectureRoot,
       'catalogs/external-providers.yaml'
     ),
-    supportSourceAdapters:
-      await loadOptionalYamlFile<SupportSourceAdaptersCatalog | undefined>(
-        architectureRoot,
-        'catalogs/support-source-adapters.yaml',
-        undefined
-      ),
-    repositoryRules: await loadYamlFile<RepositoryRulesCatalog>(
+    loadOptionalYamlFile<SupportSourceAdaptersCatalog | undefined>(
+      architectureRoot,
+      'catalogs/support-source-adapters.yaml',
+      undefined
+    ),
+    loadYamlFile<RepositoryRulesCatalog>(
       architectureRoot,
       'rules/repository.rules.yaml'
     ),
-    moneyRules: await loadYamlFile<MoneyRulesCatalog>(
-      architectureRoot,
-      'rules/money.rules.yaml'
-    ),
-    providerRules: await loadYamlFile<ProviderRulesCatalog>(
+    loadYamlFile<MoneyRulesCatalog>(architectureRoot, 'rules/money.rules.yaml'),
+    loadYamlFile<ProviderRulesCatalog>(
       architectureRoot,
       'rules/provider.rules.yaml'
     ),
-    aiDataAccessRules: await loadYamlFile<AiDataAccessRulesCatalog>(
+    loadYamlFile<AiDataAccessRulesCatalog>(
       architectureRoot,
       'rules/ai-data-access.rules.yaml'
     ),
-    dataAccessRules: await loadYamlFile<DataAccessRulesCatalog>(
+    loadYamlFile<DataAccessRulesCatalog>(
       architectureRoot,
       'rules/data-access.rules.yaml'
     ),
-    tierRules: await loadYamlFile<TierRulesCatalog>(
-      architectureRoot,
-      'rules/tier.rules.yaml'
-    ),
-    apiRules: await loadOptionalYamlFile<ApiRulesCatalog | undefined>(
+    loadYamlFile<TierRulesCatalog>(architectureRoot, 'rules/tier.rules.yaml'),
+    loadOptionalYamlFile<ApiRulesCatalog | undefined>(
       architectureRoot,
       'rules/api.rules.yaml',
       undefined
     ),
-    tokenRules: await loadOptionalYamlFile<TokenRulesCatalog | undefined>(
+    loadOptionalYamlFile<TokenRulesCatalog | undefined>(
       architectureRoot,
       'rules/token.rules.yaml',
       undefined
     )
+  ] as const);
+
+  return {
+    repositories,
+    splitTriggers,
+    repositoryRoadmapText: [repositoryRoadmap, extendedRoadmap].join('\n'),
+    services,
+    datastores,
+    dataClasses,
+    costBudgets,
+    sloTiers,
+    events,
+    externalProviders,
+    supportSourceAdapters,
+    repositoryRules,
+    moneyRules,
+    providerRules,
+    aiDataAccessRules,
+    dataAccessRules,
+    tierRules,
+    apiRules,
+    tokenRules
   };
+}
+
+async function settleInCanonicalOrder<const T extends readonly unknown[]>(
+  promises: { readonly [Index in keyof T]: Promise<T[Index]> }
+): Promise<T> {
+  const results = await Promise.allSettled(promises);
+
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      throw result.reason;
+    }
+  }
+
+  return results.map((result) =>
+    result.status === 'fulfilled' ? result.value : undefined
+  ) as unknown as T;
 }
 
 async function loadYamlFile<T>(root: string, relativePath: string): Promise<T> {

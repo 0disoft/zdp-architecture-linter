@@ -1,10 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import Ajv2020 from 'ajv/dist/2020.js';
-import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 import { parse } from 'yaml';
 import type { SupportSourceAdaptersCatalog } from './catalog-loader.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import { compileJsonSchemaFile } from './json-schema-validator-cache.ts';
 
 const CATALOG_FILE = 'catalogs/support-source-adapters.yaml';
 const CATALOG_SCHEMA_FILE = 'schemas/support-source-adapter.schema.json';
@@ -149,10 +149,9 @@ async function compileSchema(
   architectureRoot: string,
   relativePath: string
 ): Promise<ValidateFunction> {
-  const schema = JSON.parse(
-    await readFile(join(architectureRoot, relativePath), 'utf8')
-  ) as AnySchema;
-  return new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  return compileJsonSchemaFile({
+    absolutePath: join(architectureRoot, relativePath)
+  });
 }
 
 function validateSchemaValue(input: {

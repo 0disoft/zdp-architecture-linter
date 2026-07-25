@@ -1,9 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import Ajv2020 from 'ajv/dist/2020.js';
-import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import { compileJsonSchemaFile } from './json-schema-validator-cache.ts';
 
 const SERVICE_SCHEMA_FILE = 'schemas/service.schema.json';
 const SERVICE_CONTRACT_FILE = 'service.yaml';
@@ -95,14 +95,9 @@ export async function loadRepositoryServiceContract(
 async function compileServiceSchema(
   architectureRoot: string
 ): Promise<ValidateFunction> {
-  const source = await readFile(join(architectureRoot, SERVICE_SCHEMA_FILE), 'utf8');
-  const schema = JSON.parse(source) as AnySchema;
-  const ajv = new Ajv2020({
-    allErrors: true,
-    strict: false
+  return compileJsonSchemaFile({
+    absolutePath: join(architectureRoot, SERVICE_SCHEMA_FILE)
   });
-
-  return ajv.compile(schema);
 }
 
 async function loadServiceSchemaFixtures(

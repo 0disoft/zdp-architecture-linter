@@ -1,9 +1,8 @@
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import Ajv2020 from 'ajv/dist/2020.js';
-import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
+import type { ErrorObject, ValidateFunction } from 'ajv';
 import type { RepositoriesCatalog } from './catalog-loader.ts';
 import type { Diagnostic } from './diagnostics.ts';
+import { compileJsonSchemaFile } from './json-schema-validator-cache.ts';
 
 const REPOSITORY_SCHEMA_FILE = 'schemas/repository.schema.json';
 const REPOSITORY_CATALOG_FILE = 'catalogs/repositories.yaml';
@@ -34,14 +33,9 @@ export async function validateRepositoryCatalogSchema(input: {
 async function compileRepositorySchema(
   architectureRoot: string
 ): Promise<ValidateFunction> {
-  const source = await readFile(join(architectureRoot, REPOSITORY_SCHEMA_FILE), 'utf8');
-  const schema = JSON.parse(source) as AnySchema;
-  const ajv = new Ajv2020({
-    allErrors: true,
-    strict: false
+  return compileJsonSchemaFile({
+    absolutePath: join(architectureRoot, REPOSITORY_SCHEMA_FILE)
   });
-
-  return ajv.compile(schema);
 }
 
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {
