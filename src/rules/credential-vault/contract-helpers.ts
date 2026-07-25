@@ -1,8 +1,25 @@
 import type { Diagnostic } from '../../diagnostics.ts';
 import {
+  formatError,
+  isMissingPathError,
+  isRecord,
+  readPath,
+  readRepositoryName,
+  readStringField
+} from '../../contract-value-helpers.ts';
+import {
   extractTestCallNames,
   stripCommentsAndStringLiterals
 } from '../../source-proof.ts';
+
+export {
+  formatError,
+  isMissingPathError,
+  isRecord,
+  readPath,
+  readRepositoryName,
+  readStringField
+} from '../../contract-value-helpers.ts';
 
 export const CREDENTIAL_VAULT_REPOSITORY_NAME =
   'zdp-privacy-credential-vault';
@@ -271,14 +288,6 @@ export function readRustNumberConstant(
   return Number.isSafeInteger(value) ? value : undefined;
 }
 
-export function readRepositoryName(value: unknown): string | null {
-  if (!isRecord(value) || !isRecord(value.service)) {
-    return null;
-  }
-
-  return readStringField(value.service, 'repo');
-}
-
 export function readRecordArrayPath(
   value: unknown,
   path: string
@@ -307,31 +316,6 @@ export function readStringArrayPath(
   );
 }
 
-export function readPath(value: unknown, path: string): unknown {
-  let current = value;
-
-  for (const segment of path.split('.')) {
-    if (!isRecord(current)) {
-      return undefined;
-    }
-
-    current = current[segment];
-  }
-
-  return current;
-}
-
-export function readStringField(
-  value: Record<string, unknown>,
-  field: string
-): string | null {
-  const candidate = value[field];
-
-  return typeof candidate === 'string' && candidate.trim().length > 0
-    ? candidate.trim()
-    : null;
-}
-
 export function createCredentialDiagnostic(
   file: string,
   path: string,
@@ -346,21 +330,6 @@ export function createCredentialDiagnostic(
   };
 }
 
-export function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function isMissingPathError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    (error as NodeJS.ErrnoException).code === 'ENOENT'
-  );
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function validateStringArrayItems(input: {
   readonly value: unknown;

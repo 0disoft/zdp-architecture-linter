@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.135
+
+- core, privacy, money, connectors, credential-vault, runtime 규칙의 record/path/repository/error primitive를 공용 contract value helper로 통합하고 기존 `service.repo` 및 `ENOENT` 의미를 회귀 테스트로 고정했다.
+- `ZDP-EDGE-001`이 analytics queue producer와 durable consumer/dedup 활성화 전 `/v1/events`의 retryable 503 fail-closed 계약을 요구하도록 동기화했다.
+
 ## 0.39.134
 
 - architecture workflow가 고정한 linter SHA와 로컬 검증기 HEAD가 다르면 validation 전에 실패하는 pinned-linter 검증 경로를 추가했다.
