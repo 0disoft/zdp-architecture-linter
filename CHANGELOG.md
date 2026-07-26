@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.137
+
+- `zdp-web-public`의 용어집 계약을 활성 상태와 휴면 상태로 나눠, 실제 공개 용어가 없을 때 빈 원천·생성기·런타임 UI를 강제하지 않도록 했다.
+- 휴면 상태에서는 공용 용어집의 무차별 번들링과 glossary provider CI checkout을 금지하고, 실제 콘텐츠의 안정적인 `term_id` allowlist를 통한 재활성화 계약을 검사한다.
+
 ## 0.39.136
 
 - architecture catalog 입력 20개를 동시에 읽되 실패 시 기존 canonical file order의 첫 오류를 유지하도록 loader를 개선했다.

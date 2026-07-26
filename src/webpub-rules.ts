@@ -7,7 +7,10 @@ const WEBPUB_CONTRACT_RULE_ID = 'ZDP-WEBPUB-001';
 const WEB_PUBLIC_REPOSITORY_NAME = 'zdp-web-public';
 
 const REQUIRED_WEB_PUBLIC_FILES = [
-  'scripts/check-localization.ts',
+  'scripts/check-localization.ts'
+] as const;
+
+const ACTIVE_WEB_PUBLIC_GLOSSARY_FILES = [
   'scripts/check-glossary.ts',
   'scripts/generate-glossary.ts',
   'scripts/glossary-build.ts',
@@ -17,11 +20,7 @@ const REQUIRED_WEB_PUBLIC_FILES = [
 
 const WEB_PUBLIC_OPERATIONAL_GATE_TRIGGER_FILES = [
   'package.json',
-  'scripts/check-localization.ts',
-  'scripts/check-glossary.ts',
-  'scripts/generate-glossary.ts',
-  'scripts/glossary-build.ts',
-  'src/content/glossary-manifest.json'
+  'scripts/check-localization.ts'
 ] as const;
 
 const REQUIRED_LOCALIZATION_CHECK_SNIPPETS = [
@@ -62,13 +61,21 @@ const REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS = [
   'bun run check:localization passes with catalog diagnostics 0 and production fallback count 0',
   'bun run check:localization runs zdp-platform-localization catalog check and strict production compile',
   'fallback messages are not allowed',
-  'zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed',
-  'home hero localization dogfood only; keep static Astro copy rollback available before expanding to more public copy',
   'feature_flag_required":false',
-  'The first zdp-platform-localization product canary is intentionally limited to the home hero title and CTA messages',
+  'The zdp-platform-localization home catalog remains build-verified but is not rendered while the site is an empty shell',
+  'New public copy requires a fresh information-architecture and content review before localization adoption expands',
   'Static Astro copy remains the rollback boundary for the localization canary, so this static public site does not require a runtime feature flag',
+] as const;
+
+const REQUIRED_ACTIVE_WEB_PUBLIC_GLOSSARY_SERVICE_SNIPPETS = [
   'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check',
   'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract'
+] as const;
+
+const REQUIRED_DORMANT_WEB_PUBLIC_GLOSSARY_SERVICE_SNIPPETS = [
+  'Glossary consumption stays disabled while this repository has no approved public content terms',
+  'the common zdp-libs-ts glossary is not bundled wholesale',
+  'Glossary reactivation requires a real-content stable term_id allowlist'
 ] as const;
 
 const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
@@ -78,14 +85,17 @@ const REQUIRED_WEB_PUBLIC_CI_SNIPPETS = [
   'repository: 0disoft/zdp-platform-localization',
   'secrets.ZDP_CI_READ_TOKEN || github.token',
   'path: projects/zdp-platforms/platform/zdp-platform-localization',
-  'repository: 0disoft/zdp-platform-devex',
-  'path: projects/zdp-platforms/platform/zdp-platform-devex',
-  'repository: 0disoft/zdp-libs-ts',
-  'path: projects/zdp-platforms/contracts/zdp-libs-ts',
   'bun install --frozen-lockfile',
   'bun install --no-save',
   'bun run check',
   'bun run build'
+] as const;
+
+const REQUIRED_ACTIVE_WEB_PUBLIC_GLOSSARY_CI_SNIPPETS = [
+  'repository: 0disoft/zdp-platform-devex',
+  'path: projects/zdp-platforms/platform/zdp-platform-devex',
+  'repository: 0disoft/zdp-libs-ts',
+  'path: projects/zdp-platforms/contracts/zdp-libs-ts'
 ] as const;
 
 const FORBIDDEN_WEB_PUBLIC_CI_SNIPPETS = [
@@ -94,11 +104,17 @@ const FORBIDDEN_WEB_PUBLIC_CI_SNIPPETS = [
   'bun run package:build'
 ] as const;
 
+const FORBIDDEN_DORMANT_WEB_PUBLIC_GLOSSARY_CI_SNIPPETS = [
+  'repository: 0disoft/zdp-platform-devex',
+  'path: projects/zdp-platforms/platform/zdp-platform-devex',
+  'repository: 0disoft/zdp-libs-ts',
+  'path: projects/zdp-platforms/contracts/zdp-libs-ts'
+] as const;
+
 const WEB_PUBLIC_OPERATIONAL_GATE_SERVICE_TRIGGER_SNIPPETS = [
   'bun run check:localization passes with catalog diagnostics 0 and production fallback count 0',
   'bun run check:localization runs zdp-platform-localization catalog check and strict production compile',
-  'fallback messages are not allowed',
-  'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check'
+  'fallback messages are not allowed'
 ] as const;
 
 interface WebpubContract {
@@ -426,6 +442,7 @@ async function validateWebPublicOperationalGates(
   repositoryServiceContract: unknown
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
+  const glossaryDormant = isWebPublicGlossaryDormant(repositoryServiceContract);
 
   for (const file of REQUIRED_WEB_PUBLIC_FILES) {
     const source = await readOptionalTextFile(repositoryRoot, file);
@@ -441,7 +458,7 @@ async function validateWebPublicOperationalGates(
     }
   }
 
-  diagnostics.push(...(await validateWebPublicPackageScripts(repositoryRoot)));
+  diagnostics.push(...(await validateWebPublicPackageScripts(repositoryRoot, glossaryDormant)));
   diagnostics.push(
     ...(await validateRequiredSourceSnippets({
       repositoryRoot,
@@ -452,26 +469,41 @@ async function validateWebPublicOperationalGates(
         'zdp-web-public localization check must prove strict production compile and zero fallback messages'
     }))
   );
-  diagnostics.push(
-    ...(await validateRequiredSourceSnippets({
-      repositoryRoot,
-      file: 'scripts/check-glossary.ts',
-      path: 'scripts.check-glossary',
-      snippets: REQUIRED_GLOSSARY_CHECK_SNIPPETS,
-      description:
-        'zdp-web-public glossary check must fail on stale generated runtime manifests'
-    }))
-  );
-  diagnostics.push(
-    ...(await validateRequiredSourceSnippets({
-      repositoryRoot,
-      file: 'scripts/glossary-build.ts',
-      path: 'scripts.glossary-build',
-      snippets: REQUIRED_GLOSSARY_BUILD_SNIPPETS,
-      description:
-        'zdp-web-public glossary builder must preserve reviewed public terms, click-open Term Sheet placement, and hover-ad exclusion'
-    }))
-  );
+  if (glossaryDormant) {
+    diagnostics.push(...(await validateDormantWebPublicGlossary(repositoryRoot)));
+  } else {
+    for (const file of ACTIVE_WEB_PUBLIC_GLOSSARY_FILES) {
+      const source = await readOptionalTextFile(repositoryRoot, file);
+      if (source === null) {
+        diagnostics.push(
+          createWebpubDiagnostic(
+            file,
+            'repository.root',
+            `zdp-web-public must include \`${file}\` when glossary consumption is active.`
+          )
+        );
+      }
+    }
+
+    diagnostics.push(
+      ...(await validateRequiredSourceSnippets({
+        repositoryRoot,
+        file: 'scripts/check-glossary.ts',
+        path: 'scripts.check-glossary',
+        snippets: REQUIRED_GLOSSARY_CHECK_SNIPPETS,
+        description:
+          'zdp-web-public glossary check must fail on stale generated runtime manifests'
+      })),
+      ...(await validateRequiredSourceSnippets({
+        repositoryRoot,
+        file: 'scripts/glossary-build.ts',
+        path: 'scripts.glossary-build',
+        snippets: REQUIRED_GLOSSARY_BUILD_SNIPPETS,
+        description:
+          'zdp-web-public glossary builder must preserve reviewed public terms, click-open Term Sheet placement, and hover-ad exclusion'
+      }))
+    );
+  }
   diagnostics.push(
     ...validateTextIncludes({
       source: stringify(repositoryServiceContract),
@@ -479,7 +511,20 @@ async function validateWebPublicOperationalGates(
       path: 'service.contract',
       snippets: REQUIRED_WEB_PUBLIC_SERVICE_SNIPPETS,
       description:
-        'zdp-web-public service contract must document localization and glossary gates'
+        'zdp-web-public service contract must document localization gates'
+    })
+  );
+  diagnostics.push(
+    ...validateTextIncludes({
+      source: stringify(repositoryServiceContract),
+      file: 'service.yaml',
+      path: 'service.contract',
+      snippets: glossaryDormant
+        ? REQUIRED_DORMANT_WEB_PUBLIC_GLOSSARY_SERVICE_SNIPPETS
+        : REQUIRED_ACTIVE_WEB_PUBLIC_GLOSSARY_SERVICE_SNIPPETS,
+      description: glossaryDormant
+        ? 'zdp-web-public service contract must document dormant glossary and allowlist-first reactivation'
+        : 'zdp-web-public service contract must document active glossary freshness and Sheet gates'
     })
   );
   diagnostics.push(
@@ -494,6 +539,17 @@ async function validateWebPublicOperationalGates(
   );
   const ciSource = await readOptionalTextFile(repositoryRoot, '.github/workflows/ci.yml');
   if (ciSource !== null) {
+    if (!glossaryDormant) {
+      diagnostics.push(...validateTextIncludes({
+        source: ciSource,
+        file: '.github/workflows/ci.yml',
+        path: 'github.workflow.ci',
+        snippets: REQUIRED_ACTIVE_WEB_PUBLIC_GLOSSARY_CI_SNIPPETS,
+        description:
+          'zdp-web-public CI must checkout glossary contract providers while glossary consumption is active'
+      }));
+    }
+
     const actionReferences = [...ciSource.matchAll(/^\s*(?:-\s+)?uses:\s+([^\s#]+)/gm)].map(
       (match) => match[1]
     );
@@ -530,13 +586,26 @@ async function validateWebPublicOperationalGates(
         ));
       }
     }
+
+    if (glossaryDormant) {
+      for (const snippet of FORBIDDEN_DORMANT_WEB_PUBLIC_GLOSSARY_CI_SNIPPETS) {
+        if (ciSource.includes(snippet)) {
+          diagnostics.push(createWebpubDiagnostic(
+            '.github/workflows/ci.yml',
+            'github.workflow.ci',
+            `zdp-web-public CI must not checkout glossary providers while glossary consumption is dormant; remove \`${snippet}\`.`
+          ));
+        }
+      }
+    }
   }
 
   return diagnostics;
 }
 
 async function validateWebPublicPackageScripts(
-  repositoryRoot: string
+  repositoryRoot: string,
+  glossaryDormant: boolean
 ): Promise<readonly Diagnostic[]> {
   const source = await readOptionalTextFile(repositoryRoot, 'package.json');
 
@@ -568,9 +637,13 @@ async function validateWebPublicPackageScripts(
   const diagnostics: Diagnostic[] = [];
 
   const requiredScripts: Readonly<Record<string, string>> = {
-    'check:glossary': 'bun scripts/check-glossary.ts',
     'check:localization': 'bun scripts/check-localization.ts',
-    'glossary:generate': 'bun scripts/generate-glossary.ts'
+    ...(glossaryDormant
+      ? {}
+      : {
+          'check:glossary': 'bun scripts/check-glossary.ts',
+          'glossary:generate': 'bun scripts/generate-glossary.ts'
+        })
   };
 
   for (const [scriptName, expected] of Object.entries(requiredScripts)) {
@@ -599,12 +672,22 @@ async function validateWebPublicPackageScripts(
       )
     );
   } else {
-    if (!checkScript.startsWith('bun run check:glossary &&')) {
+    if (!glossaryDormant && !checkScript.startsWith('bun run check:glossary &&')) {
       diagnostics.push(
         createWebpubDiagnostic(
           'package.json',
           'scripts.check',
           '`check` must run `bun run check:glossary` first so stale glossary manifests fail before generated output can hide drift.'
+        )
+      );
+    }
+
+    if (glossaryDormant && checkScript.includes('check:glossary')) {
+      diagnostics.push(
+        createWebpubDiagnostic(
+          'package.json',
+          'scripts.check',
+          '`check` must not run `check:glossary` while glossary consumption is dormant.'
         )
       );
     }
@@ -635,6 +718,45 @@ async function validateWebPublicPackageScripts(
     }
   }
 
+  if (glossaryDormant) {
+    for (const [scriptName, command] of Object.entries(scripts)) {
+      if (scriptName.includes('glossary') || (typeof command === 'string' && command.includes('glossary'))) {
+        diagnostics.push(
+          createWebpubDiagnostic(
+            'package.json',
+            `scripts.${scriptName}`,
+            `zdp-web-public must not declare glossary script \`${scriptName}\` while glossary consumption is dormant.`
+          )
+        );
+      }
+    }
+  }
+
+  return diagnostics;
+}
+
+function isWebPublicGlossaryDormant(repositoryServiceContract: unknown): boolean {
+  const source = stringify(repositoryServiceContract);
+  return REQUIRED_DORMANT_WEB_PUBLIC_GLOSSARY_SERVICE_SNIPPETS.every((snippet) =>
+    source.includes(snippet)
+  );
+}
+
+async function validateDormantWebPublicGlossary(
+  repositoryRoot: string
+): Promise<readonly Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  for (const file of ACTIVE_WEB_PUBLIC_GLOSSARY_FILES) {
+    if ((await readOptionalTextFile(repositoryRoot, file)) !== null) {
+      diagnostics.push(
+        createWebpubDiagnostic(
+          file,
+          'repository.root',
+          `zdp-web-public must remove \`${file}\` while glossary consumption is dormant.`
+        )
+      );
+    }
+  }
   return diagnostics;
 }
 

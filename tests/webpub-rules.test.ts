@@ -19,6 +19,44 @@ describe('webpub publishing contract rules', () => {
     );
   });
 
+  test('passes when zdp-web-public keeps glossary consumption dormant without runtime artifacts', async () => {
+    await withRepositoryRoot(
+      createValidPublicWebRepositoryFiles({ glossaryDormant: true }),
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryWebpubContract({
+          repositoryRoot,
+          repositoryServiceContract: createPublicWebServiceContract({ glossaryDormant: true })
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('rejects glossary runtime residue while zdp-web-public declares dormant consumption', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidPublicWebRepositoryFiles({ glossaryDormant: true }),
+        'scripts/check-glossary.ts': 'console.log("stale glossary runtime");\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryWebpubContract({
+          repositoryRoot,
+          repositoryServiceContract: createPublicWebServiceContract({ glossaryDormant: true })
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-WEBPUB-001',
+          severity: 'error',
+          file: 'scripts/check-glossary.ts',
+          path: 'repository.root',
+          message:
+            'zdp-web-public must remove `scripts/check-glossary.ts` while glossary consumption is dormant.'
+        });
+      }
+    );
+  });
+
   test('passes a root-only zdp-web-public scaffold before app operational gates are declared', async () => {
     await withRepositoryRoot(
       {
@@ -322,7 +360,7 @@ domain_status = candidate
         file: 'service.yaml',
         path: 'service.contract',
         message:
-          'zdp-web-public service contract must document localization and glossary gates; missing `fallback messages are not allowed`.'
+          'zdp-web-public service contract must document localization gates; missing `fallback messages are not allowed`.'
       });
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-WEBPUB-001',
@@ -330,7 +368,7 @@ domain_status = candidate
         file: 'service.yaml',
         path: 'service.contract',
         message:
-          'zdp-web-public service contract must document localization and glossary gates; missing `Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract`.'
+          'zdp-web-public service contract must document active glossary freshness and Sheet gates; missing `Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract`.'
       });
     });
   });
@@ -350,7 +388,7 @@ domain_status = candidate
         file: 'service.yaml',
         path: 'service.contract',
         message:
-          'zdp-web-public service contract must document localization and glossary gates; missing `zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed`.'
+          'zdp-web-public service contract must document localization gates; missing `The zdp-platform-localization home catalog remains build-verified but is not rendered while the site is an empty shell`.'
       });
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-WEBPUB-001',
@@ -358,7 +396,7 @@ domain_status = candidate
         file: 'service.yaml',
         path: 'service.contract',
         message:
-          'zdp-web-public service contract must document localization and glossary gates; missing `feature_flag_required":false`.'
+          'zdp-web-public service contract must document localization gates; missing `feature_flag_required":false`.'
       });
     });
   });
@@ -471,17 +509,25 @@ async function withRepositoryRoot(
   }
 }
 
-function createValidPublicWebRepositoryFiles(): Record<string, string> {
+function createValidPublicWebRepositoryFiles(
+  options: { readonly glossaryDormant?: boolean } = {}
+): Record<string, string> {
+  const glossaryDormant = options.glossaryDormant ?? false;
   return {
     'webpub.toml': createValidWebpubToml(),
     'package.json': JSON.stringify(
       {
         scripts: {
-          check:
-            'bun run check:glossary && astro check && bun run check:localization && bun run check:discovery',
-          'check:glossary': 'bun scripts/check-glossary.ts',
+          check: glossaryDormant
+            ? 'astro check && bun run check:localization && bun run check:discovery'
+            : 'bun run check:glossary && astro check && bun run check:localization && bun run check:discovery',
           'check:localization': 'bun scripts/check-localization.ts',
-          'glossary:generate': 'bun scripts/generate-glossary.ts'
+          ...(glossaryDormant
+            ? {}
+            : {
+                'check:glossary': 'bun scripts/check-glossary.ts',
+                'glossary:generate': 'bun scripts/generate-glossary.ts'
+              })
         }
       },
       null,
@@ -496,33 +542,37 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       'if (fallbackCount !== 0) throw new Error(format + compileCommand + strict + totals);',
       'if (manifestFallbackCount !== 0) throw new Error("fallback");'
     ].join('\n'),
-    'scripts/check-glossary.ts': [
-      'import { buildRuntimeGlossaryManifest, GLOSSARY_RUNTIME_MANIFEST_PATH } from "./glossary-build";',
-      'const result = await buildRuntimeGlossaryManifest(".");',
-      'const stale = "is stale";',
-      'const hint = "Run bun run glossary:generate";',
-      'console.log("Glossary check passed", result, GLOSSARY_RUNTIME_MANIFEST_PATH, stale, hint);'
-    ].join('\n'),
-    'scripts/generate-glossary.ts': 'console.log("generate glossary");\n',
-    'scripts/glossary-build.ts': [
-      'import { buildGlossaryManifest } from "../../../platform/zdp-platform-devex/src/glossary-devex";',
-      'export const GLOSSARY_LOCALE = "ko";',
-      'export const GLOSSARY_PRODUCT = "zdp-web-public";',
-      'export const GLOSSARY_SITE = "web-public-home";',
-      'export function buildRuntimeGlossaryManifest() {',
-      '  const result = buildGlossaryManifest({ sources: [], locale: GLOSSARY_LOCALE, product: GLOSSARY_PRODUCT, site: GLOSSARY_SITE });',
-      '  if (result.manifest.terms.length < 10) throw new Error("Public glossary must include at least 10 reviewed terms");',
-      '  for (const term of result.manifest.terms) {',
-      '    if (term.interaction.trigger !== "click") throw new Error("click");',
-      '    if (term.interaction.surface !== "term-sheet" || term.interaction.desktopPlacement !== "right-sheet" || term.interaction.mobilePlacement !== "bottom-sheet") throw new Error("placement");',
-      '    if (term.adPolicy.hoverCard !== "forbidden") throw new Error("hover ad");',
-      '    if (term.adPolicy.termSheet !== "forbidden") throw new Error("Term Sheet advertising");',
-      '  }',
-      '  return result;',
-      '}',
-      'function createReservedDetailAdPolicy() {}',
-      'function createForbiddenAdPolicy() {}'
-    ].join('\n'),
+    ...(glossaryDormant
+      ? {}
+      : {
+          'scripts/check-glossary.ts': [
+            'import { buildRuntimeGlossaryManifest, GLOSSARY_RUNTIME_MANIFEST_PATH } from "./glossary-build";',
+            'const result = await buildRuntimeGlossaryManifest(".");',
+            'const stale = "is stale";',
+            'const hint = "Run bun run glossary:generate";',
+            'console.log("Glossary check passed", result, GLOSSARY_RUNTIME_MANIFEST_PATH, stale, hint);'
+          ].join('\n'),
+          'scripts/generate-glossary.ts': 'console.log("generate glossary");\n',
+          'scripts/glossary-build.ts': [
+            'import { buildGlossaryManifest } from "../../../platform/zdp-platform-devex/src/glossary-devex";',
+            'export const GLOSSARY_LOCALE = "ko";',
+            'export const GLOSSARY_PRODUCT = "zdp-web-public";',
+            'export const GLOSSARY_SITE = "web-public-home";',
+            'export function buildRuntimeGlossaryManifest() {',
+            '  const result = buildGlossaryManifest({ sources: [], locale: GLOSSARY_LOCALE, product: GLOSSARY_PRODUCT, site: GLOSSARY_SITE });',
+            '  if (result.manifest.terms.length < 10) throw new Error("Public glossary must include at least 10 reviewed terms");',
+            '  for (const term of result.manifest.terms) {',
+            '    if (term.interaction.trigger !== "click") throw new Error("click");',
+            '    if (term.interaction.surface !== "term-sheet" || term.interaction.desktopPlacement !== "right-sheet" || term.interaction.mobilePlacement !== "bottom-sheet") throw new Error("placement");',
+            '    if (term.adPolicy.hoverCard !== "forbidden") throw new Error("hover ad");',
+            '    if (term.adPolicy.termSheet !== "forbidden") throw new Error("Term Sheet advertising");',
+            '  }',
+            '  return result;',
+            '}',
+            'function createReservedDetailAdPolicy() {}',
+            'function createForbiddenAdPolicy() {}'
+          ].join('\n')
+        }),
     '.github/workflows/ci.yml': [
       'name: CI',
       'jobs:',
@@ -538,25 +588,33 @@ function createValidPublicWebRepositoryFiles(): Record<string, string> {
       '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
       '          path: projects/zdp-platforms/platform/zdp-platform-localization',
       '          persist-credentials: false',
-      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
-      '        with:',
-      '          repository: 0disoft/zdp-platform-devex',
-      '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
-      '          path: projects/zdp-platforms/platform/zdp-platform-devex',
-      '          persist-credentials: false',
-      '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
-      '        with:',
-      '          repository: 0disoft/zdp-libs-ts',
-      '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
-      '          path: projects/zdp-platforms/contracts/zdp-libs-ts',
-      '          persist-credentials: false',
+      ...(glossaryDormant
+        ? []
+        : [
+            '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+            '        with:',
+            '          repository: 0disoft/zdp-platform-devex',
+            '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
+            '          path: projects/zdp-platforms/platform/zdp-platform-devex',
+            '          persist-credentials: false',
+            '      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
+            '        with:',
+            '          repository: 0disoft/zdp-libs-ts',
+            '          token: ${{ secrets.ZDP_CI_READ_TOKEN || github.token }}',
+            '          path: projects/zdp-platforms/contracts/zdp-libs-ts',
+            '          persist-credentials: false'
+          ]),
       '      - run: bun install --frozen-lockfile',
       '      - run: bun install --no-save',
       '      - run: bun run check',
       '      - run: bun run build'
     ].join('\n'),
-    'glossary/terms/public.yaml': 'terms: []\n',
-    'src/content/glossary-manifest.json': '[]\n'
+    ...(glossaryDormant
+      ? {}
+      : {
+          'glossary/terms/public.yaml': 'terms: []\n',
+          'src/content/glossary-manifest.json': '[]\n'
+        })
   };
 }
 
@@ -579,12 +637,14 @@ function createPublicWebServiceContract(
     readonly includeOperationalGateNotes?: boolean;
     readonly includeOnlyRootGlossaryAdPolicyNote?: boolean;
     readonly includeLocalizationCanaryNotes?: boolean;
+    readonly glossaryDormant?: boolean;
   } = {}
 ): unknown {
   const includeOperationalGateNotes =
     options.includeOperationalGateNotes ??
     options.includeOnlyRootGlossaryAdPolicyNote !== true;
   const includeLocalizationCanaryNotes = options.includeLocalizationCanaryNotes ?? true;
+  const glossaryDormant = options.glossaryDormant ?? false;
   const contract: Record<string, unknown> = {
     service: {
       repo: 'zdp-web-public'
@@ -603,10 +663,10 @@ function createPublicWebServiceContract(
     },
     release: {
       migration_policy: includeLocalizationCanaryNotes
-        ? 'zdp-platform-localization adoption is limited to the home hero Astro canary until a broader public-copy migration is reviewed'
+        ? 'The zdp-platform-localization home catalog remains build-verified but is not rendered while the site is an empty shell'
         : 'localization canary scope is not documented',
       canary_policy: includeLocalizationCanaryNotes
-        ? 'home hero localization dogfood only; keep static Astro copy rollback available before expanding to more public copy'
+        ? 'New public copy requires a fresh information-architecture and content review before localization adoption expands'
         : 'localization canary policy is not documented',
       feature_flag_required: includeLocalizationCanaryNotes
         ? false
@@ -624,12 +684,20 @@ function createPublicWebServiceContract(
       'bun run check:localization runs zdp-platform-localization catalog check and strict production compile; fallback messages are not allowed in the public site localization manifest.',
       ...(includeLocalizationCanaryNotes
         ? [
-            'The first zdp-platform-localization product canary is intentionally limited to the home hero title and CTA messages.',
+            'The zdp-platform-localization home catalog remains build-verified but is not rendered while the site is an empty shell.',
+            'New public copy requires a fresh information-architecture and content review before localization adoption expands.',
             'Static Astro copy remains the rollback boundary for the localization canary, so this static public site does not require a runtime feature flag.'
           ]
         : []),
-      'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check.',
-      'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract.'
+      ...(glossaryDormant
+        ? [
+            'Glossary consumption stays disabled while this repository has no approved public content terms; the common zdp-libs-ts glossary is not bundled wholesale.',
+            'Glossary reactivation requires a real-content stable term_id allowlist and restores generated manifest freshness checks with click-triggered Sheet UI.'
+          ]
+        : [
+            'bun run check must fail on stale glossary-manifest.json instead of regenerating it before the freshness check.',
+            'Glossary term sheets do not include ad slots; AdSense, Ezoic, or another provider may only be considered through a separate detail-page experiment contract.'
+          ])
     ];
   } else if (options.includeOnlyRootGlossaryAdPolicyNote === true) {
     contract.notes = [

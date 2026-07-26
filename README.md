@@ -43,7 +43,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - 패키지, CLI, SDK, 템플릿 성격의 저장소 루트에 `CONTRIBUTING.md`와 `CHANGELOG.md`가 있는지 검사한다.
 - 운영 저장소, 민감 저장소, 경계가 두꺼운 저장소, 제품 저장소가 각각 `RUNBOOK.md`, `SECURITY.md`, `BOUNDARY.md`, `product-spec.md`를 갖는지 검사한다.
 - 공개 정적 웹 저장소 루트에 `webpub.toml`이 있고, 후보 도메인과 robots 차단 정책이 `service.yaml`과 어긋나지 않는지 검사한다.
-- `zdp-web-public` 저장소가 앱 패키지나 zero-fallback/glossary gate를 선언한 뒤에는 `check:localization` zero-fallback production compile gate, glossary stale-manifest gate, click-open Term Sheet placement, hover-card ad exclusion, sibling checkout과 check/build CI가 공개 웹 dogfooding 계약으로 유지되는지 검사한다.
+- `zdp-web-public` 저장소가 앱 패키지나 zero-fallback 운영 gate를 선언한 뒤에는 `check:localization` zero-fallback production compile과 check/build CI를 검사한다. 용어집이 활성 상태이면 stale-manifest, click-open Term Sheet, hover-card ad exclusion, provider sibling checkout을 요구하고, 휴면 상태이면 glossary 원천·생성기·런타임 UI·provider checkout이 남지 않았는지와 안정적인 `term_id` allowlist 기반 재활성화 계약을 검사한다.
 - glossary/Term Sheet 표면을 선언한 저장소가 hover tooltip/card 광고 슬롯, Term Sheet 광고 슬롯/provider, `term_id` 없는 용어 identity, generated manifest의 YAML source 누락을 갖는지 검사한다.
 - `zdp-api-contracts` 저장소 루트의 route/error/webhook/SDK generation input 계약, core-api auth/session route catalog, checker skeleton, API export dry-run plan gate가 API 구현 전 유지되는지 검사한다.
 - `catalogs/repositories.yaml`의 `agent_review`가 자동 리뷰 편입 여부, playbook/group 연결, 실행 범위, 산출 정책, 제외·보류·삭제 사유를 기계 필드로 유지하는지 검사한다.
@@ -304,6 +304,8 @@ fixtures/service-schema/fail/**
 0.39.15부터 `ZDP-WEBPUB-001`은 fresh CI의 local file dependency consumer install이 lockfile을 쓰려고 실패하지 않도록 `zdp-web-public` workflow의 public site install step이 `bun install --no-save`를 쓰는지도 검사한다.
 
 0.39.16부터 `ZDP-WEBPUB-001`은 `zdp-web-public` glossary checks가 source import와 YAML source를 찾을 수 있도록 `zdp-platform-devex`와 `zdp-libs-ts` sibling checkout도 검사한다.
+
+0.39.137부터 `ZDP-WEBPUB-001`은 `zdp-web-public` 용어집을 활성 상태와 휴면 상태로 구분한다. 휴면 상태는 빈 YAML·manifest·generator·Sheet UI를 유지하지 않고 공용 용어집 provider checkout도 제거해야 하며, 재활성화는 실제 공개 콘텐츠에서 승인한 안정적인 `term_id` allowlist로 시작해야 한다. 활성 상태는 기존 stale-manifest, click-open Term Sheet, 광고 제외, provider checkout 계약을 계속 검사한다.
 
 ## 개발 명령
 
