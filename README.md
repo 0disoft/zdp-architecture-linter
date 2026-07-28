@@ -83,6 +83,8 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - 위험 표면이 있는 tier3 실험이 비용·종료·관측성 기준을 밝히지 않는 경우 경고한다.
 - 제품, 웹, 실험 저장소가 core, money, privacy, credential, ledger 데이터 저장소를 직접 읽는 구조를 막는다.
 - AI 사용자 데이터 접근, 민감 AI 데이터의 모델 제공자 보관·학습 정책, 결제·크레딧 데이터 소유 경계, 외부 제공자, 웹훅 서명·재처리, 감사, 티어별 운영 기준의 차단 규칙을 실행한다.
+- `execution_plane.kind: ai_inference` 저장소가 `zdp-ai-platform` 뒤의 닫힌 실행 경계로 남고 raw engine option, 제품 직접 호출, routing·평가 정본 소유로 번지지 않는지 검사한다.
+- `zdp-ai-platform`의 모델 평가·승격 계약이 immutable artifact와 serving variant, task/risk slice, 동일 task mix, false-accept, accepted-outcome cost, OOD fallback과 사람 승인 gate를 유지하는지 검사한다.
 - 저장소, 서비스, 데이터 저장소, 데이터 클래스, 이벤트, 외부 제공자 사이의 선언된 관계를 그래프 간선으로 출력한다.
 - 실패 이유를 사람이 고칠 수 있는 진단 메시지로 출력한다.
 

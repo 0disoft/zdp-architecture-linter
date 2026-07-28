@@ -31,3 +31,12 @@ Every blocking rule must trace to a durable source. The source can be a document
 - `warning`: automation hygiene, release helper, stale bot, performance budget, security header, asset size, or similar readiness gap that should not block early experiment work unless promoted by `zdp-architecture`.
 
 Severity changes must identify the source that justifies the move.
+
+## AI inference and model promotion sources
+
+- `ZDP-AI-INFERENCE-001` reads `rules/ai-inference.rules.yaml` and selects
+  repositories through `execution_plane.kind`; repository IDs remain policy
+  data instead of code constants.
+- `ZDP-AI-PLATFORM-001` reads the live repository contract
+  `contracts/model-evaluation-promotion.json`; ADR-0032 owns the platform versus
+  inference boundary that the contract implements.

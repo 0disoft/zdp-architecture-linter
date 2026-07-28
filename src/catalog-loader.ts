@@ -18,6 +18,7 @@ export interface ArchitectureCatalogs {
   readonly moneyRules: MoneyRulesCatalog;
   readonly providerRules: ProviderRulesCatalog;
   readonly aiDataAccessRules: AiDataAccessRulesCatalog;
+  readonly aiInferenceRules?: AiInferenceRulesCatalog;
   readonly dataAccessRules: DataAccessRulesCatalog;
   readonly tierRules: TierRulesCatalog;
   readonly apiRules?: ApiRulesCatalog;
@@ -86,6 +87,10 @@ export interface AiDataAccessRulesCatalog {
   readonly rules?: unknown;
 }
 
+export interface AiInferenceRulesCatalog {
+  readonly rules?: unknown;
+}
+
 export interface DataAccessRulesCatalog {
   readonly rules?: unknown;
 }
@@ -129,6 +134,7 @@ export async function loadArchitectureCatalogs(
     moneyRules,
     providerRules,
     aiDataAccessRules,
+    aiInferenceRules,
     dataAccessRules,
     tierRules,
     apiRules,
@@ -182,6 +188,11 @@ export async function loadArchitectureCatalogs(
       architectureRoot,
       'rules/ai-data-access.rules.yaml'
     ),
+    loadOptionalYamlFile<AiInferenceRulesCatalog | undefined>(
+      architectureRoot,
+      'rules/ai-inference.rules.yaml',
+      undefined
+    ),
     loadYamlFile<DataAccessRulesCatalog>(
       architectureRoot,
       'rules/data-access.rules.yaml'
@@ -215,6 +226,7 @@ export async function loadArchitectureCatalogs(
     moneyRules,
     providerRules,
     aiDataAccessRules,
+    aiInferenceRules,
     dataAccessRules,
     tierRules,
     apiRules,

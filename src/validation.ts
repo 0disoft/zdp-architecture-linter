@@ -9,6 +9,11 @@ import {
   validateAiSensitiveDataContracts,
   validateAiUserDataContracts
 } from './ai-contract-rules.ts';
+import {
+  buildAiInferencePolicy,
+  validateAiInferenceRepositories
+} from './ai-inference-rules.ts';
+import { validateRepositoryAiPlatformContract } from './ai-platform-contract-rules.ts';
 import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
 import {
   mapServiceCatalogDiagnosticsToRepositoryServiceContract,
@@ -168,6 +173,7 @@ type RepositoryContractValidator = (
  * risk: data_consistency, dependency
  */
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
+  validateRepositoryAiPlatformContract,
   validateRepositoryWebpubContract,
   validateRepositorySecretExposureContract,
   validateRepositoryTermSheetContract,
@@ -289,6 +295,7 @@ export async function validateArchitecture(
   const aiSensitiveDataPolicy = buildAiSensitiveDataPolicy(
     catalogs.aiDataAccessRules
   );
+  const aiInferencePolicy = buildAiInferencePolicy(catalogs.aiInferenceRules);
   const tierOperationalContractPolicy = buildTierOperationalContractPolicy(
     catalogs.tierRules
   );
@@ -459,6 +466,7 @@ export async function validateArchitecture(
         repositoryRoadmapEvidence,
         repositoryPolicyNoteRules
       ),
+      ...validateAiInferenceRepositories(catalogs.repositories, aiInferencePolicy),
       ...validateSplitTriggerCatalog(catalogs.splitTriggers, repositoryIndex),
       ...validateRepositorySplitCandidates(catalogs.repositories),
       ...validateDataClassCatalog(catalogs.dataClasses),

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.138
+
+- `ZDP-AI-INFERENCE-001`을 추가해 catalog가 표시한 AI inference execution plane의 유일 caller, 닫힌 execution contract, raw engine option 금지, routing/facade owner와 실행 증거 소유 경계를 검사한다.
+- `ZDP-AI-PLATFORM-001`을 추가해 모델 별칭이 아니라 immutable artifact, serving variant, task slice, versioned evaluator 조합과 human-approved promotion gate를 `zdp-ai-platform` 계약으로 고정한다.
+
 ## 0.39.137
 
 - `zdp-web-public`의 용어집 계약을 활성 상태와 휴면 상태로 나눠, 실제 공개 용어가 없을 때 빈 원천·생성기·런타임 UI를 강제하지 않도록 했다.
