@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.41.0
+
+- `ZDP-AI-INFERENCE-REPO-001`이 실제 `zdp-ai-inference` 저장소의 consumed schema digest, 유일 caller, raw engine option 금지, runtime profile·artifact verification·content-free receipt 계약과 repo-local checker 존재를 검사한다.
+
 ## 0.40.0
 
 - `ZDP-AI-PLATFORM-001`이 `model-artifacts/v2`, model adoption review schema·registry와 fail-closed promotion state machine을 검사한다.

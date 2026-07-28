@@ -84,6 +84,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - 제품, 웹, 실험 저장소가 core, money, privacy, credential, ledger 데이터 저장소를 직접 읽는 구조를 막는다.
 - AI 사용자 데이터 접근, 민감 AI 데이터의 모델 제공자 보관·학습 정책, 결제·크레딧 데이터 소유 경계, 외부 제공자, 웹훅 서명·재처리, 감사, 티어별 운영 기준의 차단 규칙을 실행한다.
 - `execution_plane.kind: ai_inference` 저장소가 `zdp-ai-platform` 뒤의 닫힌 실행 경계로 남고 raw engine option, 제품 직접 호출, routing·평가·원고·저작성·publication 정본 소유로 번지지 않는지 검사한다.
+- `zdp-ai-inference` 실제 저장소가 네 execution schema digest, content-free receipt, 비활성 runtime profile과 repo-local checker를 유지하는지 검사한다.
 - `zdp-ai-platform`의 모델 평가·승격 계약이 immutable artifact와 serving variant, task/risk slice, 동일 task mix, false-accept, accepted-outcome cost, OOD fallback과 사람 승인 gate를 유지하는지 검사한다.
 - 같은 규칙이 exact artifact hash, 여섯 독립 model adoption 판정, fail-closed promotion state machine, 분리된 번역·소설 suite, publication gate, synthetic case, 닫힌 inference request/result/error/receipt schema와 admission fail fixture까지 검사한다.
 - `promotionEligible`, `commercial`, `safeForSale` 단일 boolean, 근거 없는 conditional 상업 판정, snapshot·base lineage 없는 `registered` 승격과 model registry의 원고·사람 창작 기여 소유를 차단한다.

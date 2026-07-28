@@ -14,6 +14,7 @@ import {
   validateAiInferenceRepositories
 } from './ai-inference-rules.ts';
 import { validateRepositoryAiPlatformContract } from './ai-platform-contract-rules.ts';
+import { validateRepositoryAiInferenceContract } from './ai-inference-contract-rules.ts';
 import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
 import {
   mapServiceCatalogDiagnosticsToRepositoryServiceContract,
@@ -174,6 +175,7 @@ type RepositoryContractValidator = (
  */
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
   validateRepositoryAiPlatformContract,
+  validateRepositoryAiInferenceContract,
   validateRepositoryWebpubContract,
   validateRepositorySecretExposureContract,
   validateRepositoryTermSheetContract,
