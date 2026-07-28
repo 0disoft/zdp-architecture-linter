@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.40.0
+
+- `ZDP-AI-PLATFORM-001`이 `model-artifacts/v2`, model adoption review schema·registry와 fail-closed promotion state machine을 검사한다.
+- 내부 실행, 출력물 상업 이용, weight 재배포, hosted inference, 학습 데이터 provenance와 저작권 보호 위험을 독립 판정하며 `promotionEligible`, `commercial`, `safeForSale` 단일 boolean을 거부한다.
+- 웹소설 suite가 memorization, 권리, 사람 창작 기여와 제품 소유 publication revision gate를 유지하는지 검사한다.
+- `ZDP-AI-INFERENCE-001`이 architecture rule의 금지 keyword를 읽어 inference `owns_data`에 manuscript, authorship, human contribution, publication 또는 product content 정본이 들어오는 것을 차단한다.
+
 ## 0.39.139
 
 - `ZDP-AI-PLATFORM-001`이 exact model/tokenizer revision, weight/tokenizer/chat-template hash, revision-bound license evidence, provenance blocker와 promotion 금지를 검사한다.

@@ -12,6 +12,7 @@ export interface AiInferencePolicy {
   readonly requiredFields: readonly string[];
   readonly requiredOwnedData: readonly string[];
   readonly forbiddenOwnedData: readonly string[];
+  readonly forbiddenOwnedDataKeywords: readonly string[];
 }
 
 const EMPTY_POLICY: AiInferencePolicy = {
@@ -22,7 +23,8 @@ const EMPTY_POLICY: AiInferencePolicy = {
   sameValues: new Map(),
   requiredFields: [],
   requiredOwnedData: [],
-  forbiddenOwnedData: []
+  forbiddenOwnedData: [],
+  forbiddenOwnedDataKeywords: []
 };
 
 export function buildAiInferencePolicy(value: unknown): AiInferencePolicy {
@@ -42,7 +44,8 @@ export function buildAiInferencePolicy(value: unknown): AiInferencePolicy {
     sameValues: readStringMap(assertions.require_same_values),
     requiredFields: readStringArray(assertions.require_fields),
     requiredOwnedData: readStringArray(assertions.require_owned_data),
-    forbiddenOwnedData: readStringArray(assertions.forbid_owned_data)
+    forbiddenOwnedData: readStringArray(assertions.forbid_owned_data),
+    forbiddenOwnedDataKeywords: readStringArray(assertions.forbid_owned_data_keywords)
   };
 }
 
@@ -127,6 +130,17 @@ export function validateAiInferenceRepositories(
           diagnostic(
             `${base}.owns_data`,
             `AI inference repository \`${name}\` must not own control-plane data \`${forbidden}\`.`
+          )
+        );
+      }
+    }
+    for (const keyword of policy.forbiddenOwnedDataKeywords) {
+      const matched = ownedData.find((entry) => entry.toLowerCase().includes(keyword.toLowerCase()));
+      if (matched !== undefined) {
+        diagnostics.push(
+          diagnostic(
+            `${base}.owns_data`,
+            `AI inference repository \`${name}\` must not own product content or authorship data \`${matched}\` matched by \`${keyword}\`.`
           )
         );
       }

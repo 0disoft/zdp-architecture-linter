@@ -27,6 +27,11 @@ const REQUIRED_STATES = [
   'retired',
   'quarantined'
 ] as const;
+const FORBIDDEN_DECISION_BOOLEANS = new Set([
+  'promotionEligible',
+  'commercial',
+  'safeForSale'
+]);
 
 export async function validateRepositoryAiPlatformContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -65,12 +70,13 @@ export function validateModelEvaluationPromotionValue(
 ): readonly Diagnostic[] {
   if (!isRecord(value)) return [diagnostic('', 'Contract must be a JSON object.')];
   const diagnostics: Diagnostic[] = [];
-  requireExact(value, 'schemaVersion', 'zdp.ai.model-evaluation-promotion/v1', diagnostics);
+  requireExact(value, 'schemaVersion', 'zdp.ai.model-evaluation-promotion/v2', diagnostics);
   requireExact(value, 'status', 'contract-only', diagnostics);
   requireExact(value, 'ownership.evaluationAndPromotion', 'zdp-ai-platform', diagnostics);
   requireExact(value, 'ownership.execution', 'zdp-ai-inference', diagnostics);
   requireExact(value, 'ownership.providerLifecycle', 'zdp-platform-infra', diagnostics);
   requireExact(value, 'ownership.providerCredentials', 'zdp-privacy-credential-vault', diagnostics);
+  requireExact(value, 'ownership.publicationContentAndAuthorship', 'product-repository', diagnostics);
   requireExact(value, 'ownership.finalBillingTruth', 'zdp-money-platform', diagnostics);
   requireExact(value, 'executionContract.schemaVersion', 'zdp.inference.execution.v1', diagnostics);
   requireExact(value, 'executionContract.normalCaller', 'zdp-ai-platform', diagnostics);
@@ -78,6 +84,8 @@ export function validateModelEvaluationPromotionValue(
   requireExact(value, 'executionContract.rawEngineOptionPassthrough', false, diagnostics);
   requireExact(value, 'executionContract.selectionOwner', 'zdp-ai-platform', diagnostics);
   requireExact(value, 'artifactRegistryRef', 'contracts/model-artifacts.json', diagnostics);
+  requireExact(value, 'adoptionReviewRegistryRef', 'contracts/model-adoption-reviews.json', diagnostics);
+  requireExact(value, 'promotionStateMachineRef', 'contracts/model-promotion-state-machine.json', diagnostics);
   requireExactList(
     value,
     'evaluationSuiteRefs',
@@ -108,6 +116,7 @@ export function validateModelEvaluationPromotionValue(
   );
   for (const path of [
     'promotionRequirements.immutableIdentity',
+    'promotionRequirements.adoptionReviewRequired',
     'promotionRequirements.capableBaselineRequired',
     'promotionRequirements.externalOrDeterministicEvaluatorRequired',
     'promotionRequirements.falseAcceptMeasuredSeparately',
@@ -130,12 +139,21 @@ export function validateModelEvaluationPromotionValue(
       diagnostics.push(diagnostic(path, `\`${path}\` must be a non-empty unique string array.`));
     }
   }
-  const leads = readPath(value, 'researchLeads');
-  if (!Array.isArray(leads) || leads.some((lead) => !isResearchOnlyLead(lead))) {
+  const forbiddenPaths = findForbiddenBooleanPaths(value);
+  for (const path of forbiddenPaths) {
     diagnostics.push(
       diagnostic(
-        'researchLeads',
-        'Research leads must link to immutable artifacts and remain identity-pinned-provenance-blocked with promotionEligible=false.'
+        path,
+        `\`${path}\` is forbidden. Record execution, output commercial use, redistribution, hosted inference, provenance, and copyright risk independently.`
+      )
+    );
+  }
+  const candidates = readPath(value, 'researchCandidates');
+  if (!Array.isArray(candidates) || candidates.length === 0 || candidates.some((candidate) => !isResearchCandidate(candidate))) {
+    diagnostics.push(
+      diagnostic(
+        'researchCandidates',
+        'Research candidates must link immutable artifact and adoption-review ids and remain intake_pending until registration guards pass.'
       )
     );
   }
@@ -149,16 +167,29 @@ function validateServiceRuleRegistration(value: unknown): readonly Diagnostic[] 
     : [diagnostic('service.yaml', `service.yaml must require linter rule \`${RULE_ID}\`.`)];
 }
 
-function isResearchOnlyLead(value: unknown): boolean {
+function isResearchCandidate(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.requestedAlias === 'string' &&
     value.requestedAlias.length > 0 &&
-    typeof value.resolvedArtifactId === 'string' &&
-    value.resolvedArtifactId.length > 0 &&
-    value.status === 'identity-pinned-provenance-blocked' &&
-    value.promotionEligible === false
+    readString(value.resolvedArtifactId) !== '' &&
+    readString(value.adoptionReviewId) !== '' &&
+    value.currentState === 'intake_pending'
   );
+}
+
+function findForbiddenBooleanPaths(value: unknown, path = ''): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => findForbiddenBooleanPaths(item, `${path}[${index}]`));
+  }
+  if (!isRecord(value)) return [];
+  const paths: string[] = [];
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = path === '' ? key : `${path}.${key}`;
+    if (FORBIDDEN_DECISION_BOOLEANS.has(key)) paths.push(childPath);
+    paths.push(...findForbiddenBooleanPaths(child, childPath));
+  }
+  return paths;
 }
 
 function requireExact(
@@ -200,6 +231,10 @@ function readStringArray(value: unknown): readonly string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
     ? value
     : [];
+}
+
+function readString(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : '';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

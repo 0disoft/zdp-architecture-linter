@@ -32,7 +32,14 @@ const policy = buildAiInferencePolicy({
           'loaded-artifact-verification-state',
           'model-serving-receipts'
         ],
-        forbid_owned_data: ['model-routing-policy']
+        forbid_owned_data: ['model-routing-policy'],
+        forbid_owned_data_keywords: [
+          'manuscript',
+          'authorship',
+          'human-contribution',
+          'publication',
+          'product-content'
+        ]
       }
     }
   ]
@@ -79,7 +86,8 @@ describe('AI inference repository policy', () => {
     repository.owns_data = [
       'inference-runtime-profiles',
       'model-serving-receipts',
-      'model-routing-policy'
+      'model-routing-policy',
+      'novel-authorship-records'
     ];
 
     const diagnostics = validateAiInferenceRepositories(
@@ -91,6 +99,7 @@ describe('AI inference repository policy', () => {
       'repositories[0:zdp-ai-inference].execution_plane.normal_callers',
       'repositories[0:zdp-ai-inference].execution_plane.selection_owner',
       'repositories[0:zdp-ai-inference].execution_plane.external_facade_owner',
+      'repositories[0:zdp-ai-inference].owns_data',
       'repositories[0:zdp-ai-inference].owns_data',
       'repositories[0:zdp-ai-inference].owns_data'
     ]);

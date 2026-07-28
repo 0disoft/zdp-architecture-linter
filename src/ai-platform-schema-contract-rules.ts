@@ -5,11 +5,41 @@ import type { Diagnostic } from './diagnostics.ts';
 
 const RULE_ID = 'ZDP-AI-PLATFORM-001';
 const MODEL_ARTIFACTS_FILE = 'contracts/model-artifacts.json';
+const MODEL_ADOPTION_REVIEWS_FILE = 'contracts/model-adoption-reviews.json';
+const MODEL_ADOPTION_REVIEW_SCHEMA_FILE = 'contracts/schemas/model-adoption-review.v1.schema.json';
+const MODEL_ADOPTION_REVIEW_PASS_FILE = 'contracts/fixtures/model-adoption-review/pass.json';
+const MODEL_ADOPTION_REVIEW_FAIL_LEGACY_FILE = 'contracts/fixtures/model-adoption-review/fail-legacy-boolean.json';
+const MODEL_ADOPTION_REVIEW_FAIL_CONDITIONAL_FILE = 'contracts/fixtures/model-adoption-review/fail-conditional-without-controls.json';
+const MODEL_PROMOTION_STATE_MACHINE_FILE = 'contracts/model-promotion-state-machine.json';
 const EVALUATION_SCHEMA_FILE = 'contracts/schemas/evaluation-case.v1.schema.json';
 const TRANSLATION_SUITE_FILE = 'contracts/evaluation-suites/translation-correction.v1.json';
 const NOVEL_SUITE_FILE = 'contracts/evaluation-suites/novel-generation.v1.json';
 const TRANSLATION_CASE_FILE = 'contracts/fixtures/evaluation/translation-correction.pass.json';
 const NOVEL_CASE_FILE = 'contracts/fixtures/evaluation/novel-generation.pass.json';
+const REQUIRED_DECISION_AXES = [
+  'internal_execution',
+  'output_commercial_use',
+  'weight_redistribution',
+  'hosted_inference',
+  'training_data_provenance',
+  'copyright_protection_risk'
+] as const;
+const PROMOTION_STATES_WITH_INTAKE = [
+  'intake_pending',
+  'registered',
+  'experiment',
+  'limited',
+  'default_candidate',
+  'default',
+  'deprecated',
+  'retired',
+  'quarantined'
+] as const;
+const FORBIDDEN_DECISION_BOOLEANS = new Set([
+  'promotionEligible',
+  'commercial',
+  'safeForSale'
+]);
 
 const EXECUTION_SURFACES = [
   {
@@ -47,7 +77,52 @@ export async function validateAiPlatformContractFiles(
   const artifacts = await readJson(repositoryRoot, MODEL_ARTIFACTS_FILE, diagnostics);
   if (artifacts !== null) {
     diagnostics.push(...validateModelArtifactRegistryValue(artifacts));
-    diagnostics.push(...validatePromotionArtifactLinks(promotionContract, artifacts));
+  }
+
+  const adoptionReviews = await readJson(repositoryRoot, MODEL_ADOPTION_REVIEWS_FILE, diagnostics);
+  const adoptionReviewSchema = await readJson(repositoryRoot, MODEL_ADOPTION_REVIEW_SCHEMA_FILE, diagnostics);
+  const promotionStateMachine = await readJson(repositoryRoot, MODEL_PROMOTION_STATE_MACHINE_FILE, diagnostics);
+  if (adoptionReviews !== null) {
+    diagnostics.push(...validateModelAdoptionReviewRegistryValue(adoptionReviews));
+  }
+  if (promotionStateMachine !== null) {
+    diagnostics.push(...validatePromotionStateMachineValue(promotionStateMachine));
+  }
+  if (artifacts !== null && adoptionReviews !== null) {
+    diagnostics.push(...validateArtifactAdoptionReviewLinks(artifacts, adoptionReviews));
+    diagnostics.push(...validatePromotionCandidateLinks(promotionContract, artifacts, adoptionReviews));
+  }
+  if (adoptionReviewSchema !== null) {
+    const validator = compileSchema(adoptionReviewSchema, MODEL_ADOPTION_REVIEW_SCHEMA_FILE, diagnostics);
+    if (validator !== null) {
+      if (adoptionReviews !== null && isRecord(adoptionReviews) && Array.isArray(adoptionReviews.records)) {
+        adoptionReviews.records.forEach((record, index) =>
+          validatePassFixture(validator, record, `${MODEL_ADOPTION_REVIEWS_FILE}#records[${index}]`, diagnostics)
+        );
+      }
+      const passFixture = await readJson(repositoryRoot, MODEL_ADOPTION_REVIEW_PASS_FILE, diagnostics);
+      if (passFixture !== null) validatePassFixture(validator, passFixture, MODEL_ADOPTION_REVIEW_PASS_FILE, diagnostics);
+      const legacyFixture = await readJson(repositoryRoot, MODEL_ADOPTION_REVIEW_FAIL_LEGACY_FILE, diagnostics);
+      if (legacyFixture !== null) {
+        validateAdditionalPropertyFailure(
+          validator,
+          legacyFixture,
+          MODEL_ADOPTION_REVIEW_FAIL_LEGACY_FILE,
+          'promotionEligible',
+          diagnostics
+        );
+      }
+      const conditionalFixture = await readJson(repositoryRoot, MODEL_ADOPTION_REVIEW_FAIL_CONDITIONAL_FILE, diagnostics);
+      if (conditionalFixture !== null) {
+        validateFailureAtPath(
+          validator,
+          conditionalFixture,
+          MODEL_ADOPTION_REVIEW_FAIL_CONDITIONAL_FILE,
+          '/decisions/output_commercial_use/conditions',
+          diagnostics
+        );
+      }
+    }
   }
 
   const evaluationSchema = await readJson(repositoryRoot, EVALUATION_SCHEMA_FILE, diagnostics);
@@ -73,6 +148,7 @@ export async function validateAiPlatformContractFiles(
         useCase: 'novel_generation'
       })
     );
+    diagnostics.push(...validateNovelPublicationGateValue(novelSuite));
   }
   if (evaluationSchema !== null) {
     const validator = compileSchema(evaluationSchema, EVALUATION_SCHEMA_FILE, diagnostics);
@@ -115,7 +191,7 @@ export function validateModelArtifactRegistryValue(
 ): readonly Diagnostic[] {
   if (!isRecord(value)) return [diagnostic(MODEL_ARTIFACTS_FILE, '', 'Artifact registry must be an object.')];
   const diagnostics: Diagnostic[] = [];
-  requireExact(value, 'schemaVersion', 'zdp.ai.model-artifacts/v1', MODEL_ARTIFACTS_FILE, diagnostics);
+  requireExact(value, 'schemaVersion', 'zdp.ai.model-artifacts/v2', MODEL_ARTIFACTS_FILE, diagnostics);
   requireExact(value, 'status', 'research-only', MODEL_ARTIFACTS_FILE, diagnostics);
   requireExact(
     value,
@@ -146,7 +222,8 @@ export function validateModelArtifactRegistryValue(
       'artifactFormat',
       'precision',
       'declaredLicense',
-      'baseModelRepository'
+      'baseModelRepository',
+      'adoptionReviewId'
     ]) {
       if (readString(artifact[field]) === '') {
         diagnostics.push(
@@ -172,23 +249,42 @@ export function validateModelArtifactRegistryValue(
     if (!evidence.startsWith('https://huggingface.co/') || !evidence.includes(`/blob/${revision}/`)) {
       diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.licenseEvidenceRef`, 'License evidence must be bound to the exact Hugging Face revision.'));
     }
-    if (readPath(artifact, 'provenanceReview.status') !== 'blocked') {
-      diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.provenanceReview.status`, 'Research candidates with unresolved evidence must remain blocked.'));
-    }
-    if (readStringArray(readPath(artifact, 'provenanceReview.reasons')).length === 0) {
+    for (const forbiddenPath of findForbiddenBooleanPaths(artifact, base)) {
       diagnostics.push(
         diagnostic(
           MODEL_ARTIFACTS_FILE,
-          `${base}.provenanceReview.reasons`,
-          'Blocked artifact must name at least one provenance reason.'
+          forbiddenPath,
+          'Single commercial or promotion booleans are forbidden; use the linked adoption review decision axes.'
         )
       );
     }
-    if (artifact.promotionEligible !== false) {
-      diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.promotionEligible`, 'Blocked artifacts must set promotionEligible=false.'));
+    const intakeStatus = readString(artifact.intakeStatus);
+    if (intakeStatus !== 'intake_pending' && intakeStatus !== 'registered') {
+      diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.intakeStatus`, 'Artifact intakeStatus must be intake_pending or registered.'));
     }
-    if (artifact.baseModelRevision !== null) {
-      diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.baseModelRevision`, 'Initial research candidates must not claim an unverified base-model revision.'));
+    const snapshotFields = [
+      'modelCardSnapshotSha256',
+      'licenseSnapshotSha256',
+      'noticeSnapshotSha256'
+    ] as const;
+    if (intakeStatus === 'registered') {
+      for (const field of snapshotFields) {
+        if (!isSha256Like(artifact[field], false)) {
+          diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.${field}`, `Registered artifacts require a ${field}.`));
+        }
+      }
+      if (!isSha256Like(artifact.baseModelRevision, true)) {
+        diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.baseModelRevision`, 'Registered artifacts require an exact base-model revision.'));
+      }
+    } else {
+      for (const field of snapshotFields) {
+        if (artifact[field] !== null && !isSha256Like(artifact[field], false)) {
+          diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.${field}`, `${field} must be null or a SHA-256 during intake.`));
+        }
+      }
+      if (artifact.baseModelRevision !== null && !isSha256Like(artifact.baseModelRevision, true)) {
+        diagnostics.push(diagnostic(MODEL_ARTIFACTS_FILE, `${base}.baseModelRevision`, 'Base model revision must be null or an exact revision during intake.'));
+      }
     }
   }
   return diagnostics;
@@ -226,26 +322,188 @@ export function validateEvaluationSuiteValue(
   return diagnostics;
 }
 
-function validatePromotionArtifactLinks(promotion: unknown, registry: unknown): readonly Diagnostic[] {
-  if (!isRecord(promotion) || !isRecord(registry) || !Array.isArray(registry.artifacts)) return [];
-  const ids = new Set(
-    registry.artifacts.filter(isRecord).map((artifact) => readString(artifact.id)).filter(Boolean)
-  );
-  const leads = promotion.researchLeads;
-  if (!Array.isArray(leads) || leads.length === 0) {
-    return [diagnostic('contracts/model-evaluation-promotion.json', 'researchLeads', 'Research leads must link to pinned artifacts.')];
+export function validateModelAdoptionReviewRegistryValue(value: unknown): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [diagnostic(MODEL_ADOPTION_REVIEWS_FILE, '', 'Model adoption review registry must be an object.')];
   }
-  return leads.flatMap((lead, index) => {
-    if (
-      !isRecord(lead) ||
-      !ids.has(readString(lead.resolvedArtifactId)) ||
-      lead.status !== 'identity-pinned-provenance-blocked' ||
-      lead.promotionEligible !== false
+  const diagnostics: Diagnostic[] = [];
+  requireExact(value, 'schemaVersion', 'zdp.ai.model-adoption-reviews/v1', MODEL_ADOPTION_REVIEWS_FILE, diagnostics);
+  requireExact(value, 'status', 'contract-only', MODEL_ADOPTION_REVIEWS_FILE, diagnostics);
+  requireExactList(value, 'decisionAxes', REQUIRED_DECISION_AXES, MODEL_ADOPTION_REVIEWS_FILE, diagnostics);
+  const records = value.records;
+  if (!Array.isArray(records) || records.length === 0) {
+    return [...diagnostics, diagnostic(MODEL_ADOPTION_REVIEWS_FILE, 'records', 'Model adoption review registry must contain records.')];
+  }
+  const reviewIds = new Set<string>();
+  const artifactIds = new Set<string>();
+  for (const [index, record] of records.entries()) {
+    const base = `records[${index}]`;
+    if (!isRecord(record)) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, base, 'Model adoption review record must be an object.'));
+      continue;
+    }
+    const reviewId = readString(record.review_id);
+    const artifactId = readString(record.artifact_id);
+    if (reviewId === '' || reviewIds.has(reviewId)) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.review_id`, 'Review id must be non-empty and unique.'));
+    }
+    if (artifactId === '' || artifactIds.has(artifactId)) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.artifact_id`, 'Artifact id must be non-empty and have one active review record.'));
+    }
+    reviewIds.add(reviewId);
+    artifactIds.add(artifactId);
+    for (const forbiddenPath of findForbiddenBooleanPaths(record, base)) {
+      diagnostics.push(
+        diagnostic(
+          MODEL_ADOPTION_REVIEWS_FILE,
+          forbiddenPath,
+          'Single commercial or promotion booleans are forbidden; record the six decision axes independently.'
+        )
+      );
+    }
+    const commercialDecision = readPath(record, 'decisions.output_commercial_use');
+    if (!isRecord(commercialDecision)) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.decisions.output_commercial_use`, 'Output commercial use decision is required.'));
+    } else if (
+      commercialDecision.status === 'conditional' &&
+      (readStringArray(commercialDecision.conditions).length === 0 ||
+        readStringArray(commercialDecision.source_refs).length === 0)
     ) {
-      return [diagnostic('contracts/model-evaluation-promotion.json', `researchLeads[${index}]`, 'Research lead must link to a pinned, provenance-blocked, non-promotable artifact.')];
+      diagnostics.push(
+        diagnostic(
+          MODEL_ADOPTION_REVIEWS_FILE,
+          `${base}.decisions.output_commercial_use`,
+          'Conditional output commercial use requires non-empty conditions and source_refs.'
+        )
+      );
+    }
+    const currentStatus = readPath(record, 'promotion.current_status');
+    if (!PROMOTION_STATES_WITH_INTAKE.includes(currentStatus as (typeof PROMOTION_STATES_WITH_INTAKE)[number])) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.promotion.current_status`, 'Promotion state is not recognized.'));
+    }
+    if (
+      currentStatus === 'intake_pending' &&
+      readStringArray(readPath(record, 'promotion.blocking_reasons')).length === 0
+    ) {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.promotion.blocking_reasons`, 'intake_pending reviews must name blocking reasons.'));
+    }
+    if (currentStatus !== 'intake_pending' && record.review_status !== 'approved') {
+      diagnostics.push(diagnostic(MODEL_ADOPTION_REVIEWS_FILE, `${base}.review_status`, 'Promotion beyond intake_pending requires an approved adoption review.'));
+    }
+  }
+  return diagnostics;
+}
+
+export function validatePromotionStateMachineValue(value: unknown): readonly Diagnostic[] {
+  if (!isRecord(value)) {
+    return [diagnostic(MODEL_PROMOTION_STATE_MACHINE_FILE, '', 'Promotion state machine must be an object.')];
+  }
+  const diagnostics: Diagnostic[] = [];
+  requireExact(value, 'schemaVersion', 'zdp.ai.model-promotion-state-machine/v1', MODEL_PROMOTION_STATE_MACHINE_FILE, diagnostics);
+  requireExact(value, 'status', 'contract-only', MODEL_PROMOTION_STATE_MACHINE_FILE, diagnostics);
+  requireExactList(value, 'states', PROMOTION_STATES_WITH_INTAKE, MODEL_PROMOTION_STATE_MACHINE_FILE, diagnostics);
+  const expectedTransitions: Readonly<Record<string, readonly string[]>> = {
+    intake_pending: ['registered', 'quarantined'],
+    registered: ['experiment', 'deprecated', 'quarantined'],
+    experiment: ['limited', 'deprecated', 'quarantined'],
+    limited: ['default_candidate', 'deprecated', 'quarantined'],
+    default_candidate: ['default', 'limited', 'deprecated', 'quarantined'],
+    default: ['deprecated', 'quarantined'],
+    deprecated: ['retired', 'quarantined'],
+    retired: [],
+    quarantined: ['intake_pending']
+  };
+  for (const [state, expected] of Object.entries(expectedTransitions)) {
+    requireExactList(value, `transitions.${state}`, expected, MODEL_PROMOTION_STATE_MACHINE_FILE, diagnostics);
+  }
+  for (const state of PROMOTION_STATES_WITH_INTAKE.filter((state) => state !== 'intake_pending')) {
+    if (readStringArray(readPath(value, `entryGuards.${state}`)).length === 0) {
+      diagnostics.push(diagnostic(MODEL_PROMOTION_STATE_MACHINE_FILE, `entryGuards.${state}`, 'Every promotion state requires explicit entry guards.'));
+    }
+  }
+  if (readStringArray(value.globalRules).length === 0) {
+    diagnostics.push(diagnostic(MODEL_PROMOTION_STATE_MACHINE_FILE, 'globalRules', 'Promotion state machine requires fail-closed global rules.'));
+  }
+  return diagnostics;
+}
+
+function validateArtifactAdoptionReviewLinks(artifacts: unknown, reviews: unknown): readonly Diagnostic[] {
+  if (!isRecord(artifacts) || !Array.isArray(artifacts.artifacts) || !isRecord(reviews) || !Array.isArray(reviews.records)) return [];
+  const reviewById = new Map(
+    reviews.records
+      .filter(isRecord)
+      .map((record) => [readString(record.review_id), record] as const)
+      .filter(([id]) => id !== '')
+  );
+  return artifacts.artifacts.flatMap((artifact, index) => {
+    if (!isRecord(artifact)) return [];
+    const reviewId = readString(artifact.adoptionReviewId);
+    const review = reviewById.get(reviewId);
+    if (review === undefined || readString(review.artifact_id) !== readString(artifact.id)) {
+      return [diagnostic(MODEL_ARTIFACTS_FILE, `artifacts[${index}].adoptionReviewId`, 'Artifact must link to its matching adoption review record.')];
+    }
+    if (readPath(review, 'promotion.current_status') !== artifact.intakeStatus) {
+      return [diagnostic(MODEL_ARTIFACTS_FILE, `artifacts[${index}].intakeStatus`, 'Artifact intakeStatus must match the linked adoption review promotion state.')];
     }
     return [];
   });
+}
+
+function validatePromotionCandidateLinks(promotion: unknown, artifacts: unknown, reviews: unknown): readonly Diagnostic[] {
+  if (!isRecord(promotion) || !isRecord(artifacts) || !Array.isArray(artifacts.artifacts) || !isRecord(reviews) || !Array.isArray(reviews.records)) return [];
+  const artifactById = new Map(artifacts.artifacts.filter(isRecord).map((artifact) => [readString(artifact.id), artifact] as const));
+  const reviewById = new Map(reviews.records.filter(isRecord).map((record) => [readString(record.review_id), record] as const));
+  const candidates = promotion.researchCandidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return [diagnostic('contracts/model-evaluation-promotion.json', 'researchCandidates', 'Research candidates must link to artifacts and adoption reviews.')];
+  }
+  return candidates.flatMap((candidate, index) => {
+    if (!isRecord(candidate)) {
+      return [diagnostic('contracts/model-evaluation-promotion.json', `researchCandidates[${index}]`, 'Research candidate must be an object.')];
+    }
+    const artifact = artifactById.get(readString(candidate.resolvedArtifactId));
+    const review = reviewById.get(readString(candidate.adoptionReviewId));
+    if (
+      artifact === undefined ||
+      review === undefined ||
+      artifact.adoptionReviewId !== candidate.adoptionReviewId ||
+      review.artifact_id !== candidate.resolvedArtifactId ||
+      readPath(review, 'promotion.current_status') !== candidate.currentState
+    ) {
+      return [diagnostic('contracts/model-evaluation-promotion.json', `researchCandidates[${index}]`, 'Research candidate artifact, adoption review, and state links must agree.')];
+    }
+    return [];
+  });
+}
+
+function validateNovelPublicationGateValue(value: unknown): readonly Diagnostic[] {
+  if (!isRecord(value)) return [];
+  const diagnostics: Diagnostic[] = [];
+  const requiredSlices = [
+    'exact_match',
+    'near_match',
+    'continuation_memorization',
+    'protected_universe',
+    'author_imitation',
+    'multi_seed_repetition',
+    'long_context',
+    'legal_and_safety',
+    'human_review'
+  ];
+  requireExactList(value, 'publicationGate.requiredSlices', requiredSlices, NOVEL_SUITE_FILE, diagnostics);
+  for (const path of [
+    'publicationGate.criticalFailures',
+    'publicationGate.corpusPolicy'
+  ]) {
+    if (readStringArray(readPath(value, path)).length === 0) {
+      diagnostics.push(diagnostic(NOVEL_SUITE_FILE, path, `${path} must be a non-empty string array.`));
+    }
+  }
+  requireExact(value, 'publicationGate.authorshipRecordSchemaVersion', 'zdp.content.ai-assisted-authorship-record/v1', NOVEL_SUITE_FILE, diagnostics);
+  requireExact(value, 'publicationGate.productOwnsManuscriptAndAuthorship', true, NOVEL_SUITE_FILE, diagnostics);
+  requireExact(value, 'publicationGate.humanReviewRequired', true, NOVEL_SUITE_FILE, diagnostics);
+  requireExact(value, 'publicationGate.commercialDecisionDoesNotPromoteModel', true, NOVEL_SUITE_FILE, diagnostics);
+  return diagnostics;
 }
 
 async function readJson(root: string, file: string, diagnostics: Diagnostic[]): Promise<unknown | null> {
@@ -299,9 +557,43 @@ function validateAdditionalPropertyFailure(
   }
 }
 
+function validateFailureAtPath(
+  validator: ValidateFunction,
+  value: unknown,
+  file: string,
+  expectedPath: string,
+  diagnostics: Diagnostic[]
+): void {
+  const accepted = validator(value);
+  const rejectedAtPath = validator.errors?.some(
+    (error) => error.instancePath === expectedPath
+  );
+  if (accepted || rejectedAtPath !== true) {
+    diagnostics.push(diagnostic(file, expectedPath, `Fail fixture must be rejected at \`${expectedPath}\`.`));
+  }
+}
+
 function requireExact(value: Record<string, unknown>, path: string, expected: unknown, file: string, diagnostics: Diagnostic[]): void {
   if (readPath(value, path) !== expected) {
     diagnostics.push(diagnostic(file, path, `\`${path}\` must equal \`${String(expected)}\`.`));
+  }
+}
+
+function requireExactList(
+  value: Record<string, unknown>,
+  path: string,
+  expected: readonly string[],
+  file: string,
+  diagnostics: Diagnostic[]
+): void {
+  const raw = readPath(value, path);
+  if (!Array.isArray(raw) || raw.some((item) => typeof item !== 'string')) {
+    diagnostics.push(diagnostic(file, path, `\`${path}\` must be a string array.`));
+    return;
+  }
+  const actual = raw;
+  if (actual.length !== expected.length || actual.some((item, index) => item !== expected[index])) {
+    diagnostics.push(diagnostic(file, path, `\`${path}\` must equal the reviewed ordered contract.`));
   }
 }
 
@@ -325,6 +617,20 @@ function readString(value: unknown): string {
 
 function readStringArray(value: unknown): readonly string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string' && item.length > 0) ? value : [];
+}
+
+function findForbiddenBooleanPaths(value: unknown, path = ''): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => findForbiddenBooleanPaths(item, `${path}[${index}]`));
+  }
+  if (!isRecord(value)) return [];
+  const paths: string[] = [];
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = path === '' ? key : `${path}.${key}`;
+    if (FORBIDDEN_DECISION_BOOLEANS.has(key)) paths.push(childPath);
+    paths.push(...findForbiddenBooleanPaths(child, childPath));
+  }
+  return paths;
 }
 
 function diagnostic(file: string, path: string, message: string): Diagnostic {
