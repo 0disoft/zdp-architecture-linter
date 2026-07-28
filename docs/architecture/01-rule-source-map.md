@@ -38,5 +38,7 @@ Severity changes must identify the source that justifies the move.
   repositories through `execution_plane.kind`; repository IDs remain policy
   data instead of code constants.
 - `ZDP-AI-PLATFORM-001` reads the live repository contract
-  `contracts/model-evaluation-promotion.json`; ADR-0032 owns the platform versus
-  inference boundary that the contract implements.
+  `contracts/model-evaluation-promotion.json`, `contracts/model-artifacts.json`,
+  evaluation suites and cases, and inference execution schemas and admission
+  fixtures; ADR-0032 owns the platform versus inference boundary that these
+  contracts implement.

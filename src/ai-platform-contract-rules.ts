@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Diagnostic } from './diagnostics.ts';
+import { validateAiPlatformContractFiles } from './ai-platform-schema-contract-rules.ts';
 
 const RULE_ID = 'ZDP-AI-PLATFORM-001';
 const REPOSITORY = 'zdp-ai-platform';
@@ -54,6 +55,7 @@ export async function validateRepositoryAiPlatformContract(input: {
 
   return [
     ...validateModelEvaluationPromotionValue(value),
+    ...(await validateAiPlatformContractFiles(input.repositoryRoot, value)),
     ...validateServiceRuleRegistration(input.repositoryServiceContract)
   ];
 }
@@ -75,6 +77,27 @@ export function validateModelEvaluationPromotionValue(
   requireExact(value, 'executionContract.closedFields', true, diagnostics);
   requireExact(value, 'executionContract.rawEngineOptionPassthrough', false, diagnostics);
   requireExact(value, 'executionContract.selectionOwner', 'zdp-ai-platform', diagnostics);
+  requireExact(value, 'artifactRegistryRef', 'contracts/model-artifacts.json', diagnostics);
+  requireExactList(
+    value,
+    'evaluationSuiteRefs',
+    [
+      'contracts/evaluation-suites/translation-correction.v1.json',
+      'contracts/evaluation-suites/novel-generation.v1.json'
+    ],
+    diagnostics
+  );
+  requireExactList(
+    value,
+    'executionSchemaRefs',
+    [
+      'contracts/schemas/inference-execution-request.v1.schema.json',
+      'contracts/schemas/inference-execution-result.v1.schema.json',
+      'contracts/schemas/inference-execution-error.v1.schema.json',
+      'contracts/schemas/inference-serving-receipt.v1.schema.json'
+    ],
+    diagnostics
+  );
   requireExactList(value, 'evaluationUnit', REQUIRED_EVALUATION_UNIT, diagnostics);
   requireExactList(value, 'promotionStates', REQUIRED_STATES, diagnostics);
   requireExactList(
@@ -112,7 +135,7 @@ export function validateModelEvaluationPromotionValue(
     diagnostics.push(
       diagnostic(
         'researchLeads',
-        'Research leads must remain revision-required and promotionEligible=false until immutable identity evidence exists.'
+        'Research leads must link to immutable artifacts and remain identity-pinned-provenance-blocked with promotionEligible=false.'
       )
     );
   }
@@ -131,7 +154,9 @@ function isResearchOnlyLead(value: unknown): boolean {
     isRecord(value) &&
     typeof value.requestedAlias === 'string' &&
     value.requestedAlias.length > 0 &&
-    value.status === 'revision-required' &&
+    typeof value.resolvedArtifactId === 'string' &&
+    value.resolvedArtifactId.length > 0 &&
+    value.status === 'identity-pinned-provenance-blocked' &&
     value.promotionEligible === false
   );
 }

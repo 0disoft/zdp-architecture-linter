@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.39.139
+
+- `ZDP-AI-PLATFORM-001`이 exact model/tokenizer revision, weight/tokenizer/chat-template hash, revision-bound license evidence, provenance blocker와 promotion 금지를 검사한다.
+- 번역 교정·소설 생성 suite와 synthetic evaluation case, 닫힌 inference request/result/error/receipt schema를 검증하고 unknown field, raw engine option, 임의 model URL과 provider credential admission fixture를 차단한다.
+
 ## 0.39.138
 
 - `ZDP-AI-INFERENCE-001`을 추가해 catalog가 표시한 AI inference execution plane의 유일 caller, 닫힌 execution contract, raw engine option 금지, routing/facade owner와 실행 증거 소유 경계를 검사한다.
