@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `ZDP-OPS-ASSET-001`을 추가해 운영자산 카탈로그의 소유자, 공급자 역할, 수명주기, 보안 상태와 검증 증거 누락을 fail-closed 차단한다.
+
 ## 0.41.1
 
 - `ZDP-MONEY-PLATFORM-001`과 runtime smoke 규칙이 실행하지 않은 contract check를 강제하지 않고 contract-only mode, 빈 check 목록, live-handler blocker를 검증한다.

@@ -82,6 +82,11 @@ export function createMinimalArchitectureFiles(
       type: 'object',
       additionalProperties: true
     }),
+    'schemas/operational-asset.schema.json': JSON.stringify({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: true
+    }),
     'ROADMAP.md': '# Roadmap\n',
     'docs/26-eighteen-month-roadmap.md': '# Eighteen month roadmap\n',
     'catalogs/repositories.yaml': 'repositories: []\n',
@@ -94,6 +99,7 @@ export function createMinimalArchitectureFiles(
     'catalogs/slo-tiers.yaml': 'tiers: []\nservice_tier_mapping: {}\n',
     'catalogs/events.yaml': 'events: []\n',
     'catalogs/external-providers.yaml': 'providers: []\n',
+    'catalogs/operational-assets.yaml': 'schema_version: 1\npolicy: {}\nassets: []\n',
     'rules/repository.rules.yaml': 'repository_area_rules: {}\n',
     'rules/money.rules.yaml': 'rules: []\n',
     'rules/provider.rules.yaml': 'rules: []\n',

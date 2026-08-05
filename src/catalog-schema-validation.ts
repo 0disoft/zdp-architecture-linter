@@ -5,6 +5,7 @@ import {
 import { validateDataClassCatalogSchema } from './data-class-schema-validation.ts';
 import { validateEventCatalogSchema } from './event-schema-validation.ts';
 import { validateExternalProviderCatalogSchema } from './external-provider-schema-validation.ts';
+import { validateOperationalAssetCatalogSchema } from './operational-asset-schema-validation.ts';
 import {
   hasErrors,
   type ValidationResult
@@ -50,6 +51,10 @@ export async function validateArchitectureCatalogSchemas(input: {
       validateExternalProviderCatalogSchema({
         architectureRoot: input.architectureRoot,
         value: input.catalogs.externalProviders
+      }),
+      validateOperationalAssetCatalogSchema({
+        architectureRoot: input.architectureRoot,
+        value: input.catalogs.operationalAssets
       }),
       validateSupportSourceAdapterCatalogSchema({
         architectureRoot: input.architectureRoot,

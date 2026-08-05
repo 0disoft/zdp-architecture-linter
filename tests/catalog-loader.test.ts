@@ -15,6 +15,7 @@ const REQUIRED_FILES = [
   'catalogs/slo-tiers.yaml',
   'catalogs/events.yaml',
   'catalogs/external-providers.yaml',
+  'catalogs/operational-assets.yaml',
   'rules/repository.rules.yaml',
   'rules/money.rules.yaml',
   'rules/provider.rules.yaml',
@@ -30,6 +31,7 @@ describe('architecture catalog loader', () => {
 
       expect(catalogs.repositories).toEqual({});
       expect(catalogs.splitTriggers).toEqual({ split_triggers: [] });
+      expect(catalogs.operationalAssets).toEqual({});
       expect(catalogs.supportSourceAdapters).toBeUndefined();
       expect(catalogs.apiRules).toBeUndefined();
       expect(catalogs.tokenRules).toBeUndefined();
