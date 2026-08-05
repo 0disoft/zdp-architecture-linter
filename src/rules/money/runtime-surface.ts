@@ -122,7 +122,9 @@ export async function validateRuntimeSurface(
             '.route("/healthz", get(healthz))',
             '.route("/readyz", get(readyz))',
             'service: SERVICE_ID',
-            'checks: &["contracts"]',
+            'checks: &[]',
+            'mode: "contract_only"',
+            'blockers: &["live_money_handlers_disabled"]',
             'money_boundaries_keep_ledger_as_credit_balance_truth_owner',
             'command_envelope_requires_idempotency_audit_and_trace_fields'
           ]

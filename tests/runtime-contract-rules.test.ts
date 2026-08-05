@@ -702,8 +702,10 @@ targets:
       expect_json:
         ready: false
         checks: []
+        mode: live
+        blockers: []
     blocked_production_when:
-      - condition: readyz checks omit contracts
+      - condition: contract-only readiness omits live money handler blocker
         enforced_by: smoke_runner
 `
         })
@@ -1935,12 +1937,14 @@ function createSmokeTargetsYaml(
       timeout_seconds: 3
       expect_json:
         ready: true
-        checks:
-          - contracts
+        checks: []
+        mode: contract_only
+        blockers:
+          - live_money_handlers_disabled
     blocked_production_when:
       - condition: healthz service id does not match money-api
         enforced_by: smoke_runner
-      - condition: readyz checks omit contracts
+      - condition: contract-only readiness omits live money handler blocker
         enforced_by: smoke_runner
       - condition: smoke check requires a real payment, refund, credit mutation, customer account, or provider credential
         enforced_by: operator_review

@@ -4,6 +4,7 @@ import {
   isRecord,
   readPath,
   readStringField,
+  validateEmptyStringArray,
   validateExactValue,
   validateOptionalJsonExpectationField,
   validateOptionalStringArrayField,
@@ -730,12 +731,29 @@ function validateMoneyApiSmokeTarget(
       expected: true,
       message: 'Runtime `money-api` readyz smoke target must expect `ready: true`.'
     }),
-    ...validateRequiredStringArrayEntries({
+    ...validateEmptyStringArray({
       value: target,
       file: SMOKE_TARGETS_FILE,
       path: 'targets.money-api.readyz.expect_json.checks',
       field: 'readyz.expect_json.checks',
-      requiredEntries: ['contracts']
+      message:
+        'Runtime `money-api` contract-only readyz smoke target must not claim unexecuted dependency checks.'
+    }),
+    ...validateExactValue({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.readyz.expect_json.mode',
+      field: 'readyz.expect_json.mode',
+      expected: 'contract_only',
+      message:
+        'Runtime `money-api` readyz smoke target must declare mode `contract_only`.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value: target,
+      file: SMOKE_TARGETS_FILE,
+      path: 'targets.money-api.readyz.expect_json.blockers',
+      field: 'readyz.expect_json.blockers',
+      requiredEntries: ['live_money_handlers_disabled']
     }),
     ...validateRequiredBlockedProductionConditions({
       value: target,
@@ -748,7 +766,7 @@ function validateMoneyApiSmokeTarget(
           enforcedBy: 'smoke_runner'
         },
         {
-          condition: 'readyz checks omit contracts',
+          condition: 'contract-only readiness omits live money handler blocker',
           enforcedBy: 'smoke_runner'
         },
         {

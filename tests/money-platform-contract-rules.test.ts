@@ -16,6 +16,29 @@ describe('money platform contract rules', () => {
     });
   });
 
+  test.each([
+    'mode: "contract_only"',
+    'blockers: &["live_money_handlers_disabled"]'
+  ])('fails when money readiness omits %s', async (fragment) => {
+    const files = createValidMoneyFiles();
+    files['src/lib.rs'] = files['src/lib.rs'].replace(fragment, '');
+
+    await withRepositoryRoot(files, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryMoneyPlatformContract({
+        repositoryRoot,
+        repositoryServiceContract: createMoneyServiceContract()
+      });
+
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-MONEY-PLATFORM-001',
+        severity: 'error',
+        file: 'src/lib.rs',
+        path: 'source',
+        message: `Money platform runtime source must include \`${fragment}\`.`
+      });
+    });
+  });
+
   test('skips repositories that are not zdp-money-platform', async () => {
     await withRepositoryRoot({}, async (repositoryRoot) => {
       const diagnostics = await validateRepositoryMoneyPlatformContract({
@@ -2005,8 +2028,10 @@ async fn healthz() -> Json<&'static str> {
 }
 
 async fn readyz() -> Json<&'static [&'static str]> {
-    // checks: &["contracts"]
-    let checks = &["contracts"];
+    // checks: &[]
+    // mode: "contract_only"
+    // blockers: &["live_money_handlers_disabled"]
+    let checks: &[&str] = &[];
     Json(checks)
 }
 

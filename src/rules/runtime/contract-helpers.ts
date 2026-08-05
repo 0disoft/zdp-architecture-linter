@@ -274,6 +274,22 @@ export function validateExactValue(input: {
   return [createRuntimeDiagnostic(input.file, input.path, input.message)];
 }
 
+export function validateEmptyStringArray(input: {
+  readonly value: unknown;
+  readonly file: string;
+  readonly path: string;
+  readonly field?: string;
+  readonly message: string;
+}): readonly Diagnostic[] {
+  const actual = readPath(input.value, input.field ?? input.path);
+
+  if (Array.isArray(actual) && actual.length === 0) {
+    return [];
+  }
+
+  return [createRuntimeDiagnostic(input.file, input.path, input.message)];
+}
+
 export function createRuntimeDiagnostic(
   file: string,
   path: string,
