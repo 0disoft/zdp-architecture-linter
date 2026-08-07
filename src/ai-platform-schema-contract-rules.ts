@@ -14,8 +14,10 @@ const MODEL_PROMOTION_STATE_MACHINE_FILE = 'contracts/model-promotion-state-mach
 const EVALUATION_SCHEMA_FILE = 'contracts/schemas/evaluation-case.v1.schema.json';
 const TRANSLATION_SUITE_FILE = 'contracts/evaluation-suites/translation-correction.v1.json';
 const NOVEL_SUITE_FILE = 'contracts/evaluation-suites/novel-generation.v1.json';
+const CODING_SUITE_FILE = 'contracts/evaluation-suites/coding-agent.v1.json';
 const TRANSLATION_CASE_FILE = 'contracts/fixtures/evaluation/translation-correction.pass.json';
 const NOVEL_CASE_FILE = 'contracts/fixtures/evaluation/novel-generation.pass.json';
+const CODING_CASE_FILE = 'contracts/fixtures/evaluation/coding-agent.pass.json';
 const REQUIRED_DECISION_AXES = [
   'internal_execution',
   'output_commercial_use',
@@ -128,8 +130,10 @@ export async function validateAiPlatformContractFiles(
   const evaluationSchema = await readJson(repositoryRoot, EVALUATION_SCHEMA_FILE, diagnostics);
   const translationSuite = await readJson(repositoryRoot, TRANSLATION_SUITE_FILE, diagnostics);
   const novelSuite = await readJson(repositoryRoot, NOVEL_SUITE_FILE, diagnostics);
+  const codingSuite = await readJson(repositoryRoot, CODING_SUITE_FILE, diagnostics);
   const translationCase = await readJson(repositoryRoot, TRANSLATION_CASE_FILE, diagnostics);
   const novelCase = await readJson(repositoryRoot, NOVEL_CASE_FILE, diagnostics);
+  const codingCase = await readJson(repositoryRoot, CODING_CASE_FILE, diagnostics);
 
   if (translationSuite !== null) {
     diagnostics.push(
@@ -150,6 +154,16 @@ export async function validateAiPlatformContractFiles(
     );
     diagnostics.push(...validateNovelPublicationGateValue(novelSuite));
   }
+  if (codingSuite !== null) {
+    diagnostics.push(
+      ...validateEvaluationSuiteValue(codingSuite, {
+        file: CODING_SUITE_FILE,
+        id: 'suite.coding-agent.v1',
+        useCase: 'coding_agent'
+      })
+    );
+    diagnostics.push(...validateCodingAgentBaselineValue(codingSuite));
+  }
   if (evaluationSchema !== null) {
     const validator = compileSchema(evaluationSchema, EVALUATION_SCHEMA_FILE, diagnostics);
     if (validator !== null && translationCase !== null) {
@@ -157,6 +171,9 @@ export async function validateAiPlatformContractFiles(
     }
     if (validator !== null && novelCase !== null) {
       validatePassFixture(validator, novelCase, NOVEL_CASE_FILE, diagnostics);
+    }
+    if (validator !== null && codingCase !== null) {
+      validatePassFixture(validator, codingCase, CODING_CASE_FILE, diagnostics);
     }
   }
 
@@ -503,6 +520,33 @@ function validateNovelPublicationGateValue(value: unknown): readonly Diagnostic[
   requireExact(value, 'publicationGate.productOwnsManuscriptAndAuthorship', true, NOVEL_SUITE_FILE, diagnostics);
   requireExact(value, 'publicationGate.humanReviewRequired', true, NOVEL_SUITE_FILE, diagnostics);
   requireExact(value, 'publicationGate.commercialDecisionDoesNotPromoteModel', true, NOVEL_SUITE_FILE, diagnostics);
+  return diagnostics;
+}
+
+function validateCodingAgentBaselineValue(value: unknown): readonly Diagnostic[] {
+  if (!isRecord(value)) return [];
+  const diagnostics: Diagnostic[] = [];
+  requireExact(value, 'capableBaseline.modelRepository', 'Qwen/Qwen3.6-27B', CODING_SUITE_FILE, diagnostics);
+  requireExact(value, 'capableBaseline.modelRevision', null, CODING_SUITE_FILE, diagnostics);
+  requireExact(
+    value,
+    'capableBaseline.status',
+    'revision_required_before_execution',
+    CODING_SUITE_FILE,
+    diagnostics
+  );
+  const comparisonPolicy = readString(readPath(value, 'capableBaseline.comparisonPolicy'));
+  for (const requiredTerm of ['same immutable fixture set', 'container', 'tool allowlist', 'token budget', 'evaluator version']) {
+    if (!comparisonPolicy.includes(requiredTerm)) {
+      diagnostics.push(
+        diagnostic(
+          CODING_SUITE_FILE,
+          'capableBaseline.comparisonPolicy',
+          `Coding-agent baseline comparison policy must include \`${requiredTerm}\`.`
+        )
+      );
+    }
+  }
   return diagnostics;
 }
 

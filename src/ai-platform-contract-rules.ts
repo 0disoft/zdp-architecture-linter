@@ -91,7 +91,8 @@ export function validateModelEvaluationPromotionValue(
     'evaluationSuiteRefs',
     [
       'contracts/evaluation-suites/translation-correction.v1.json',
-      'contracts/evaluation-suites/novel-generation.v1.json'
+      'contracts/evaluation-suites/novel-generation.v1.json',
+      'contracts/evaluation-suites/coding-agent.v1.json'
     ],
     diagnostics
   );

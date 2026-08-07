@@ -37,7 +37,8 @@ function validContract(): Record<string, unknown> {
     promotionStateMachineRef: 'contracts/model-promotion-state-machine.json',
     evaluationSuiteRefs: [
       'contracts/evaluation-suites/translation-correction.v1.json',
-      'contracts/evaluation-suites/novel-generation.v1.json'
+      'contracts/evaluation-suites/novel-generation.v1.json',
+      'contracts/evaluation-suites/coding-agent.v1.json'
     ],
     executionSchemaRefs: [
       'contracts/schemas/inference-execution-request.v1.schema.json',
