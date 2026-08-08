@@ -33,7 +33,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 - `catalogs/events.yaml`이 `schemas/event.schema.json`을 따르는지 검사한다.
 - 이벤트 `schema_ref`가 `schemas/events/*.json` 아래의 실제 JSON Schema 파일을 가리키고, 해당 파일의 `$id`가 참조 경로와 일치하는지 검사한다.
 - `catalogs/**/*.yaml` 사이의 참조 무결성을 검사한다.
-- `catalogs/operational-assets.yaml`이 소유자, 공급자 역할, 수명주기, 보안 상태, 검증 증거를 `schemas/operational-asset.schema.json`에 맞게 기록하는지 fail-closed 검사한다.
+- `catalogs/operational-assets.yaml`이 소유자, 공급자 역할, 수명주기, 보안 상태, 검증 증거를 `schemas/operational-asset.schema.json`에 맞게 기록하는지 fail-closed 검사하고, `ZDP-OPS-ASSET-002`로 검증 증거의 신선도, 활성 도메인 만료, 데이터베이스와 비공개 객체 스토리지 백업 관계 drift를 차단한다.
 - 데이터 클래스를 선언한 서비스가 데이터 소유자와 저장소를 함께 밝히고, 중앙 카탈로그에 존재하는 데이터 클래스와 저장소만 참조하는지 검사한다.
 - 실제 `service.yaml`이 이벤트를 생산할 때 중앙 이벤트 카탈로그의 `schema_ref`와 같은 payload 계약을 쓰는지 검사한다.
 - 실제 `service.yaml`이 재처리나 실패 큐가 필요한 이벤트를 참조할 때 운영 계약을 함께 밝히는지 검사한다.

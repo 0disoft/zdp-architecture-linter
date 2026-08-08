@@ -31,17 +31,20 @@ describe('operational asset catalog schema validation', () => {
     await withOperationalAssetSchemaRoot(async (architectureRoot) => {
       const diagnostics = await validateOperationalAssetCatalogSchema({
         architectureRoot,
+        observedAt: new Date('2026-08-08T12:00:00Z'),
         value: {
           schema_version: 1,
-          policy: { record_before_change: true },
+          policy: { record_before_change: true, review_interval_days: 30 },
           assets: [
             {
               id: 'domain-example-com',
+              kind: 'domain',
+              status: 'active',
               owner: 'platform',
               provider_bindings: [],
-              lifecycle: {},
-              security: {},
-              evidence: {}
+              lifecycle: { expires_at: '2027-08-08T00:00:00Z' },
+              security: { public_access: true },
+              evidence: { last_verified_at: '2026-08-08' }
             }
           ]
         }
@@ -74,7 +77,116 @@ describe('operational asset catalog schema validation', () => {
       ]);
     });
   });
+
+  test('fails when non-retired asset evidence exceeds the review interval', async () => {
+    await withOperationalAssetSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        observedAt: new Date('2026-08-08T12:00:00Z'),
+        value: operationalAssetCatalog([
+          operationalAsset({
+            id: 'compute-staging',
+            evidence: { last_verified_at: '2026-07-08' }
+          })
+        ])
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-OPS-ASSET-002',
+          severity: 'error',
+          file: 'catalogs/operational-assets.yaml',
+          path: 'assets.0.evidence.last_verified_at',
+          message:
+            'Operational asset `compute-staging` evidence is 31 days old, exceeding policy.review_interval_days=30; reconcile provider state and refresh non-secret evidence.'
+        }
+      ]);
+    });
+  });
+
+  test('fails when a non-retired domain has expired', async () => {
+    await withOperationalAssetSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        observedAt: new Date('2026-08-08T12:00:00Z'),
+        value: operationalAssetCatalog([
+          operationalAsset({
+            id: 'domain-example-com',
+            kind: 'domain',
+            lifecycle: { expires_at: '2026-08-08T11:59:59Z' }
+          })
+        ])
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-OPS-ASSET-002',
+          severity: 'error',
+          file: 'catalogs/operational-assets.yaml',
+          path: 'assets.0.lifecycle.expires_at',
+          message:
+            'Operational domain asset `domain-example-com` expired at `2026-08-08T11:59:59Z`; renew, retire, or replace it before operational completion.'
+        }
+      ]);
+    });
+  });
+
+  test('fails when an active database backup reference is missing or not private storage', async () => {
+    await withOperationalAssetSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        observedAt: new Date('2026-08-08T12:00:00Z'),
+        value: operationalAssetCatalog([
+          operationalAsset({
+            id: 'database-core',
+            kind: 'database',
+            details: { backup_asset_id: 'backup-core' }
+          }),
+          operationalAsset({
+            id: 'backup-core',
+            kind: 'object-storage',
+            security: { public_access: true }
+          })
+        ])
+      });
+
+      expect(diagnostics).toEqual([
+        {
+          ruleId: 'ZDP-OPS-ASSET-002',
+          severity: 'error',
+          file: 'catalogs/operational-assets.yaml',
+          path: 'assets.0.details.backup_asset_id',
+          message:
+            'Operational asset `database-core` backup reference `backup-core` must resolve to an active, private object-storage asset.'
+        }
+      ]);
+    });
+  });
 });
+
+function operationalAssetCatalog(assets: readonly Record<string, unknown>[]) {
+  return {
+    schema_version: 1,
+    policy: { record_before_change: true, review_interval_days: 30 },
+    assets
+  };
+}
+
+function operationalAsset(
+  overrides: Readonly<Record<string, unknown>> = {}
+): Record<string, unknown> {
+  return {
+    id: 'compute-example',
+    kind: 'compute',
+    status: 'active',
+    owner: 'platform',
+    provider_bindings: [],
+    lifecycle: { expires_at: null },
+    security: { public_access: false },
+    evidence: { last_verified_at: '2026-08-08' },
+    ...overrides
+  };
+}
 
 async function withOperationalAssetSchemaRoot(
   callback: (architectureRoot: string) => Promise<void>
