@@ -15,6 +15,7 @@ import {
 } from './ai-inference-rules.ts';
 import { validateRepositoryAiPlatformContract } from './ai-platform-contract-rules.ts';
 import { validateRepositoryAiInferenceContract } from './ai-inference-contract-rules.ts';
+import { validateRepositoryAgentReviewPlaybookContract } from './agent-review-playbook-contract-rules.ts';
 import { validateChatgptAppsSdkGatewayContract } from './chatgpt-app-rules.ts';
 import {
   mapServiceCatalogDiagnosticsToRepositoryServiceContract,
@@ -174,6 +175,7 @@ type RepositoryContractValidator = (
  * risk: data_consistency, dependency
  */
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidator[] = [
+  validateRepositoryAgentReviewPlaybookContract,
   validateRepositoryAiPlatformContract,
   validateRepositoryAiInferenceContract,
   validateRepositoryWebpubContract,

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ZDP-AGENT-REVIEW-001`을 추가해 group reducer schema, Markdown template, producer prompt의 non-empty `target_commits`와 marker parity 계약을 검사한다.
 - `ZDP-OPS-ASSET-001`을 추가해 운영자산 카탈로그의 소유자, 공급자 역할, 수명주기, 보안 상태와 검증 증거 누락을 fail-closed 차단한다.
 
 ## 0.41.1
