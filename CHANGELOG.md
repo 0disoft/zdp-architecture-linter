@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ZDP-AGENT-REVIEW-001`이 raw/group/final schema, Markdown template, producer prompt의 canonical catalog `model_id`와 model profile exact-id 계약을 검사한다.
 - `ZDP-OPS-ASSET-002`를 추가해 운영자산 검증 증거가 정책 검토 간격을 넘기거나 미래 날짜를 가리키는 경우, 활성 도메인이 만료된 경우, 데이터베이스의 백업 참조가 활성 비공개 객체 스토리지와 일치하지 않는 경우를 fail-closed 차단한다.
 - `ZDP-AGENT-REVIEW-001`을 추가해 group reducer schema, Markdown template, producer prompt의 non-empty `target_commits`와 marker parity 계약을 검사한다.
 - `ZDP-OPS-ASSET-001`을 추가해 운영자산 카탈로그의 소유자, 공급자 역할, 수명주기, 보안 상태와 검증 증거 누락을 fail-closed 차단한다.

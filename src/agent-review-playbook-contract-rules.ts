@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
 
 const REPOSITORY = 'zdp-agent-review-playbooks';
@@ -8,6 +9,14 @@ const SCHEMA_FILE = 'schemas/group-reducer-report.schema.json';
 const TEMPLATE_FILE = 'templates/group-reducer-output.md';
 const PROMPT_FILE = 'prompts/10-group-reducer.md';
 const COMMIT_PATTERN = '^[0-9a-f]{40}$';
+const MODEL_ID_PATTERN = '^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)?$';
+const MODEL_PROFILE_FILE = 'manifests/model-profiles.yaml';
+const PROVIDER_MODELS_FILE = 'manifests/provider-models.json';
+const MODEL_SURFACES = [
+  ['raw_review', 'schemas/raw-review-manifest.schema.json', 'templates/raw-review-output.md', 'prompts/00-common-review-contract.md'],
+  ['group_reducer', SCHEMA_FILE, TEMPLATE_FILE, PROMPT_FILE],
+  ['final_reducer', 'schemas/final-report.schema.json', 'templates/final-top6-report.md', 'prompts/20-final-reducer.md']
+] as const;
 
 export async function validateRepositoryAgentReviewPlaybookContract(input: {
   readonly repositoryRoot: string | undefined;
@@ -63,6 +72,19 @@ export async function validateRepositoryAgentReviewPlaybookContract(input: {
     }
   }
 
+  const modelFiles = [
+    MODEL_PROFILE_FILE,
+    PROVIDER_MODELS_FILE,
+    ...MODEL_SURFACES.flatMap(([, schema, template, prompt]) => [schema, template, prompt])
+  ];
+  const modelSources = new Map<string, string | null>();
+  await Promise.all(
+    [...new Set(modelFiles)].map(async (file) => {
+      modelSources.set(file, await readRequired(input.repositoryRoot!, file, diagnostics));
+    })
+  );
+  validateModelProducerContract(modelSources, diagnostics);
+
   const requiredRules = readStringArray(
     readPath(input.repositoryServiceContract, 'policy_gates.required_linter_rules')
   );
@@ -77,6 +99,72 @@ export async function validateRepositoryAgentReviewPlaybookContract(input: {
   }
 
   return diagnostics;
+}
+
+function validateModelProducerContract(
+  sources: ReadonlyMap<string, string | null>,
+  diagnostics: Diagnostic[]
+): void {
+  const profileSource = sources.get(MODEL_PROFILE_FILE);
+  const providerSource = sources.get(PROVIDER_MODELS_FILE);
+  if (profileSource === null || profileSource === undefined || providerSource === null || providerSource === undefined) {
+    return;
+  }
+
+  let profiles: unknown;
+  let providers: unknown;
+  try {
+    profiles = parseYaml(profileSource);
+    providers = JSON.parse(providerSource);
+  } catch {
+    diagnostics.push(diagnostic(MODEL_PROFILE_FILE, 'model_profiles', 'Model profile and provider model manifests must be parseable.'));
+    return;
+  }
+  const providerIds = new Set(
+    Array.isArray(readPath(providers, 'models'))
+      ? (readPath(providers, 'models') as unknown[])
+          .map((model) => readPath(model, 'model_id'))
+          .filter((model): model is string => typeof model === 'string')
+      : []
+  );
+
+  for (const [profile, schemaFile, templateFile, promptFile] of MODEL_SURFACES) {
+    const preferredModel = readPath(profiles, `profiles.${profile}.preferred_model`);
+    if (typeof preferredModel !== 'string' || !providerIds.has(preferredModel)) {
+      diagnostics.push(diagnostic(MODEL_PROFILE_FILE, `profiles.${profile}.preferred_model`, `Model profile ${profile} must reference a canonical provider model id.`));
+    }
+
+    const schemaSource = sources.get(schemaFile);
+    if (schemaSource !== null && schemaSource !== undefined) {
+      try {
+        const schema = JSON.parse(schemaSource);
+        if (
+          !readStringArray(readPath(schema, 'required')).includes('model_id') ||
+          readPath(schema, 'properties.model_id.pattern') !== MODEL_ID_PATTERN
+        ) {
+          diagnostics.push(diagnostic(schemaFile, 'properties.model_id', `Review schema for ${profile} must require a canonical model_id token.`));
+        }
+      } catch {
+        diagnostics.push(diagnostic(schemaFile, 'json', `Review schema for ${profile} must be valid JSON.`));
+      }
+    }
+
+    const templateSource = sources.get(templateFile);
+    if (templateSource !== null && templateSource !== undefined && !frontmatter(templateSource).includes('model_id: ""')) {
+      diagnostics.push(diagnostic(templateFile, 'frontmatter.model_id', `Review template for ${profile} must expose model_id.`));
+    }
+
+    const promptSource = sources.get(promptFile);
+    for (const [fragment, suffix] of [
+      [`${profile}.preferred_model`, 'preferred_model'],
+      ['DONE_MARKER_FILE.model_id', 'marker_model_id'],
+      ['status: completed', 'completed_gate']
+    ] as const) {
+      if (promptSource !== null && promptSource !== undefined && !promptSource.includes(fragment)) {
+        diagnostics.push(diagnostic(promptFile, `producer.${profile}.${suffix}`, `Review producer for ${profile} must enforce canonical model_id provenance.`));
+      }
+    }
+  }
 }
 
 function validateSchema(source: string, diagnostics: Diagnostic[]): void {
