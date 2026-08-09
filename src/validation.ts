@@ -53,6 +53,7 @@ import {
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
   validateEventDataClassReferences,
+  validateEventPiiFloor,
   validateEventRepositoryReferences
 } from './event-rules.ts';
 import { validateEventSchemaReferences } from './event-schema-validation.ts';
@@ -485,6 +486,7 @@ export async function validateArchitecture(
       })),
       ...validateEventCatalog(catalogs.events),
       ...validateEventDataClassReferences(catalogs.events, dataClassIndex),
+      ...validateEventPiiFloor(catalogs.events, dataClassIndex),
       ...validateEventRepositoryReferences(catalogs.events, repositoryIndex),
       ...validateDataClassDeletionEventReferences(catalogs.dataClasses, eventIndex),
       ...validateCostBudgetCatalog(catalogs.costBudgets),

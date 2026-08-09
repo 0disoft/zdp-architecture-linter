@@ -97,6 +97,44 @@ export function validateEventDataClassReferences(
   );
 }
 
+export function validateEventPiiFloor(
+  value: unknown,
+  dataClassIndex: DataClassIndex
+): readonly Diagnostic[] {
+  if (!isRecord(value) || !Array.isArray(value.events)) {
+    return [];
+  }
+
+  return value.events.flatMap((event, index) => {
+    if (!isRecord(event) || !Array.isArray(event.data_classes)) {
+      return [];
+    }
+
+    const piiDataClasses = event.data_classes.flatMap((dataClassId) => {
+      if (typeof dataClassId !== 'string') {
+        return [];
+      }
+      const normalizedId = dataClassId.trim();
+      return dataClassIndex.byId.get(normalizedId)?.containsPii === true
+        ? [normalizedId]
+        : [];
+    });
+
+    if (piiDataClasses.length === 0 || event.contains_pii === true) {
+      return [];
+    }
+
+    return [
+      createEventPiiDiagnostic(
+        `${getEventDiagnosticPath(event, index)}.contains_pii`,
+        `Event references PII data class${piiDataClasses.length === 1 ? '' : 'es'} ${piiDataClasses
+          .map((id) => `\`${id}\``)
+          .join(', ')} and must declare \`contains_pii: true\`.`
+      )
+    ];
+  });
+}
+
 export function validateEventRepositoryReferences(
   value: unknown,
   repositoryIndex: RepositoryIndex
@@ -434,6 +472,16 @@ function createEventDiagnostic(path: string, message: string): Diagnostic {
 function createEventRepositoryDiagnostic(path: string, message: string): Diagnostic {
   return {
     ruleId: 'ZDP-REF-008',
+    severity: 'error',
+    file: EVENTS_FILE,
+    path,
+    message
+  };
+}
+
+function createEventPiiDiagnostic(path: string, message: string): Diagnostic {
+  return {
+    ruleId: 'ZDP-DATA-009',
     severity: 'error',
     file: EVENTS_FILE,
     path,

@@ -24,6 +24,7 @@ const EMPTY_SERVICE_DATA_OWNERSHIP_POLICY: ServiceDataOwnershipPolicy = {
 export interface DataClassRecord {
   readonly id: string;
   readonly path: string;
+  readonly containsPii: boolean | null;
 }
 
 export interface DataClassIndex {
@@ -65,7 +66,8 @@ export function buildDataClassIndex(value: unknown): DataClassIndex {
       id,
       {
         id,
-        path: getDataClassDiagnosticPath(dataClass, index)
+        path: getDataClassDiagnosticPath(dataClass, index),
+        containsPii: readBooleanField(dataClass, 'contains_pii')
       }
     ]);
   }
@@ -874,6 +876,13 @@ function readStringField(value: Record<string, unknown>, field: string): string 
   return typeof candidate === 'string' && candidate.trim().length > 0
     ? candidate.trim()
     : null;
+}
+
+function readBooleanField(
+  value: Record<string, unknown>,
+  field: string
+): boolean | null {
+  return typeof value[field] === 'boolean' ? value[field] : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

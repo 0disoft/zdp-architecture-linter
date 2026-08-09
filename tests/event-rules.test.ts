@@ -5,6 +5,7 @@ import {
   validateDataClassDeletionEventReferences,
   validateEventCatalog,
   validateEventDataClassReferences,
+  validateEventPiiFloor,
   validateEventRepositoryReferences
 } from '../src/event-rules.ts';
 import { buildRepositoryIndex } from '../src/repository-rules.ts';
@@ -221,6 +222,63 @@ describe('event data class references', () => {
       }
     ]);
   });
+});
+
+describe('event PII floor', () => {
+  test('passes non-PII events and events that preserve the PII classification', () => {
+    const index = buildDataClassIndex({
+      data_classes: [
+        { id: 'events', contains_pii: false },
+        { id: 'support-case-metadata', contains_pii: true }
+      ]
+    });
+
+    expect(
+      validateEventPiiFloor(
+        {
+          events: [
+            { id: 'analytics.event-recorded', data_classes: ['events'], contains_pii: false },
+            { id: 'support.case-upserted', data_classes: ['support-case-metadata'], contains_pii: true }
+          ]
+        },
+        index
+      )
+    ).toEqual([]);
+  });
+
+  test.each([false, undefined])(
+    'rejects a PII event with contains_pii=%s',
+    (containsPii) => {
+      const event: Record<string, unknown> = {
+        id: 'support.case-upserted',
+        data_classes: ['events', 'support-case-metadata']
+      };
+      if (containsPii !== undefined) {
+        event.contains_pii = containsPii;
+      }
+
+      expect(
+        validateEventPiiFloor(
+          { events: [event] },
+          buildDataClassIndex({
+            data_classes: [
+              { id: 'events', contains_pii: false },
+              { id: 'support-case-metadata', contains_pii: true }
+            ]
+          })
+        )
+      ).toEqual([
+        {
+          ruleId: 'ZDP-DATA-009',
+          severity: 'error',
+          file: 'catalogs/events.yaml',
+          path: 'events[0:support.case-upserted].contains_pii',
+          message:
+            'Event references PII data class `support-case-metadata` and must declare `contains_pii: true`.'
+        }
+      ]);
+    }
+  );
 });
 
 function createRepository(
