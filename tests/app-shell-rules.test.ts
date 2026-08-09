@@ -16,6 +16,41 @@ describe('app shell contract rules', () => {
     });
   });
 
+  test('allows only localized password login and signup in the bounded staging state', async () => {
+    await withRepositoryRoot(createPartialAuthAppShellFiles(), async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryAppShellContract({
+        repositoryRoot,
+        repositoryServiceContract: createPartialAuthWebAppsServiceContract()
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
+  });
+
+  test('keeps recovery blocked while localized password login and signup are allowed', async () => {
+    await withRepositoryRoot(
+      {
+        ...createPartialAuthAppShellFiles(),
+        'src/routes/[locale]/recovery/+page.svelte': '<h1>Recovery</h1>\n'
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryAppShellContract({
+          repositoryRoot,
+          repositoryServiceContract: createPartialAuthWebAppsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-APP-001',
+          severity: 'error',
+          file: 'src/routes/[locale]/recovery/+page.svelte',
+          path: 'source.auth_route_promotion',
+          message:
+            'App shell auth route `src/routes/[locale]/recovery/+page.svelte` is blocked until core auth/session route catalog adoption, live runtime handoff, cleared promotion blockers, auth product review receipt review, and product reviewer approval evidence exist.'
+        });
+      }
+    );
+  });
+
   test('skips repositories that are not zdp-web-apps', async () => {
     await withRepositoryRoot({}, async (repositoryRoot) => {
       const diagnostics = await validateRepositoryAppShellContract({
@@ -211,7 +246,7 @@ forbidden:
           file: 'contracts/app-shell.yaml',
           path: 'auth_route_promotion.status',
           message:
-            'App shell auth route promotion status must stay `blocked_until_core_auth_runtime_and_product_review`.'
+            'App shell auth route promotion status must be `blocked_until_core_auth_runtime_and_product_review` or the bounded staging status `partial_login_signup_implemented_pending_staging_deployment`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-APP-001',
@@ -626,6 +661,37 @@ function createWebAppsServiceContract(): unknown {
       'Disabling the affected app slice and keeping the previous app-shell copy or i18n runtime path is the rollback boundary for the localization canary, so this shell does not require a runtime feature flag.'
     ]
   };
+}
+
+function createPartialAuthWebAppsServiceContract(): unknown {
+  const contract = structuredClone(createWebAppsServiceContract()) as {
+    notes: string[];
+  };
+  contract.notes = [
+    ...contract.notes.filter(
+      (note) => !note.startsWith('auth route promotion remains blocked')
+    ),
+    'localized password login and signup routes consume zdp-auth-ui and the private account BFF Edge binding.',
+    'recovery, passkey, OAuth callback, provider-choice, refresh, revoke, and logout UI remain blocked until operation-specific evidence exists.',
+    'Password login and signup are the only promoted auth routes.'
+  ];
+  return contract;
+}
+
+function createPartialAuthAppShellFiles(): Record<string, string> {
+  const files = createValidAppShellFiles();
+  files['contracts/app-shell.yaml'] = files['contracts/app-shell.yaml']
+    .replace(
+      'status: blocked_until_core_auth_runtime_and_product_review',
+      'status: partial_login_signup_implemented_pending_staging_deployment'
+    )
+    .replace(
+      '  allowed_routes: []',
+      `  allowed_routes:\n    - /{locale}/login\n    - /{locale}/signup\n  partial_route_scope:\n    implemented:\n      - password_registration\n      - password_session_issue\n    still_blocked:\n      - session_refresh\n      - session_revoke_and_logout_ui\n      - recovery\n      - passkey\n      - oauth_callback\n      - provider_choice\n    approval_source: user_explicit_request_2026-08-09`
+    );
+  files['src/routes/[locale]/login/+page.svelte'] = '<h1>Login</h1>\n';
+  files['src/routes/[locale]/signup/+page.svelte'] = '<h1>Signup</h1>\n';
+  return files;
 }
 
 function createValidAppShellFiles(): Record<string, string> {

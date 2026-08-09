@@ -182,6 +182,8 @@ fixtures/service-schema/fail/**
 
 0.39.18부터 `ZDP-APP-001`은 `zdp-web-apps` auth route promotion 계약이 `zdp-api-contracts/contracts/apis/catalog.yaml`의 core-api auth/session operation 목록을 명시하되, live core runtime handoff와 product reviewer approval 전에는 route를 열지 않는 상태를 유지하는지 검사한다.
 
+0.42.2부터 `ZDP-APP-001`은 기본 차단 상태와 함께 `partial_login_signup_implemented_pending_staging_deployment`를 인식한다. 이 상태는 localized `/{locale}/login`, `/{locale}/signup` 두 경로와 password registration/session issue만 허용하고, 명시적 approval source 및 recovery/passkey/OAuth/refresh/revoke/logout 차단 목록을 요구한다.
+
 0.39.19부터 `ZDP-CORE-001`은 `zdp-core-platform` auth/session runtime handoff 계약이 `contracted_no_live_handler`, catalog source, 8개 auth/session operation, request/trace/idempotency/audit/session-store/credential-vault handoff, promotion blocker, plaintext refresh token 금지선을 유지하는지 검사한다.
 
 0.39.35부터 `ZDP-CORE-001`은 `zdp-core-platform` auth runtime readiness summary 계약이 `readiness_summary_no_runtime_promotion`, `promotion_ready: false`, `production_route_ready: false`, required gate states, blocking summary, forbidden readiness claims를 유지하는지 검사한다. session store, credential vault handoff, passkey challenge store, OAuth callback state, audit persistence/storage adapter, idempotency, request/trace propagation, refresh token rotation, product reviewer approval gate는 durable implementation 또는 review proof가 없으면 계속 blocker로 남아야 한다. 이 summary는 blocker map이며 durable auth runtime, provider token exchange, DB migration, live handler, product route unblock proof가 아니다.

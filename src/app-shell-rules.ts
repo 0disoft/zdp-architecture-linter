@@ -32,6 +32,21 @@ const REQUIRED_FORBIDDEN_CONTRACTS = [
 ] as const;
 const REQUIRED_AUTH_ROUTE_PROMOTION_STATUS =
   'blocked_until_core_auth_runtime_and_product_review';
+const PARTIAL_AUTH_ROUTE_PROMOTION_STATUS =
+  'partial_login_signup_implemented_pending_staging_deployment';
+const PARTIAL_AUTH_ALLOWED_ROUTES = ['/{locale}/login', '/{locale}/signup'] as const;
+const PARTIAL_AUTH_IMPLEMENTED_OPERATIONS = [
+  'password_registration',
+  'password_session_issue'
+] as const;
+const PARTIAL_AUTH_STILL_BLOCKED_OPERATIONS = [
+  'session_refresh',
+  'session_revoke_and_logout_ui',
+  'recovery',
+  'passkey',
+  'oauth_callback',
+  'provider_choice'
+] as const;
 const REQUIRED_AUTH_ROUTE_CATALOG_SOURCE =
   'zdp-api-contracts/contracts/apis/catalog.yaml';
 const REQUIRED_AUTH_ROUTE_OPERATIONS = [
@@ -80,15 +95,24 @@ const REQUIRED_SERVICE_CONTRACT_SNIPPETS = [
   'generated large-catalog diagnostics 0',
   'production fallback 0',
   'auth route promotion requires core auth/session route catalog adoption',
-  'auth route promotion remains blocked until the core auth/session route catalog is adopted',
-  'core auth/session promotion blockers are cleared',
   'zdp-core-platform contracts/auth-product-review-approval.yaml receipt review',
   'typed_product_approval_gate_receipt_no_route_unblock',
-  'product_reviewer_approval_present plus product_approval_evidence_ref_present are true',
   'Required auth catalog operations are core.auth.registrations.create',
   'limited to the six app-shell navigation and page-title messages',
   'keep the previous app-shell copy or i18n runtime path',
   'does not require a runtime feature flag'
+] as const;
+
+const REQUIRED_BLOCKED_AUTH_SERVICE_SNIPPETS = [
+  'auth route promotion remains blocked until the core auth/session route catalog is adopted',
+  'core auth/session promotion blockers are cleared',
+  'product_reviewer_approval_present plus product_approval_evidence_ref_present are true'
+] as const;
+
+const REQUIRED_PARTIAL_AUTH_SERVICE_SNIPPETS = [
+  'localized password login and signup routes consume zdp-auth-ui',
+  'recovery, passkey, OAuth callback, provider-choice, refresh, revoke, and logout UI remain blocked',
+  'Password login and signup are the only promoted auth routes'
 ] as const;
 
 const REQUIRED_CI_WORKFLOW_SNIPPETS = [
@@ -164,10 +188,10 @@ export async function validateRepositoryAppShellContract(input: {
   }
 
   diagnostics.push(
-    ...validateServiceContractIncludes(input.repositoryServiceContract)
+    ...validateServiceContractIncludes(input.repositoryServiceContract, contract.value)
   );
   diagnostics.push(...(await validateCiWorkflowIncludes(input.repositoryRoot)));
-  diagnostics.push(...(await validateSourceBoundaries(input.repositoryRoot)));
+  diagnostics.push(...(await validateSourceBoundaries(input.repositoryRoot, contract.value)));
 
   return diagnostics;
 }
@@ -302,12 +326,16 @@ function validateAuthRoutePromotion(value: unknown): readonly Diagnostic[] {
 
   const diagnostics: Diagnostic[] = [];
 
-  if (readStringField(promotion, 'status') !== REQUIRED_AUTH_ROUTE_PROMOTION_STATUS) {
+  const status = readStringField(promotion, 'status');
+  if (
+    status !== REQUIRED_AUTH_ROUTE_PROMOTION_STATUS &&
+    status !== PARTIAL_AUTH_ROUTE_PROMOTION_STATUS
+  ) {
     diagnostics.push(
       createAppShellDiagnostic(
         APP_SHELL_CONTRACT_FILE,
         'auth_route_promotion.status',
-        `App shell auth route promotion status must stay \`${REQUIRED_AUTH_ROUTE_PROMOTION_STATUS}\`.`
+        `App shell auth route promotion status must be \`${REQUIRED_AUTH_ROUTE_PROMOTION_STATUS}\` or the bounded staging status \`${PARTIAL_AUTH_ROUTE_PROMOTION_STATUS}\`.`
       )
     );
   }
@@ -330,12 +358,14 @@ function validateAuthRoutePromotion(value: unknown): readonly Diagnostic[] {
       field: 'required_operations',
       requiredEntries: REQUIRED_AUTH_ROUTE_OPERATIONS
     }),
-    ...validateEmptyStringArray({
-      value: promotion,
-      file: APP_SHELL_CONTRACT_FILE,
-      path: 'auth_route_promotion.allowed_routes',
-      field: 'allowed_routes'
-    }),
+    ...(status === PARTIAL_AUTH_ROUTE_PROMOTION_STATUS
+      ? validatePartialAuthRoutePromotion(promotion)
+      : validateEmptyStringArray({
+          value: promotion,
+          file: APP_SHELL_CONTRACT_FILE,
+          path: 'auth_route_promotion.allowed_routes',
+          field: 'allowed_routes'
+        })),
     ...validateRequiredStringArrayEntries({
       value: promotion,
       file: APP_SHELL_CONTRACT_FILE,
@@ -344,6 +374,46 @@ function validateAuthRoutePromotion(value: unknown): readonly Diagnostic[] {
       requiredEntries: REQUIRED_AUTH_ROUTE_PROMOTION_REQUIREMENTS
     })
   );
+
+  return diagnostics;
+}
+
+function validatePartialAuthRoutePromotion(
+  promotion: Readonly<Record<string, unknown>>
+): readonly Diagnostic[] {
+  const diagnostics = [
+    ...validateExactStringArray({
+      value: promotion,
+      field: 'allowed_routes',
+      expectedEntries: PARTIAL_AUTH_ALLOWED_ROUTES,
+      path: 'auth_route_promotion.allowed_routes',
+      label: 'partial auth route allowlist'
+    }),
+    ...validateExactStringArray({
+      value: promotion,
+      field: 'partial_route_scope.implemented',
+      expectedEntries: PARTIAL_AUTH_IMPLEMENTED_OPERATIONS,
+      path: 'auth_route_promotion.partial_route_scope.implemented',
+      label: 'partial auth implemented operations'
+    }),
+    ...validateExactStringArray({
+      value: promotion,
+      field: 'partial_route_scope.still_blocked',
+      expectedEntries: PARTIAL_AUTH_STILL_BLOCKED_OPERATIONS,
+      path: 'auth_route_promotion.partial_route_scope.still_blocked',
+      label: 'partial auth blocked operations'
+    })
+  ];
+
+  if (readStringField(readRecordPath(promotion, 'partial_route_scope'), 'approval_source') === null) {
+    diagnostics.push(
+      createAppShellDiagnostic(
+        APP_SHELL_CONTRACT_FILE,
+        'auth_route_promotion.partial_route_scope.approval_source',
+        'Partial staging login/signup promotion must record a non-empty explicit approval source.'
+      )
+    );
+  }
 
   return diagnostics;
 }
@@ -498,11 +568,24 @@ function validateRequiredSurfaces(value: unknown): readonly Diagnostic[] {
   return diagnostics;
 }
 
-function validateServiceContractIncludes(value: unknown): readonly Diagnostic[] {
+function validateServiceContractIncludes(
+  value: unknown,
+  appShellContract: unknown | null
+): readonly Diagnostic[] {
   const source = stringify(value);
   const diagnostics: Diagnostic[] = [];
+  const promotionStatus = readStringField(
+    readRecordPath(appShellContract, 'auth_route_promotion'),
+    'status'
+  );
+  const requiredSnippets = [
+    ...REQUIRED_SERVICE_CONTRACT_SNIPPETS,
+    ...(promotionStatus === PARTIAL_AUTH_ROUTE_PROMOTION_STATUS
+      ? REQUIRED_PARTIAL_AUTH_SERVICE_SNIPPETS
+      : REQUIRED_BLOCKED_AUTH_SERVICE_SNIPPETS)
+  ];
 
-  for (const snippet of REQUIRED_SERVICE_CONTRACT_SNIPPETS) {
+  for (const snippet of requiredSnippets) {
     if (source.includes(snippet)) {
       continue;
     }
@@ -584,17 +667,22 @@ async function validateCiWorkflowIncludes(
 }
 
 async function validateSourceBoundaries(
-  repositoryRoot: string
+  repositoryRoot: string,
+  appShellContract: unknown | null
 ): Promise<readonly Diagnostic[]> {
   const sourceRoot = join(repositoryRoot, 'src');
   const sourceFiles = await listSourceFiles(sourceRoot);
   const diagnostics: Diagnostic[] = [];
+  const allowedRoutes = readStringArrayPath(
+    readRecordPath(appShellContract, 'auth_route_promotion'),
+    'allowed_routes'
+  );
 
   for (const file of sourceFiles) {
     const source = await readFile(file, 'utf8');
     const relativePath = relative(repositoryRoot, file).replaceAll('\\', '/');
 
-    if (isBlockedAuthRoutePath(relativePath)) {
+    if (isBlockedAuthRoutePath(relativePath, allowedRoutes)) {
       diagnostics.push(
         createAppShellDiagnostic(
           relativePath,
@@ -622,7 +710,10 @@ async function validateSourceBoundaries(
   return diagnostics;
 }
 
-function isBlockedAuthRoutePath(path: string): boolean {
+function isBlockedAuthRoutePath(
+  path: string,
+  allowedRoutes: readonly string[]
+): boolean {
   if (!path.startsWith('src/routes/')) {
     return false;
   }
@@ -631,12 +722,29 @@ function isBlockedAuthRoutePath(path: string): boolean {
     .split('/')
     .map((segment) => segment.toLowerCase());
 
+  const route = sourceRouteTemplate(path);
+  if (route !== null && allowedRoutes.includes(route)) {
+    return false;
+  }
+
   if (segments.some((segment) => BLOCKED_AUTH_ROUTE_SEGMENTS.has(segment))) {
     return true;
   }
 
   return segments.includes('callback') &&
     segments.some((segment) => AUTH_CALLBACK_ROUTE_CONTEXT_SEGMENTS.has(segment));
+}
+
+function sourceRouteTemplate(path: string): string | null {
+  const segments = path.split('/');
+  if (segments.length < 4 || segments[0] !== 'src' || segments[1] !== 'routes') {
+    return null;
+  }
+  const routeSegments = segments.slice(2, -1).map((segment) => {
+    const parameter = segment.match(/^\[([^\]]+)\]$/);
+    return parameter === null ? segment : `{${parameter[1]}}`;
+  });
+  return `/${routeSegments.join('/')}`;
 }
 
 async function listSourceFiles(root: string): Promise<readonly string[]> {
@@ -750,6 +858,42 @@ function validateExactStringArrayEntries(input: {
   return diagnostics;
 }
 
+function validateExactStringArray(input: {
+  readonly value: unknown;
+  readonly field: string;
+  readonly expectedEntries: readonly string[];
+  readonly path: string;
+  readonly label: string;
+}): readonly Diagnostic[] {
+  const entries = readStringArrayPath(input.value, input.field);
+  const diagnostics: Diagnostic[] = [];
+
+  for (const expectedEntry of input.expectedEntries) {
+    if (!entries.includes(expectedEntry)) {
+      diagnostics.push(
+        createAppShellDiagnostic(
+          APP_SHELL_CONTRACT_FILE,
+          input.path,
+          `App shell ${input.label} must include \`${expectedEntry}\`.`
+        )
+      );
+    }
+  }
+  for (const entry of entries) {
+    if (!input.expectedEntries.includes(entry)) {
+      diagnostics.push(
+        createAppShellDiagnostic(
+          APP_SHELL_CONTRACT_FILE,
+          input.path,
+          `App shell ${input.label} must not include \`${entry}\`.`
+        )
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
 function validateEmptyStringArray(input: {
   readonly value: unknown;
   readonly file: string;
@@ -803,6 +947,14 @@ function readPath(value: unknown, path: string): unknown {
   }
 
   return current;
+}
+
+function readRecordPath(
+  value: unknown,
+  path: string
+): Readonly<Record<string, unknown>> {
+  const candidate = readPath(value, path);
+  return isRecord(candidate) ? candidate : {};
 }
 
 function readStringField(
