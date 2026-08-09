@@ -4,6 +4,7 @@ import {
   buildServiceDataCatalogPolicy,
   buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
+  validateDataClassDatastoreReciprocity,
   validateDataClassCatalog,
   validateDatastoreDataClassReferences,
   validateServiceDataCatalogReferences,
@@ -488,6 +489,53 @@ describe('datastore data class references', () => {
         file: 'catalogs/datastores.yaml',
         path: 'datastores[0:core_postgres].data_classes',
         message: '`data_classes` must be a YAML array when present.'
+      }
+    ]);
+  });
+});
+
+describe('data class and datastore reciprocity', () => {
+  test('passes when both catalogs declare the same storage relation', () => {
+    expect(
+      validateDataClassDatastoreReciprocity(
+        { data_classes: [{ id: 'audit-logs', allowed_datastores: ['audit_postgres'] }] },
+        { datastores: [{ id: 'audit_postgres', data_classes: ['audit-logs'] }] }
+      )
+    ).toEqual([]);
+  });
+
+  test('reports each one-sided relation without duplicating unknown-reference errors', () => {
+    const diagnostics = validateDataClassDatastoreReciprocity(
+      {
+        data_classes: [
+          { id: 'audit-logs', allowed_datastores: ['admin_postgres', 'missing'] },
+          { id: 'admin-action-request', allowed_datastores: [] }
+        ]
+      },
+      {
+        datastores: [
+          { id: 'admin_postgres', data_classes: [] },
+          { id: 'audit_postgres', data_classes: ['admin-action-request', 'missing'] }
+        ]
+      }
+    );
+
+    expect(diagnostics).toEqual([
+      {
+        ruleId: 'ZDP-DATA-008',
+        severity: 'error',
+        file: 'catalogs/data-classes.yaml',
+        path: 'data_classes[0:audit-logs].allowed_datastores[0]',
+        message:
+          'Data class `audit-logs` allows datastore `admin_postgres`, but that datastore does not list the data class.'
+      },
+      {
+        ruleId: 'ZDP-DATA-008',
+        severity: 'error',
+        file: 'catalogs/datastores.yaml',
+        path: 'datastores[1:audit_postgres].data_classes[0]',
+        message:
+          'Datastore `audit_postgres` stores data class `admin-action-request`, but that data class does not allow the datastore.'
       }
     ]);
   });

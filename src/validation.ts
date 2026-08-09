@@ -32,6 +32,7 @@ import {
   buildServiceDataOwnershipPolicy,
   validateDataClassAllowedDatastoreReferences,
   validateDataClassCatalog,
+  validateDataClassDatastoreReciprocity,
   validateDatastoreDataClassReferences,
   validateServiceDataCatalogReferences,
   validateServiceDataOwnershipContracts
@@ -496,6 +497,10 @@ export async function validateArchitecture(
       ...validateServiceDependencyReferences(catalogs.services, serviceIndex),
       ...validateDatastoreOwnerReferences(catalogs.datastores, repositoryIndex),
       ...validateDatastoreDataClassReferences(catalogs.datastores, dataClassIndex),
+      ...validateDataClassDatastoreReciprocity(
+        catalogs.dataClasses,
+        catalogs.datastores
+      ),
       ...validateServiceDatastoreReferences(catalogs.services, datastoreIndex),
       ...validateServiceDataCatalogReferences(
         catalogs.services,

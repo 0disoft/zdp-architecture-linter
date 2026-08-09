@@ -292,6 +292,53 @@ export function validateDataClassAllowedDatastoreReferences(
   );
 }
 
+export function validateDataClassDatastoreReciprocity(
+  dataClassCatalog: unknown,
+  datastoreCatalog: unknown
+): readonly Diagnostic[] {
+  const dataClasses = readCatalogRecords(dataClassCatalog, 'data_classes');
+  const datastores = readCatalogRecords(datastoreCatalog, 'datastores');
+  const dataClassIds = new Set(dataClasses.map(({ id }) => id));
+  const datastoreIds = new Set(datastores.map(({ id }) => id));
+  const allowedRelations = readRelations(
+    dataClasses,
+    'allowed_datastores',
+    datastoreIds
+  );
+  const storedRelations = readRelations(datastores, 'data_classes', dataClassIds);
+  const allowedKeys = new Set(
+    allowedRelations.map(({ ownerId, targetId }) => relationKey(ownerId, targetId))
+  );
+  const storedKeys = new Set(
+    storedRelations.map(({ ownerId, targetId }) => relationKey(targetId, ownerId))
+  );
+
+  return [
+    ...allowedRelations.flatMap(({ ownerId, targetId, path }) =>
+      storedKeys.has(relationKey(ownerId, targetId))
+        ? []
+        : [
+            createReciprocityDiagnostic(
+              DATA_CLASSES_FILE,
+              path,
+              `Data class \`${ownerId}\` allows datastore \`${targetId}\`, but that datastore does not list the data class.`
+            )
+          ]
+    ),
+    ...storedRelations.flatMap(({ ownerId, targetId, path }) =>
+      allowedKeys.has(relationKey(targetId, ownerId))
+        ? []
+        : [
+            createReciprocityDiagnostic(
+              DATASTORES_FILE,
+              path,
+              `Datastore \`${ownerId}\` stores data class \`${targetId}\`, but that data class does not allow the datastore.`
+            )
+          ]
+    )
+  ];
+}
+
 function validateServiceDataCatalogRecord(
   value: unknown,
   index: number,
@@ -610,6 +657,79 @@ function validateDatastoreRecord(
 
     return [];
   });
+}
+
+interface CatalogRecord {
+  readonly id: string;
+  readonly value: Record<string, unknown>;
+  readonly index: number;
+}
+
+interface CatalogRelation {
+  readonly ownerId: string;
+  readonly targetId: string;
+  readonly path: string;
+}
+
+function readCatalogRecords(
+  catalog: unknown,
+  collection: 'data_classes' | 'datastores'
+): readonly CatalogRecord[] {
+  if (!isRecord(catalog) || !Array.isArray(catalog[collection])) {
+    return [];
+  }
+
+  return catalog[collection].flatMap((value, index) => {
+    if (!isRecord(value)) {
+      return [];
+    }
+    const id = readStringField(value, 'id');
+    return id === null ? [] : [{ id, value, index }];
+  });
+}
+
+function readRelations(
+  records: readonly CatalogRecord[],
+  field: 'allowed_datastores' | 'data_classes',
+  knownTargetIds: ReadonlySet<string>
+): readonly CatalogRelation[] {
+  return records.flatMap(({ id, value, index }) => {
+    const targets = value[field];
+    if (!Array.isArray(targets)) {
+      return [];
+    }
+    const ownerPath = field === 'allowed_datastores'
+      ? getDataClassDiagnosticPath(value, index)
+      : getDatastoreDiagnosticPath(value, index);
+
+    return targets.flatMap((target, targetIndex) => {
+      if (typeof target !== 'string') {
+        return [];
+      }
+      const targetId = target.trim();
+      return targetId.length === 0 || !knownTargetIds.has(targetId)
+        ? []
+        : [{ ownerId: id, targetId, path: `${ownerPath}.${field}[${targetIndex}]` }];
+    });
+  });
+}
+
+function relationKey(dataClassId: string, datastoreId: string): string {
+  return `${dataClassId}\u0000${datastoreId}`;
+}
+
+function createReciprocityDiagnostic(
+  file: typeof DATA_CLASSES_FILE | typeof DATASTORES_FILE,
+  path: string,
+  message: string
+): Diagnostic {
+  return {
+    ruleId: 'ZDP-DATA-008',
+    severity: 'error',
+    file,
+    path,
+    message
+  };
 }
 
 function readStringArrayAtPath(

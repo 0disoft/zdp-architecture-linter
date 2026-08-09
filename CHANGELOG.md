@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ZDP-DATA-008`을 추가해 data class의 `allowed_datastores`와 datastore의 `data_classes`가 같은 저장 관계를 양방향으로 선언하도록 강제한다.
 - `ZDP-APP-001`이 기본 auth route 차단을 유지하면서 guarded staging password runtime, private Edge binding, secure-cookie boundary와 명시적 승인 계약이 있는 경우 localized login/signup 두 경로만 조건부로 허용한다.
 - `ZDP-AGENT-REVIEW-001`이 raw/group/final schema, Markdown template, producer prompt의 canonical catalog `model_id`와 model profile exact-id 계약을 검사한다.
 - `ZDP-OPS-ASSET-002`를 추가해 운영자산 검증 증거가 정책 검토 간격을 넘기거나 미래 날짜를 가리키는 경우, 활성 도메인이 만료된 경우, 데이터베이스의 백업 참조가 활성 비공개 객체 스토리지와 일치하지 않는 경우를 fail-closed 차단한다.
