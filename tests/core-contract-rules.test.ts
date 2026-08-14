@@ -417,6 +417,37 @@ forbidden_readiness_claims:
     );
   });
 
+  test('fails when auth runtime readiness summary reuses the session operation status', async () => {
+    const files = createValidCoreFiles();
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'contracts/auth-runtime-readiness.yaml': files[
+          'contracts/auth-runtime-readiness.yaml'
+        ].replace(
+          'runtime_status: guarded_staging_registration_and_session_issue_no_production_promotion',
+          'runtime_status: contracted_no_live_handler'
+        )
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryCoreContract({
+          repositoryRoot,
+          repositoryServiceContract: createCoreServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-CORE-001',
+          severity: 'error',
+          file: 'contracts/auth-runtime-readiness.yaml',
+          path: 'contract.runtime_status',
+          message:
+            'Core platform auth runtime readiness summary must keep runtime_status `guarded_staging_registration_and_session_issue_no_production_promotion`.'
+        });
+      }
+    );
+  });
+
   test('fails when product review approval contract claims route unblock', async () => {
     await withRepositoryRoot(
       {
@@ -2483,7 +2514,7 @@ contract:
   status: readiness_summary_no_runtime_promotion
   owner_repo: zdp-core-platform
   owner_boundary: identity
-  runtime_status: contracted_no_live_handler
+  runtime_status: guarded_staging_registration_and_session_issue_no_production_promotion
 promotion_ready: false
 production_route_ready: false
 required_gate_states:

@@ -61,7 +61,8 @@ export const AUTH_RUNTIME_READINESS_FILE =
 export const AUTH_RUNTIME_READINESS_STATUS =
   'readiness_summary_no_runtime_promotion';
 
-export const AUTH_RUNTIME_READINESS_RUNTIME_STATUS = AUTH_SESSION_RUNTIME_STATUS;
+export const AUTH_RUNTIME_READINESS_RUNTIME_STATUS =
+  'guarded_staging_registration_and_session_issue_no_production_promotion';
 
 export const REQUIRED_AUTH_RUNTIME_READINESS_GATES =
   createRequiredAuthRuntimeReadinessGates({
