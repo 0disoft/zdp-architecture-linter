@@ -110,7 +110,7 @@ function validateTimestampLines(
       return;
     }
 
-    if (SQL_DATETIME_TYPE_PATTERN.test(line)) {
+    if (file.toLowerCase().endsWith('.sql') && SQL_DATETIME_TYPE_PATTERN.test(line)) {
       diagnostics.push(
         createTimeDiagnostic({
           file,

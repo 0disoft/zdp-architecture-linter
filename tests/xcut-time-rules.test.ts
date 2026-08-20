@@ -127,6 +127,32 @@ examples:
     );
   });
 
+  test('allows datetime as an API wire-type descriptor outside storage schemas', async () => {
+    await withRepositoryRoot(
+      {
+        'contracts/typescript-sdk-models.yaml': `
+typescript_sdk_models:
+  schema_field_types:
+    ExampleResponse:
+      created_at: datetime
+      expires_at: datetime
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryTimeContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            service: {
+              repo: 'zdp-client-sdks'
+            }
+          }
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('fails when recurring schedules omit timezone', async () => {
     await withRepositoryRoot(
       {
