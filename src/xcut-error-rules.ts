@@ -194,6 +194,10 @@ function declaresPublicApiErrorContract(file: string, source: string): boolean {
     );
   }
 
+  if (basename(file).toLowerCase().includes('catalog')) {
+    return false;
+  }
+
   if (isErrorContractFileName(file)) {
     return true;
   }
@@ -209,7 +213,7 @@ function isErrorContractFileName(file: string): boolean {
   const normalized = basename(file).toLowerCase();
 
   return (
-    normalized.includes('error') ||
+    (normalized.includes('error') && !normalized.includes('catalog')) ||
     normalized === 'openapi.json' ||
     normalized === 'openapi.yaml' ||
     normalized === 'openapi.yml' ||

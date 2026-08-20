@@ -133,6 +133,32 @@ responses:
     );
   });
 
+  test('does not treat an error code catalog as an error envelope', async () => {
+    await withRepositoryRoot(
+      {
+        'contracts/error-code-catalog.yaml': `
+error_code_catalog:
+  schema_version: 1
+  entries:
+    - code: not_found
+      http_status: 404
+      localization_key: api.errors.not_found
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryErrorEnvelopeContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            domain: { public_api: true },
+            api: { exposure: 'public' }
+          }
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('fails message-only error response contracts', async () => {
     await withRepositoryRoot(
       {
