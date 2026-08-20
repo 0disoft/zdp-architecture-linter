@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ZDP-LIBS-001`이 기본 `contracts:check`를 독립 저장소 검사로 유지하고, sibling `zdp-api-contracts`를 읽는 검증은 명시적인 integration scripts에서 실행하도록 검사 경계를 분리했다.
 - `ZDP-REF-003` datastore kind에 D1 같은 관리형 SQLite 저장소를 거짓 분류 없이 등록할 수 있도록 `sqlite`와 회귀 테스트를 추가했다.
 - `ZDP-EDGE-001`을 consent-gated analytics v2 producer 경계에 맞췄다. Queue binding이 없거나 send가 실패하면 503으로 닫고, metadata-only envelope과 event sibling message의 producer acceptance 뒤에만 202를 허용하며 consumer·dedupe·DLQ route 활성화 gate는 계속 분리한다.
 - `ZDP-EVENT-003`이 `schemas/events/` 안의 공유 JSON Schema `$ref`를 같은 architecture root에서 재귀적으로 해석하고, 누락되거나 `$id`가 어긋난 로컬 참조를 차단한다.

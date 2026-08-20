@@ -408,9 +408,8 @@ test('libs placeholder', () => {});
           ruleId: 'ZDP-LIBS-001',
           severity: 'error',
           file: 'package.json',
-          path: 'scripts.contracts:check',
-          message:
-            'Libs package `contracts:check` must read sibling `zdp-api-contracts` with `--api-contracts-root ../zdp-api-contracts`.'
+          path: 'scripts.check:integration',
+          message: 'Libs package must declare `check:integration` script.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-LIBS-001',
@@ -427,6 +426,74 @@ test('libs placeholder', () => {});
           path: 'source',
           message:
             'Libs checker source must include `fails when API contract source handoff drifts`.'
+        });
+      }
+    );
+  });
+
+  test('separates standalone and API integration scripts', async () => {
+    await withRepositoryRoot(
+      {
+        ...createValidLibsContractFiles(),
+        'package.json': `
+{
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema/index.d.ts", "import": "./dist/schema/index.js" },
+    "./env-contract": { "types": "./dist/env-contract/index.d.ts", "import": "./dist/env-contract/index.js" },
+    "./event-contracts": { "types": "./dist/event-contracts/index.d.ts", "import": "./dist/event-contracts/index.js" },
+    "./error": { "types": "./dist/error/index.d.ts", "import": "./dist/error/index.js" },
+    "./i18n-contract": { "types": "./dist/i18n-contract/index.d.ts", "import": "./dist/i18n-contract/index.js" }
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check:integration": "bun run contracts:check:integration",
+    "test": "bun test",
+    "test:integration": "bun test",
+    "contracts:check": "bun scripts/check-libs-contracts.ts --api-contracts-root ../zdp-api-contracts",
+    "contracts:check:integration": "bun scripts/check-libs-contracts.ts"
+  }
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryLibsContract({
+          repositoryRoot,
+          repositoryServiceContract: createLibsServiceContract()
+        });
+
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check',
+          message:
+            'Libs package `contracts:check` must remain standalone without requiring a sibling API contracts checkout.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.check:integration',
+          message:
+            'Libs package `check:integration` must include `bun run contracts:check:integration` and `bun run test:integration`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.test:integration',
+          message:
+            'Libs package `test:integration` must include `scripts/test-api-contract-integration.ts` and `--api-contracts-root ../zdp-api-contracts`.'
+        });
+        expect(diagnostics).toContainEqual({
+          ruleId: 'ZDP-LIBS-001',
+          severity: 'error',
+          file: 'package.json',
+          path: 'scripts.contracts:check:integration',
+          message:
+            'Libs package `contracts:check:integration` must include `scripts/check-libs-contracts.ts` and `--api-contracts-root ../zdp-api-contracts`.'
         });
       }
     );
@@ -752,8 +819,11 @@ function createValidLibsCheckerFiles(): Record<string, string> {
   "types": "./dist/index.d.ts",
   "scripts": {
     "check": "tsc --noEmit && bun test && bun run contracts:check",
+    "check:integration": "bun run contracts:check:integration && bun run test:integration",
     "test": "bun test",
-    "contracts:check": "bun scripts/check-libs-contracts.ts --api-contracts-root ../zdp-api-contracts"
+    "test:integration": "bun scripts/test-api-contract-integration.ts --api-contracts-root ../zdp-api-contracts",
+    "contracts:check": "bun scripts/check-libs-contracts.ts",
+    "contracts:check:integration": "bun scripts/check-libs-contracts.ts --api-contracts-root ../zdp-api-contracts"
   }
 }
 `,
