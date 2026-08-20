@@ -13,6 +13,7 @@ const ALLOWED_DATASTORE_KINDS = new Set([
   'search-engine',
   'secure-storage',
   'object-storage',
+  'sqlite',
   'vector-database'
 ]);
 const DEPLOY_UNIT_KIND = 'deploy_unit';

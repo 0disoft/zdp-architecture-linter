@@ -339,9 +339,28 @@ describe('datastore owner references', () => {
         file: 'catalogs/datastores.yaml',
         path: 'datastores[0:core_postgres].kind',
         message:
-          'Datastore kind must be one of: `clickhouse`, `key-value-store`, `postgresql`, `search-engine`, `secure-storage`, `object-storage`, `vector-database`.'
+          'Datastore kind must be one of: `clickhouse`, `key-value-store`, `postgresql`, `search-engine`, `secure-storage`, `object-storage`, `sqlite`, `vector-database`.'
       }
     ]);
+  });
+
+  test('passes for a managed SQLite datastore owned by a deploy unit', () => {
+    const diagnostics = validateDatastoreOwnerReferences(
+      {
+        datastores: [
+          {
+            id: 'analytics_ingest_d1',
+            kind: 'sqlite',
+            owner_repo: 'zdp-data-platform'
+          }
+        ]
+      },
+      buildRepositoryIndex({
+        repositories: [createRepository({ name: 'zdp-data-platform', kind: 'deploy_unit' })]
+      })
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 
   test('passes for a canonical key-value store owned by a deploy unit', () => {
