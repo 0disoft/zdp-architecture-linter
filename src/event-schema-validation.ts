@@ -156,7 +156,7 @@ async function validateSchemaRefFile(
   }
 
   try {
-    compileJsonSchema(schema);
+    await compileJsonSchema(architectureRoot, schema);
   } catch (error) {
     return createSchemaRefDiagnostic(
       EVENT_SCHEMA_TARGET_RULE_ID,
@@ -168,14 +168,91 @@ async function validateSchemaRefFile(
   return null;
 }
 
-function compileJsonSchema(schema: unknown): ValidateFunction {
+async function compileJsonSchema(
+  architectureRoot: string,
+  schema: unknown
+): Promise<ValidateFunction> {
   const ajv = new Ajv2020({
     allErrors: true,
     strict: false,
     validateFormats: false
   });
 
+  await addLocalEventSchemaReferences({
+    ajv,
+    architectureRoot,
+    schema,
+    visitedSchemaIds: new Set<string>()
+  });
+
   return ajv.compile(schema as AnySchema);
+}
+
+async function addLocalEventSchemaReferences(input: {
+  readonly ajv: Ajv2020;
+  readonly architectureRoot: string;
+  readonly schema: unknown;
+  readonly visitedSchemaIds: Set<string>;
+}): Promise<void> {
+  const baseSchemaId = isRecord(input.schema) && typeof input.schema.$id === 'string'
+    ? input.schema.$id
+    : null;
+
+  if (baseSchemaId === null) {
+    return;
+  }
+
+  for (const schemaReference of collectSchemaReferences(input.schema)) {
+    if (schemaReference.startsWith('#')) {
+      continue;
+    }
+
+    const resolvedReference = new URL(schemaReference, baseSchemaId);
+    if (
+      resolvedReference.origin !== 'https://zdp.zerodi.dev' ||
+      !resolvedReference.pathname.startsWith('/schemas/events/') ||
+      !resolvedReference.pathname.endsWith('.json')
+    ) {
+      continue;
+    }
+
+    resolvedReference.hash = '';
+    const referencedSchemaId = resolvedReference.href;
+    if (input.visitedSchemaIds.has(referencedSchemaId)) {
+      continue;
+    }
+    input.visitedSchemaIds.add(referencedSchemaId);
+
+    const relativePath = decodeURIComponent(resolvedReference.pathname.slice(1));
+    const source = await readFile(join(input.architectureRoot, relativePath), 'utf8');
+    const referencedSchema = JSON.parse(source) as unknown;
+    if (!isRecord(referencedSchema) || referencedSchema.$id !== referencedSchemaId) {
+      throw new Error(
+        `local event schema reference ${referencedSchemaId} must declare a matching $id`
+      );
+    }
+
+    await addLocalEventSchemaReferences({
+      ...input,
+      schema: referencedSchema
+    });
+    input.ajv.addSchema(referencedSchema as AnySchema);
+  }
+}
+
+function collectSchemaReferences(value: unknown): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectSchemaReferences(entry));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  const ownReference = typeof value.$ref === 'string' ? [value.$ref] : [];
+  return [
+    ...ownReference,
+    ...Object.values(value).flatMap((entry) => collectSchemaReferences(entry))
+  ];
 }
 
 function createSchemaRefDiagnostic(

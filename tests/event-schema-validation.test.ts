@@ -154,6 +154,77 @@ describe('event schema references', () => {
     });
   });
 
+  test('passes when an event schema uses a local shared schema reference', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const schemaRef = 'schemas/events/web-page-viewed.v2.json';
+      const privacySchemaRef = 'schemas/events/analytics-privacy-context.v1.json';
+
+      await writeArchitectureFile(
+        architectureRoot,
+        privacySchemaRef,
+        JSON.stringify({
+          ...createEventPayloadSchema(privacySchemaRef),
+          required: ['consent_state'],
+          properties: {
+            consent_state: { const: 'granted' }
+          }
+        })
+      );
+      await writeArchitectureFile(
+        architectureRoot,
+        schemaRef,
+        JSON.stringify({
+          ...createEventPayloadSchema(schemaRef),
+          properties: {
+            privacy_context: { $ref: 'analytics-privacy-context.v1.json' }
+          }
+        })
+      );
+
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [{ id: 'web.page-viewed', schema_ref: schemaRef }]
+        }
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
+  });
+
+  test('fails when a local shared event schema reference is missing', async () => {
+    await withEventSchemaRoot(async (architectureRoot) => {
+      const schemaRef = 'schemas/events/web-page-viewed.v2.json';
+
+      await writeArchitectureFile(
+        architectureRoot,
+        schemaRef,
+        JSON.stringify({
+          ...createEventPayloadSchema(schemaRef),
+          properties: {
+            privacy_context: { $ref: 'missing-privacy-context.v1.json' }
+          }
+        })
+      );
+
+      const diagnostics = await validateEventSchemaReferences({
+        architectureRoot,
+        value: {
+          events: [{ id: 'web.page-viewed', schema_ref: schemaRef }]
+        }
+      });
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        ruleId: 'ZDP-EVENT-003',
+        severity: 'error',
+        file: 'catalogs/events.yaml',
+        path: 'events[0:web.page-viewed].schema_ref'
+      });
+      expect(diagnostics[0]?.message).toContain('missing-privacy-context.v1.json');
+    });
+  });
+
   test('fails when schema_ref points outside schemas/events', async () => {
     await withEventSchemaRoot(async (architectureRoot) => {
       const diagnostics = await validateEventSchemaReferences({

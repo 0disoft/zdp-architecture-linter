@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `ZDP-EVENT-003`이 `schemas/events/` 안의 공유 JSON Schema `$ref`를 같은 architecture root에서 재귀적으로 해석하고, 누락되거나 `$id`가 어긋난 로컬 참조를 차단한다.
 - `ZDP-CORE-001` auth runtime readiness summary가 guarded staging password registration/session issue 상태를 인식하되 production promotion과 미승격 auth/session operation을 계속 차단하도록 계약 결합을 바로잡았다.
 - `ZDP-DATA-009`를 추가해 PII data class를 참조하는 이벤트가 `contains_pii`를 누락하거나 false로 하향 선언하지 못하게 한다.
 - `ZDP-DATA-008`을 추가해 data class의 `allowed_datastores`와 datastore의 `data_classes`가 같은 저장 관계를 양방향으로 선언하도록 강제한다.
