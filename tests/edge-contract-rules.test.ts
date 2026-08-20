@@ -65,11 +65,18 @@ describe('edge worker contract rules', () => {
       expect(diagnostics).toContainEqual({
         ruleId: 'ZDP-EDGE-001',
         severity: 'error',
+        file: 'src/app.ts',
+        path: 'repository.root',
+        message: 'Edge worker repository must include `src/app.ts`.'
+      });
+      expect(diagnostics).toContainEqual({
+        ruleId: 'ZDP-EDGE-001',
+        severity: 'error',
         file: 'tests/app.test.ts',
         path: 'repository.root',
         message: 'Edge worker repository must include `tests/app.test.ts`.'
       });
-      expect(diagnostics).toHaveLength(6);
+      expect(diagnostics).toHaveLength(7);
     });
   });
 
@@ -249,7 +256,7 @@ analytics_ingress:
           file: 'contracts/analytics-ingress.yaml',
           path: 'analytics_ingress.status',
           message:
-            'Edge analytics ingress must remain `contract-only` before collector route implementation.'
+            'Edge analytics ingress must remain `implemented-unbound` until route activation evidence exists.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-EDGE-001',
@@ -295,9 +302,9 @@ analytics_ingress:
           ruleId: 'ZDP-EDGE-001',
           severity: 'error',
           file: 'contracts/analytics-ingress.yaml',
-          path: 'analytics_ingress.runtime_activation.current_response_status',
+          path: 'analytics_ingress.runtime_activation.current_response_status_without_binding',
           message:
-            'Edge analytics ingress must fail closed with 503 before durable queue handoff activation.'
+            'Edge analytics ingress must fail closed with 503 while its Queue binding is absent.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-EDGE-001',
@@ -346,7 +353,7 @@ test('placeholder', () => {});
           file: 'src/analytics/ingress.ts',
           path: 'source',
           message:
-            'Edge worker source must include `input.payload.schema_version !== 1`.'
+            'Edge worker source must include `input.payload.schema_version !== 2`.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-EDGE-001',
@@ -456,7 +463,7 @@ queue_envelope:
 `,
     'contracts/analytics-ingress.yaml': `
 analytics_ingress:
-  status: contract-only
+  status: implemented-unbound
   endpoint_candidate: POST /v1/events
   accepted_events:
     - web.page-viewed
@@ -469,10 +476,12 @@ analytics_ingress:
     - malformed request
     - event name allowlist
     - schema version present
-    - schema version pinned to numeric 1
+    - schema version pinned to numeric 2
+    - environment allowlist
+    - granted privacy context
     - request id present
     - trace id propagation
-    - idempotency key present
+    - idempotency-key header present
     - idempotency key equals event_id
   required_fields:
     - event_id
@@ -480,24 +489,37 @@ analytics_ingress:
     - schema_version
     - source
     - product_id
+    - environment
     - occurred_at
     - request_id
     - trace_id
-    - idempotency_key
+    - privacy_context
+  privacy_context:
+    accepted_consent_state: granted
+    choice_ref_scheme: consent-choice
+    allowed_subject_modes:
+      - anonymous
+      - pseudonymous
   handoff:
     target: zdp-data-platform
     service_id: data-platform
     queue: analytics-events
     dead_letter_queue: analytics-events-dlq
     runtime_validator: zdp-data-platform/src/analytics-ingest/runtime.ts
+    message_shape: envelope_and_event_siblings
+    envelope_contains_inline_payload: false
+    accepted_response_after: successful_queue_send
   runtime_activation:
     status: blocked
-    current_response_status: 503
+    current_response_status_without_binding: 503
+    configured_success_response_status: 202
     accepted_response_requires:
       - configured Cloudflare Queue producer binding
       - successful producer send
+    route_activation_requires:
       - downstream queue consumer
       - durable downstream idempotency and conflict handling
+      - dead-letter ownership and replay procedure
   direct_clickhouse_write: forbidden
   final_truth_owner: zdp-data-platform
   forbidden_in_logs:
@@ -518,8 +540,12 @@ analytics_ingress:
 `,
     'src/analytics/ingress.ts': `
 export function precheckAnalyticsIngress(input: { payload: { schema_version: unknown } }): unknown {
-  if (input.payload.schema_version !== 1) {
+  if (input.payload.schema_version !== 2) {
     return { code: 'invalid_schema_version' };
+  }
+  const consentState = 'granted';
+  if (consentState !== 'granted') {
+    return { code: 'invalid_privacy_context', consent_state: consentState };
   }
   const idempotencyKey = 'evt_123';
   const eventId = 'evt_123';
@@ -536,10 +562,25 @@ export function precheckAnalyticsIngress(input: { payload: { schema_version: unk
   };
 }
 `,
+    'src/app.ts': `
+const ANALYTICS_EVENTS_QUEUE = 'analytics-events';
+async function handle(c: { req: { header(name: string): string }; env: { queue: { send(value: unknown): Promise<void> } } }) {
+  c.req.header('idempotency-key');
+  const queue = c.env.queue;
+  await queue.send({ ANALYTICS_EVENTS_QUEUE });
+  const analyticsQueueUnavailable = false;
+  const jsonAccepted = true;
+  return { analyticsQueueUnavailable, jsonAccepted };
+}
+export { handle };
+`,
     'tests/app.test.ts': `
 const tests = [
   'fails closed for an allowlisted analytics event until durable queue handoff exists',
   'analytics_queue_unavailable',
+  'returns 202 only after the analytics queue producer accepts the v2 message',
+  'returns retryable 503 when analytics queue send rejects',
+  'rejects denied consent and nested sensitive fields before queue send',
   'rejects analytics events with schema_version that data runtime will reject',
   'rejects analytics events whose idempotency key would fail data runtime consistency',
   'invalid_schema_version',

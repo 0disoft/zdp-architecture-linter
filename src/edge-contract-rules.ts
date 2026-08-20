@@ -11,6 +11,7 @@ const WEBHOOK_INGRESS_FILE = 'contracts/webhook-ingress.yaml';
 const QUEUE_ENVELOPE_FILE = 'contracts/queue-envelope.yaml';
 const ANALYTICS_INGRESS_FILE = 'contracts/analytics-ingress.yaml';
 const EDGE_ANALYTICS_SOURCE_FILE = 'src/analytics/ingress.ts';
+const EDGE_APP_SOURCE_FILE = 'src/app.ts';
 const EDGE_APP_TEST_FILE = 'tests/app.test.ts';
 
 const REQUIRED_FORBIDDEN_LOG_VALUES = [
@@ -79,10 +80,12 @@ const REQUIRED_ANALYTICS_PRECHECKS = [
   'malformed request',
   'event name allowlist',
   'schema version present',
-  'schema version pinned to numeric 1',
+  'schema version pinned to numeric 2',
+  'environment allowlist',
+  'granted privacy context',
   'request id present',
   'trace id propagation',
-  'idempotency key present',
+  'idempotency-key header present',
   'idempotency key equals event_id'
 ] as const;
 
@@ -92,10 +95,11 @@ const REQUIRED_ANALYTICS_FIELDS = [
   'schema_version',
   'source',
   'product_id',
+  'environment',
   'occurred_at',
   'request_id',
   'trace_id',
-  'idempotency_key'
+  'privacy_context'
 ] as const;
 
 const REQUIRED_ANALYTICS_FORBIDDEN_LOG_VALUES = [
@@ -119,9 +123,13 @@ const REQUIRED_ANALYTICS_FORBIDDEN_DECISIONS = [
 
 const REQUIRED_ANALYTICS_ACTIVATION_GATES = [
   'configured Cloudflare Queue producer binding',
-  'successful producer send',
+  'successful producer send'
+] as const;
+
+const REQUIRED_ANALYTICS_ROUTE_ACTIVATION_GATES = [
   'downstream queue consumer',
-  'durable downstream idempotency and conflict handling'
+  'durable downstream idempotency and conflict handling',
+  'dead-letter ownership and replay procedure'
 ] as const;
 
 export async function validateRepositoryEdgeContract(input: {
@@ -142,8 +150,9 @@ export async function validateRepositoryEdgeContract(input: {
       readRequiredYamlContract(input.repositoryRoot, QUEUE_ENVELOPE_FILE),
       readRequiredYamlContract(input.repositoryRoot, ANALYTICS_INGRESS_FILE)
     ]);
-  const [analyticsSource, appTestSource] = await Promise.all([
+  const [analyticsSource, appSource, appTestSource] = await Promise.all([
     readRequiredTextFile(input.repositoryRoot, EDGE_ANALYTICS_SOURCE_FILE),
+    readRequiredTextFile(input.repositoryRoot, EDGE_APP_SOURCE_FILE),
     readRequiredTextFile(input.repositoryRoot, EDGE_APP_TEST_FILE)
   ]);
 
@@ -153,6 +162,7 @@ export async function validateRepositoryEdgeContract(input: {
     ...queueEnvelope.diagnostics,
     ...analyticsIngress.diagnostics,
     ...analyticsSource.diagnostics,
+    ...appSource.diagnostics,
     ...appTestSource.diagnostics,
     ...(requestBoundary.value === null
       ? []
@@ -169,6 +179,9 @@ export async function validateRepositoryEdgeContract(input: {
     ...(analyticsSource.source === null
       ? []
       : validateAnalyticsSourceSurface(analyticsSource.source)),
+    ...(appSource.source === null
+      ? []
+      : validateAnalyticsAppSurface(appSource.source)),
     ...(appTestSource.source === null
       ? []
       : validateAnalyticsTestSurface(appTestSource.source))
@@ -352,9 +365,9 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
       value,
       file: ANALYTICS_INGRESS_FILE,
       path: 'analytics_ingress.status',
-      expected: 'contract-only',
+      expected: 'implemented-unbound',
       message:
-        'Edge analytics ingress must remain `contract-only` before collector route implementation.'
+        'Edge analytics ingress must remain `implemented-unbound` until route activation evidence exists.'
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -376,6 +389,27 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
       path: 'analytics_ingress.required_fields',
       field: 'analytics_ingress.required_fields',
       requiredEntries: REQUIRED_ANALYTICS_FIELDS
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.privacy_context.accepted_consent_state',
+      expected: 'granted',
+      message: 'Edge analytics ingress must accept only granted analytics consent.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.privacy_context.choice_ref_scheme',
+      expected: 'consent-choice',
+      message: 'Edge analytics ingress must require opaque consent-choice references.'
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.privacy_context.allowed_subject_modes',
+      field: 'analytics_ingress.privacy_context.allowed_subject_modes',
+      requiredEntries: ['anonymous', 'pseudonymous']
     }),
     ...validateExactValue({
       value,
@@ -420,6 +454,27 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
     ...validateExactValue({
       value,
       file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.message_shape',
+      expected: 'envelope_and_event_siblings',
+      message: 'Edge analytics queue messages must keep envelope and event as siblings.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.envelope_contains_inline_payload',
+      expected: false,
+      message: 'Edge analytics queue envelopes must not contain inline payloads.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.handoff.accepted_response_after',
+      expected: 'successful_queue_send',
+      message: 'Edge analytics ingress may return accepted only after queue send succeeds.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
       path: 'analytics_ingress.runtime_activation.status',
       expected: 'blocked',
       message:
@@ -428,10 +483,18 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
     ...validateExactValue({
       value,
       file: ANALYTICS_INGRESS_FILE,
-      path: 'analytics_ingress.runtime_activation.current_response_status',
+      path: 'analytics_ingress.runtime_activation.current_response_status_without_binding',
       expected: 503,
       message:
-        'Edge analytics ingress must fail closed with 503 before durable queue handoff activation.'
+        'Edge analytics ingress must fail closed with 503 while its Queue binding is absent.'
+    }),
+    ...validateExactValue({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.runtime_activation.configured_success_response_status',
+      expected: 202,
+      message:
+        'Edge analytics ingress must use 202 only for successful Queue producer acceptance.'
     }),
     ...validateRequiredStringArrayEntries({
       value,
@@ -439,6 +502,13 @@ function validateAnalyticsIngressContract(value: unknown): readonly Diagnostic[]
       path: 'analytics_ingress.runtime_activation.accepted_response_requires',
       field: 'analytics_ingress.runtime_activation.accepted_response_requires',
       requiredEntries: REQUIRED_ANALYTICS_ACTIVATION_GATES
+    }),
+    ...validateRequiredStringArrayEntries({
+      value,
+      file: ANALYTICS_INGRESS_FILE,
+      path: 'analytics_ingress.runtime_activation.route_activation_requires',
+      field: 'analytics_ingress.runtime_activation.route_activation_requires',
+      requiredEntries: REQUIRED_ANALYTICS_ROUTE_ACTIVATION_GATES
     }),
     ...validateExactValue({
       value,
@@ -480,14 +550,31 @@ function validateAnalyticsSourceSurface(source: string): readonly Diagnostic[] {
     requiredFragments: [
       'precheckAnalyticsIngress',
       'schema_version',
-      'input.payload.schema_version !== 1',
+      'input.payload.schema_version !== 2',
       'invalid_schema_version',
+      'invalid_privacy_context',
+      'consent_state',
+      "consentState !== 'granted'",
       'idempotencyKey !== eventId',
       'idempotency_mismatch',
       'analytics.event.ingest',
       'analytics-event://',
       "target: 'zdp-data-platform'",
       "queue: 'analytics-events'"
+    ]
+  });
+}
+
+function validateAnalyticsAppSurface(source: string): readonly Diagnostic[] {
+  return validateSourceIncludes({
+    file: EDGE_APP_SOURCE_FILE,
+    source,
+    requiredFragments: [
+      'ANALYTICS_EVENTS_QUEUE',
+      "c.req.header('idempotency-key')",
+      'await queue.send',
+      'analyticsQueueUnavailable',
+      'jsonAccepted'
     ]
   });
 }
@@ -499,6 +586,9 @@ function validateAnalyticsTestSurface(source: string): readonly Diagnostic[] {
     requiredFragments: [
       'fails closed for an allowlisted analytics event until durable queue handoff exists',
       'analytics_queue_unavailable',
+      'returns 202 only after the analytics queue producer accepts the v2 message',
+      'returns retryable 503 when analytics queue send rejects',
+      'rejects denied consent and nested sensitive fields before queue send',
       'rejects analytics events with schema_version that data runtime will reject',
       'rejects analytics events whose idempotency key would fail data runtime consistency',
       'invalid_schema_version',
