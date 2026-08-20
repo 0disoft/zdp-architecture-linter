@@ -499,6 +499,44 @@ test('libs placeholder', () => {});
     );
   });
 
+  test('accepts split base and generated calculator validator ownership', async () => {
+    const files = createValidLibsContractFiles();
+    const baseValidator = files['src/libs-contracts/validator.ts'];
+    if (baseValidator === undefined) {
+      throw new Error('Expected the valid fixture to include a validator.');
+    }
+
+    await withRepositoryRoot(
+      {
+        ...files,
+        'src/libs-contracts/validator-base.ts': baseValidator,
+        'src/libs-contracts/validator.ts': `
+import { CALCULATORS, CALCULATOR_IDS } from '../calculator-engine/catalog.generated';
+import { validateLibsContracts as validateBaseLibsContracts } from './validator-base';
+function validateGeneratedCalculatorCatalog(): void {}
+export function validateLibsContracts(): void {
+  validateBaseLibsContracts();
+  validateGeneratedCalculatorCatalog();
+  void CALCULATORS;
+  void CALCULATOR_IDS;
+}
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryLibsContract({
+          repositoryRoot,
+          repositoryServiceContract: createLibsServiceContract()
+        });
+
+        expect(
+          diagnostics.filter((diagnostic) =>
+            diagnostic.file.startsWith('src/libs-contracts/validator')
+          )
+        ).toEqual([]);
+      }
+    );
+  });
+
   test('fails when libs public export skeleton drifts', async () => {
     await withRepositoryRoot(
       {

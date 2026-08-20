@@ -22,6 +22,7 @@ const CHECKER_CLI_FILE = 'src/libs-contracts/cli.ts';
 const CHECKER_PARSER_FILE = 'src/libs-contracts/parser.ts';
 const CHECKER_TYPES_FILE = 'src/libs-contracts/types.ts';
 const CHECKER_VALIDATOR_FILE = 'src/libs-contracts/validator.ts';
+const CHECKER_VALIDATOR_BASE_FILE = 'src/libs-contracts/validator-base.ts';
 const CHECKER_TEST_FILE = 'tests/libs-contracts.test.ts';
 const PUBLIC_ROOT_EXPORT_FILE = 'src/index.ts';
 const PUBLIC_SCHEMA_EXPORT_FILE = 'src/schema/index.ts';
@@ -748,6 +749,10 @@ function validatePackageExports(value: unknown): readonly Diagnostic[] {
 async function validateCheckerSurface(
   repositoryRoot: string
 ): Promise<readonly Diagnostic[]> {
+  const validatorBaseSource = await readOptionalTextFile(
+    repositoryRoot,
+    CHECKER_VALIDATOR_BASE_FILE
+  );
   const [
     bunLock,
     tsconfig,
@@ -770,6 +775,13 @@ async function validateCheckerSurface(
       readOptionalTextFile(repositoryRoot, file)
     )
   );
+
+  const validatorContractSource =
+    validatorBaseSource.source ?? validatorSource.source;
+  const validatorContractFile =
+    validatorBaseSource.source === null
+      ? CHECKER_VALIDATOR_FILE
+      : CHECKER_VALIDATOR_BASE_FILE;
 
   return [
     ...bunLock.diagnostics,
@@ -839,11 +851,11 @@ async function validateCheckerSurface(
             I18N_CONTRACT_FILE
           ]
         })),
-    ...(validatorSource.source === null
+    ...(validatorContractSource === null
       ? []
       : validateSourceIncludes({
-          file: CHECKER_VALIDATOR_FILE,
-          source: validatorSource.source,
+          file: validatorContractFile,
+          source: validatorContractSource,
           requiredFragments: [
             'REQUIRED_PACKAGE_NAMES',
             'REQUIRED_API_SOURCE_CONTRACTS',
@@ -865,6 +877,18 @@ async function validateCheckerSurface(
             'LIBS_EVENT_TRACE_FIELD_MISSING',
             'LIBS_ERROR_FORBIDDEN_FIELD_MISSING',
             'LIBS_I18N_FORBIDDEN_OWNERSHIP_MISSING'
+          ]
+        })),
+    ...(validatorBaseSource.source === null || validatorSource.source === null
+      ? []
+      : validateSourceIncludes({
+          file: CHECKER_VALIDATOR_FILE,
+          source: validatorSource.source,
+          requiredFragments: [
+            'validateBaseLibsContracts',
+            'validateGeneratedCalculatorCatalog',
+            'CALCULATORS',
+            'CALCULATOR_IDS'
           ]
         })),
     ...(testSource.source === null
