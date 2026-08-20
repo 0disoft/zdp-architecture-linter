@@ -50,7 +50,14 @@ const REQUIRED_LIBS_CHECKER_FILES = [
   PUBLIC_EXPORT_TEST_FILE
 ] as const;
 
-const REQUIRED_PACKAGE_SCRIPTS = ['check', 'test', 'contracts:check'] as const;
+const REQUIRED_PACKAGE_SCRIPTS = [
+  'check',
+  'check:integration',
+  'test',
+  'test:integration',
+  'contracts:check',
+  'contracts:check:integration'
+] as const;
 
 const REQUIRED_PACKAGE_EXPORTS = {
   '.': { import: './dist/index.js', types: './dist/index.d.ts' },
@@ -646,14 +653,55 @@ function validatePackageScripts(value: unknown): readonly Diagnostic[] {
 
   const contractsCheck = readPath(value, 'scripts.contracts:check');
   if (
-    typeof contractsCheck !== 'string' ||
-    !contractsCheck.includes('--api-contracts-root ../zdp-api-contracts')
+    typeof contractsCheck === 'string' &&
+    contractsCheck.includes('--api-contracts-root')
   ) {
     diagnostics.push(
       createLibsDiagnostic(
         PACKAGE_FILE,
         'scripts.contracts:check',
-        'Libs package `contracts:check` must read sibling `zdp-api-contracts` with `--api-contracts-root ../zdp-api-contracts`.'
+        'Libs package `contracts:check` must remain standalone without requiring a sibling API contracts checkout.'
+      )
+    );
+  }
+
+  const requiredIntegrationFragments = [
+    {
+      script: 'check:integration',
+      fragments: ['bun run contracts:check:integration', 'bun run test:integration']
+    },
+    {
+      script: 'test:integration',
+      fragments: [
+        'scripts/test-api-contract-integration.ts',
+        '--api-contracts-root ../zdp-api-contracts'
+      ]
+    },
+    {
+      script: 'contracts:check:integration',
+      fragments: [
+        'scripts/check-libs-contracts.ts',
+        '--api-contracts-root ../zdp-api-contracts'
+      ]
+    }
+  ] as const;
+
+  for (const requirement of requiredIntegrationFragments) {
+    const actual = readPath(value, `scripts.${requirement.script}`);
+    if (
+      typeof actual !== 'string' ||
+      requirement.fragments.every((fragment) => actual.includes(fragment))
+    ) {
+      continue;
+    }
+
+    diagnostics.push(
+      createLibsDiagnostic(
+        PACKAGE_FILE,
+        `scripts.${requirement.script}`,
+        `Libs package \`${requirement.script}\` must include ${requirement.fragments
+          .map((fragment) => `\`${fragment}\``)
+          .join(' and ')}.`
       )
     );
   }
