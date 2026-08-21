@@ -48,6 +48,11 @@ import {
   type ValidationResult
 } from './diagnostics.ts';
 import {
+  CliFailure,
+  createCliErrorReport,
+  formatCliFailureText
+} from './cli-error-report.ts';
+import {
   checkGeneratedArchitectureFile,
   writeGeneratedArchitectureFile
 } from './generated-output.ts';
@@ -66,6 +71,21 @@ type ParsedCommand =
   | ParsedDoctorCommand
   | ParsedNormalizeCommand
   | ParsedListCommand;
+
+const CLI_USAGE_LINES = [
+  'Usage:',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
+  '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
+  '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
+  '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
+  '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
+  '  zdp-arch check-split --architecture <path> [--json]',
+  '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
+  '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
+  '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
+  '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]',
+  '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
+] as const;
 
 const CLI_OPTION_CONFIG = {
   architecture: {
@@ -195,11 +215,20 @@ interface ParsedListCommand {
  * risk: config, data_consistency
  */
 async function main(argv: readonly string[]): Promise<number> {
+  const jsonRequested = isJsonRequested(argv);
   const command = parseCommand(argv);
 
   if (command === null) {
-    printUsage();
-    return 2;
+    const failure = new CliFailure({
+      code: 'invalid_arguments',
+      message: ['Invalid command or arguments.', '', ...CLI_USAGE_LINES].join('\n'),
+      publicMessage: 'Invalid command or arguments.',
+      details: {
+        usage: CLI_USAGE_LINES.slice(1).map((line) => line.trim())
+      }
+    });
+    printCliFailure(failure, jsonRequested);
+    return 1;
   }
 
   try {
@@ -340,10 +369,19 @@ async function main(argv: readonly string[]): Promise<number> {
           });
 
           if (!checkResult.matches) {
-            console.error(
-              `Generated pack is stale: ${checkResult.path}\nRun \`zdp-arch pack --architecture <path> --repo ${command.repo} --task "${command.task}" --out ${command.out}\` to regenerate it.`
-            );
-            return 1;
+            const remediation =
+              `zdp-arch pack --architecture <path> --repo ${command.repo} ` +
+              `--task "${command.task}" --out ${command.out}`;
+
+            throw new CliFailure({
+              code: 'generated_output_stale',
+              message: `Generated pack is stale: ${checkResult.path}\nRun \`${remediation}\` to regenerate it.`,
+              publicMessage: 'Generated pack is stale.',
+              details: {
+                path: command.out,
+                remediation
+              }
+            });
           }
 
           if (command.json) {
@@ -493,12 +531,21 @@ async function main(argv: readonly string[]): Promise<number> {
 
       if (command.out !== undefined) {
         if (hasErrors(result)) {
-          console.error(
-            command.check
-              ? 'Refusing to check generated registry because validation has errors.'
-              : 'Refusing to write generated registry because validation has errors.'
-          );
-          return 1;
+          const operation = command.check ? 'check' : 'write';
+          const message = command.check
+            ? 'Refusing to check generated registry because validation has errors.'
+            : 'Refusing to write generated registry because validation has errors.';
+
+          throw new CliFailure({
+            code: 'validation_failed',
+            message,
+            details: {
+              operation,
+              errorCount: result.diagnostics.filter(
+                (diagnostic) => diagnostic.severity === 'error'
+              ).length
+            }
+          });
         }
 
         const contents = `${JSON.stringify(report, null, 2)}\n`;
@@ -511,10 +558,18 @@ async function main(argv: readonly string[]): Promise<number> {
           });
 
           if (!checkResult.matches) {
-            console.error(
-              `Generated registry is stale: ${checkResult.path}\nRun \`zdp-arch normalize --architecture <path> --out ${command.out}\` to regenerate it.`
-            );
-            return 1;
+            const remediation =
+              `zdp-arch normalize --architecture <path> --out ${command.out}`;
+
+            throw new CliFailure({
+              code: 'generated_output_stale',
+              message: `Generated registry is stale: ${checkResult.path}\nRun \`${remediation}\` to regenerate it.`,
+              publicMessage: 'Generated registry is stale.',
+              details: {
+                path: command.out,
+                remediation
+              }
+            });
           }
 
           if (command.json) {
@@ -620,7 +675,7 @@ async function main(argv: readonly string[]): Promise<number> {
 
     return hasErrors(result) ? 1 : 0;
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    printCliFailure(error, command.json);
     return 1;
   }
 }
@@ -818,23 +873,19 @@ function printResult(result: ValidationResult, json: boolean): void {
   }
 }
 
-function printUsage(): void {
-  console.error(
-    [
-      'Usage:',
-      '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
-      '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
-      '  zdp-arch check-split --architecture <path> [--json]',
-      '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
-      '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
-      '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
-      '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]',
-      '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
-    ].join('\n')
+function isJsonRequested(argv: readonly string[]): boolean {
+  return argv.some(
+    (argument) => argument === '--json' || argument.startsWith('--json=')
   );
+}
+
+function printCliFailure(error: unknown, json: boolean): void {
+  if (json) {
+    console.log(JSON.stringify(createCliErrorReport(error), null, 2));
+    return;
+  }
+
+  console.error(formatCliFailureText(error));
 }
 
 const exitCode = await main(Bun.argv.slice(2));

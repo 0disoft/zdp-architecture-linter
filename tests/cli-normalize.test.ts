@@ -216,7 +216,7 @@ describe('normalize CLI', () => {
   test('prints usage when architecture is missing', async () => {
     const result = await runCli(['normalize']);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
@@ -234,7 +234,7 @@ describe('normalize CLI', () => {
           '--check'
         ]);
 
-        expect(result.exitCode).toBe(2);
+        expect(result.exitCode).toBe(1);
         expect(result.stdout).toBe('');
         expect(result.stderr).toContain(
           'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
