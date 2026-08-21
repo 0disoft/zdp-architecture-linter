@@ -76,7 +76,8 @@ type CliOptionValue = string | boolean | readonly string[] | undefined;
 
 const CLI_USAGE_LINES = [
   'Usage:',
-  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json | --format sarif]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... --format sarif',
   '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
