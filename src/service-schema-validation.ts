@@ -39,10 +39,14 @@ export async function validateRepositoryServiceContract(
   input: {
     readonly architectureRoot: string;
     readonly repositoryRoot: string;
+    readonly repositoryServiceContract?: RepositoryServiceContract | null;
   }
 ): Promise<readonly Diagnostic[]> {
   const validate = await compileServiceSchema(input.architectureRoot);
-  const serviceContract = await loadRepositoryServiceContract(input.repositoryRoot);
+  const serviceContract =
+    input.repositoryServiceContract === undefined
+      ? await loadRepositoryServiceContract(input.repositoryRoot)
+      : input.repositoryServiceContract;
 
   if (serviceContract === null) {
     return [
