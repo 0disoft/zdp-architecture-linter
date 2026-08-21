@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "zdp.architecture-linter.validation-performance-budget/v1",
+  "fullArchitectureValidation": {
+    "maxWarmP95RegressionPercent": 20
+  }
+}
