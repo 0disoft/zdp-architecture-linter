@@ -1,9 +1,4 @@
 import {
-  loadArchitectureCatalogSchemaPreflight,
-  type ArchitectureCatalogSchemaPreflight
-} from './catalog-schema-validation.ts';
-import { buildArchitectureGraph } from './architecture-graph.ts';
-import {
   buildAiSensitiveDataPolicy,
   buildAiUserDataPolicy,
   validateAiSensitiveDataContracts,
@@ -102,7 +97,6 @@ import {
   validateRepositoryServiceContractProviderReferences
 } from './service-contract-reference-rules.ts';
 import {
-  loadRepositoryServiceContract,
   validateRepositoryServiceContract,
   validateServiceSchemaFixtures
 } from './service-schema-validation.ts';
@@ -153,12 +147,19 @@ import { validateRepositorySecurityHeaderContract } from './xcut-secheader-rules
 import { validateRepositoryAssetContract } from './xcut-asset-rules.ts';
 import { validateRepositoryLlmsContract } from './xcut-llms-rules.ts';
 import { validateSupportSourceRegistrationFixtures } from './support-source-registry-validation.ts';
+import {
+  loadValidationContext,
+  type ValidationContext
+} from './validation-context.ts';
 
-export interface ValidateArchitectureInput {
-  readonly architectureRoot: string;
-  readonly repositoryRoot?: string;
-  readonly catalogSchemaPreflight?: ArchitectureCatalogSchemaPreflight;
-}
+export type ValidateArchitectureInput =
+  | {
+      readonly architectureRoot: string;
+      readonly repositoryRoot?: string;
+    }
+  | {
+      readonly context: ValidationContext;
+    };
 
 interface RepositoryContractValidatorInput {
   readonly repositoryRoot: string;
@@ -245,22 +246,28 @@ async function validateRepositoryContractRegistry(input: {
 export async function validateArchitecture(
   input: ValidateArchitectureInput
 ): Promise<ValidationResult> {
-  const catalogSchemaPreflight =
-    input.catalogSchemaPreflight ??
-    (await loadArchitectureCatalogSchemaPreflight(input.architectureRoot));
-  const { catalogs } = catalogSchemaPreflight;
+  const context =
+    'context' in input
+      ? input.context
+      : await loadValidationContext({
+          architectureRoot: input.architectureRoot,
+          repositoryRoot: input.repositoryRoot
+        });
+  const {
+    architectureRoot,
+    repositoryRoot,
+    catalogSchemaPreflight,
+    catalogs
+  } = context;
 
   if (catalogSchemaPreflight.validation.diagnostics.length > 0) {
     return catalogSchemaPreflight.validation;
   }
-  const repositoryServiceContract =
-    input.repositoryRoot === undefined
-      ? null
-      : await loadRepositoryServiceContract(input.repositoryRoot);
-  const graph = buildArchitectureGraph({
-    catalogs,
-    repositoryServiceContract: repositoryServiceContract?.value ?? null
-  });
+
+  const [repositoryServiceContract, graph] = await Promise.all([
+    context.getRepositoryServiceContract(),
+    context.getGraph()
+  ]);
   const {
     repositories: repositoryIndex,
     datastores: datastoreIndex,
@@ -320,7 +327,7 @@ export async function validateArchitecture(
   );
 
   const fixtureDiagnostics = await validateFixtureExpectations({
-    architectureRoot: input.architectureRoot,
+    architectureRoot,
     repositoryIndex,
     datastoreIndex,
     dataClassIndex,
@@ -343,7 +350,7 @@ export async function validateArchitecture(
   });
   const repositoryServiceFixtureDiagnostics =
     await validateRepositoryServiceFixtureExpectations({
-      architectureRoot: input.architectureRoot,
+      architectureRoot,
       repositoryIndex,
       serviceIndex,
       dataClassIndex,
@@ -352,33 +359,34 @@ export async function validateArchitecture(
       externalProviderIndex
     });
   const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
-    input.architectureRoot
+    architectureRoot
   );
   const supportSourceRegistrationFixtureDiagnostics =
     await validateSupportSourceRegistrationFixtures({
-      architectureRoot: input.architectureRoot,
+      architectureRoot,
       catalog: catalogs.supportSourceAdapters
     });
   const repositoryServiceDiagnostics =
-    input.repositoryRoot === undefined
+    repositoryRoot === undefined
       ? []
       : await validateRepositoryServiceContract({
-          architectureRoot: input.architectureRoot,
-          repositoryRoot: input.repositoryRoot
+          architectureRoot,
+          repositoryRoot,
+          repositoryServiceContract
         });
   const repositoryBaselineDiagnostics = await validateRepositoryBaselineFiles(
-    input.repositoryRoot
+    repositoryRoot
   );
   const repositoryMarkdownDiagnostics =
-    input.repositoryRoot === undefined
+    repositoryRoot === undefined
       ? []
       : await validateRepositoryRootMarkdownFiles({
-          repositoryRoot: input.repositoryRoot,
+          repositoryRoot,
           repositoryServiceContract: repositoryServiceContract?.value ?? null,
           repositoryIndex
         });
   const repositoryContractDiagnostics = await validateRepositoryContractRegistry({
-    repositoryRoot: input.repositoryRoot,
+    repositoryRoot,
     repositoryServiceContract: repositoryServiceContract?.value ?? null
   });
   const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
@@ -459,7 +467,7 @@ export async function validateArchitecture(
     repositoryServiceContract === null
       ? []
       : validateRepositoryAutomationContract({
-          repositoryRoot: input.repositoryRoot,
+          repositoryRoot,
           repositoryServiceContract: repositoryServiceContract.value,
           repositoryIndex
         });
@@ -481,7 +489,7 @@ export async function validateArchitecture(
         datastoreIndex
       ),
       ...(await validateEventSchemaReferences({
-        architectureRoot: input.architectureRoot,
+        architectureRoot,
         value: catalogs.events
       })),
       ...validateEventCatalog(catalogs.events),

@@ -1,12 +1,7 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadArchitectureCatalogs } from './catalog-loader.ts';
-import {
-  catalogSchemaPreflightFailed,
-  loadArchitectureCatalogSchemaPreflight
-} from './catalog-schema-validation.ts';
-import { loadArchitectureGraph } from './architecture-graph-loader.ts';
+import { catalogSchemaPreflightFailed } from './catalog-schema-validation.ts';
 import {
   createArchitectureDoctorReport,
   formatArchitectureDoctorReportText
@@ -57,8 +52,8 @@ import {
   writeGeneratedArchitectureFile
 } from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
-import { loadRepositoryServiceContract } from './service-schema-validation.ts';
 import { validateArchitecture } from './validation.ts';
+import { loadValidationContext } from './validation-context.ts';
 
 type ParsedCommand =
   | ParsedValidateCommand
@@ -237,20 +232,17 @@ async function main(argv: readonly string[]): Promise<number> {
 
   try {
     if (command.name === 'graph') {
-      const preflight = await loadArchitectureCatalogSchemaPreflight(
-        command.architectureRoot
-      );
+      const context = await loadValidationContext({
+        architectureRoot: command.architectureRoot,
+        repositoryRoot: command.repositoryRoot
+      });
 
-      if (catalogSchemaPreflightFailed(preflight)) {
-        printResult(preflight.validation, command.json);
+      if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
+        printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
 
-      const graph = await loadArchitectureGraph({
-        architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot,
-        catalogs: preflight.catalogs
-      });
+      const graph = await context.getGraph();
       const report = createArchitectureGraphReport(graph);
 
       if (command.json) {
@@ -263,15 +255,13 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'explain') {
+      const context = await loadValidationContext({
+        architectureRoot: command.architectureRoot,
+        repositoryRoot: command.repositoryRoot
+      });
       const [result, graph] = await Promise.all([
-        validateArchitecture({
-          architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot
-        }),
-        loadArchitectureGraph({
-          architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot
-        })
+        validateArchitecture({ context }),
+        context.getGraph()
       ]);
       const report = createDiagnosticExplainReport({
         validation: result,
@@ -290,12 +280,13 @@ async function main(argv: readonly string[]): Promise<number> {
     if (command.name === 'compliance') {
       let report: ContractComplianceReport;
       try {
+        const context = await loadValidationContext({
+          architectureRoot: command.architectureRoot,
+          repositoryRoot: command.repositoryRoot
+        });
         const [serviceContract, validation] = await Promise.all([
-          loadRepositoryServiceContract(command.repositoryRoot),
-          validateArchitecture({
-            architectureRoot: command.architectureRoot,
-            repositoryRoot: command.repositoryRoot
-          })
+          context.getRepositoryServiceContract(),
+          validateArchitecture({ context })
         ]);
         report = createContractComplianceReport({
           repositoryRoot: command.repositoryRoot,
@@ -343,19 +334,16 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'pack') {
-      const preflight = await loadArchitectureCatalogSchemaPreflight(
-        command.architectureRoot
-      );
+      const context = await loadValidationContext({
+        architectureRoot: command.architectureRoot
+      });
 
-      if (catalogSchemaPreflightFailed(preflight)) {
-        printResult(preflight.validation, command.json);
+      if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
+        printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
 
-      const graph = await loadArchitectureGraph({
-        architectureRoot: command.architectureRoot,
-        catalogs: preflight.catalogs
-      });
+      const graph = await context.getGraph();
       const report = createArchitecturePackReport({
         graph,
         repo: command.repo,
@@ -457,24 +445,17 @@ async function main(argv: readonly string[]): Promise<number> {
         });
         snapshots.push(headSnapshot);
 
-        const [
-          baseCatalogs,
-          headCatalogs,
-          baseValidation,
-          headValidation
-        ] = await Promise.all([
-          loadArchitectureCatalogs(baseSnapshot.root),
-          loadArchitectureCatalogs(headSnapshot.root),
-          validateArchitecture({
-            architectureRoot: baseSnapshot.root
-          }),
-          validateArchitecture({
-            architectureRoot: headSnapshot.root
-          })
+        const [baseContext, headContext] = await Promise.all([
+          loadValidationContext({ architectureRoot: baseSnapshot.root }),
+          loadValidationContext({ architectureRoot: headSnapshot.root })
+        ]);
+        const [baseValidation, headValidation] = await Promise.all([
+          validateArchitecture({ context: baseContext }),
+          validateArchitecture({ context: headContext })
         ]);
         const report = createArchitectureDiffReport({
-          baseCatalogs,
-          headCatalogs,
+          baseCatalogs: baseContext.catalogs,
+          headCatalogs: headContext.catalogs,
           baseDiagnostics: baseValidation.diagnostics,
           headDiagnostics: headValidation.diagnostics
         });
@@ -512,26 +493,19 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'normalize') {
-      const preflight = await loadArchitectureCatalogSchemaPreflight(
-        command.architectureRoot
-      );
+      const context = await loadValidationContext({
+        architectureRoot: command.architectureRoot,
+        repositoryRoot: command.repositoryRoot
+      });
 
-      if (catalogSchemaPreflightFailed(preflight)) {
-        printResult(preflight.validation, command.json);
+      if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
+        printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
 
       const [graph, result] = await Promise.all([
-        loadArchitectureGraph({
-          architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot,
-          catalogs: preflight.catalogs
-        }),
-        validateArchitecture({
-          architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot,
-          catalogSchemaPreflight: preflight
-        })
+        context.getGraph(),
+        validateArchitecture({ context })
       ]);
       const report = createArchitectureNormalizeReport({
         graph,
@@ -635,19 +609,16 @@ async function main(argv: readonly string[]): Promise<number> {
     }
 
     if (command.name === 'list') {
-      const preflight = await loadArchitectureCatalogSchemaPreflight(
-        command.architectureRoot
-      );
+      const context = await loadValidationContext({
+        architectureRoot: command.architectureRoot
+      });
 
-      if (catalogSchemaPreflightFailed(preflight)) {
-        printResult(preflight.validation, command.json);
+      if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
+        printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
 
-      const graph = await loadArchitectureGraph({
-        architectureRoot: command.architectureRoot,
-        catalogs: preflight.catalogs
-      });
+      const graph = await context.getGraph();
       const report =
         command.listKind === 'repos'
           ? createArchitectureListReport({
