@@ -98,7 +98,7 @@ repositories:
   test('prints usage when base ref is missing', async () => {
     const result = await runCli(['diff', '--architecture', '.']);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]'
@@ -123,7 +123,7 @@ repositories:
     );
   });
 
-  test('cleans a base snapshot when the head ref fails to load', async () => {
+  test('cleans a base snapshot and redacts JSON when the head ref fails to load', async () => {
     await withArchitectureFiles(
       createMinimalArchitectureFiles({}),
       async ({ architectureRoot }) => {
@@ -143,7 +143,17 @@ repositories:
         const after = await listDiffSnapshotDirectories();
 
         expect(result.exitCode).toBe(1);
-        expect(result.stdout).toBe('');
+        expect(result.stderr).toBe('');
+        expect(JSON.parse(result.stdout)).toEqual({
+          schemaVersion: 'zdp.architecture.cli-error.v1',
+          status: 'failed',
+          error: {
+            code: 'command_failed',
+            message: 'The command could not be completed.',
+            details: {}
+          }
+        });
+        expect(result.stdout).not.toContain('refs/heads/does-not-exist');
         expect([...after].filter((entry) => !before.has(entry))).toEqual([]);
       }
     );

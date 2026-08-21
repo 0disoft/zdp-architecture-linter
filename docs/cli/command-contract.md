@@ -2,13 +2,16 @@
 
 Status: Active
 
-이 문서는 `zdp-arch` CLI의 명령 계약이다. 실제 parser와 구현은 `src/cli.ts`와 관련 report/validation module이 소유한다.
+이 문서는 `zdp-arch` CLI의 명령 계약이다. 실제 parser, 명령 구현, 실패 출력 정규화는 `src/cli.ts`와 관련 report/validation module이 소유한다.
 
 ## Global contract
 
 - `--architecture <path>`는 `zdp-architecture` 루트를 가리킨다.
 - `--repository <path>` 또는 `--repo <repo>`는 검증 대상 저장소 루트 또는 task pack 대상 repo ID를 가리킨다.
 - `--json`은 자동화가 읽을 수 있는 JSON을 stdout으로 출력한다.
+- 잘못된 명령, 필수 옵션 누락, 충돌하는 옵션을 포함한 모든 실패는 exit `1`을 반환한다.
+- `--json`을 요청한 CLI 자체 실패는 `zdp.architecture.cli-error.v1` envelope 하나만 stdout에 출력하고 stderr를 비운다.
+- JSON 모드의 예상하지 못한 실행 오류는 원문 오류를 되비추지 않고 `command_failed`로 redaction한다. 사람이 실행한 text mode는 수정에 필요한 상세 오류를 stderr로 출력한다.
 - CLI는 provider API, GitHub mutation, deployment, secret rotation, database migration을 실행하지 않는다.
 - 정책 판단은 `zdp-architecture` 원천 파일에서 오며, 이 저장소가 새 ZDP 정책을 임의로 만들지 않는다.
 
