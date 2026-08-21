@@ -6,9 +6,16 @@ Status: Active
 
 - Human output은 사람이 고칠 파일과 필드를 빠르게 찾도록 작성한다.
 - JSON output은 자동화가 안정적으로 파싱할 수 있어야 한다.
-- JSON output은 generated file content, existing source file content, secret, customer raw payload, provider raw payload, private incident detail을 포함하지 않는다.
+- SARIF output은 GitHub code scanning과 SARIF consumer가 같은 논리 진단을 실행 간 추적할 수 있어야 한다.
+- JSON과 SARIF output은 generated file content, existing source file content, secret, customer raw payload, provider raw payload, private incident detail을 포함하지 않는다.
 - 진단은 가능한 한 `ruleId`, `severity`, `message`, `file`, `path`, `sourceProof` 같은 구조로 원인과 수정 위치를 분리한다.
 - `--json` 실패는 stdout에 JSON 문서 하나만 출력하고 stderr를 비운다. text mode 실패는 stdout을 비우고 stderr에 사람이 고칠 수 있는 상세 오류를 출력한다.
+
+## SARIF output contract
+
+`validate --format sarif`은 SARIF `2.1.0` log를 stdout에 출력한다. 기존 `--json`과 함께 지정하면 모호한 이중 형식이므로 argument error로 거부한다. SARIF 선택은 warning과 error의 exit code 의미를 바꾸지 않는다.
+
+각 result는 `ruleId`, `level`, message, source-relative artifact URI, ZDP logical path와 `partialFingerprints`를 가진다. GitHub 추적용 `primaryLocationLineHash`와 도구 고유 `zdpDiagnostic/v1`은 같은 stable fingerprint에서 파생한다. 자세한 계산과 호환성 계약은 `docs/cli/sarif.md`가 소유한다.
 
 ## Exit codes
 
@@ -72,3 +79,7 @@ repository 또는 architecture 입력을 읽거나 파싱할 수 없으면 원�
 ## Diagnostic compatibility
 
 진단 ID의 의미를 바꾸는 것은 호환성 변화다. 조건을 좁히는 rollback은 가능하지만, 기존 ID를 다른 정책 의미로 재사용하지 않는다. 새 정책 의미가 필요하면 새 rule ID를 만든다.
+
+기본 fingerprint는 versioned namespace, `ruleId`, normalized source-relative `file`, logical `path`로 계산한다. message 문구와 severity는 fingerprint에 넣지 않는다. 따라서 설명 문구 수정은 같은 진단으로 유지되고, `diff`는 severity 변경만 별도 변화로 보고한다.
+
+같은 rule과 위치에서 둘 이상의 독립 진단을 내야 하거나 파일·path 이동 중 identity를 유지해야 하면 producer가 명시적 `fingerprint`를 제공한다. fingerprint 알고리즘이나 입력 의미를 바꾸려면 namespace와 SARIF property version을 올리고 회귀 테스트를 추가한다.
