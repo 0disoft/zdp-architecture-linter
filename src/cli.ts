@@ -53,6 +53,10 @@ import {
 } from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { validateArchitecture } from './validation.ts';
+import {
+  resolveValidationRuleSelection,
+  type ValidationRuleSelection
+} from './rule-registry.ts';
 import { loadValidationContext } from './validation-context.ts';
 
 type ParsedCommand =
@@ -67,9 +71,11 @@ type ParsedCommand =
   | ParsedNormalizeCommand
   | ParsedListCommand;
 
+type CliOptionValue = string | boolean | readonly string[] | undefined;
+
 const CLI_USAGE_LINES = [
   'Usage:',
-  '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]',
   '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
@@ -121,6 +127,18 @@ const CLI_OPTION_CONFIG = {
   },
   'agent-review-status': {
     type: 'string'
+  },
+  rule: {
+    type: 'string',
+    multiple: true
+  },
+  group: {
+    type: 'string',
+    multiple: true
+  },
+  severity: {
+    type: 'string',
+    multiple: true
   }
 } as const;
 
@@ -128,6 +146,7 @@ interface ParsedValidateCommand {
   readonly name: 'validate';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly selection: ValidationRuleSelection;
   readonly json: boolean;
 }
 
@@ -649,7 +668,8 @@ async function main(argv: readonly string[]): Promise<number> {
 
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
-      repositoryRoot: command.repositoryRoot
+      repositoryRoot: command.repositoryRoot,
+      selection: command.selection
     });
     printResult(result, command.json);
 
@@ -688,6 +708,41 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
 
   if (architecture === null) {
     return null;
+  }
+
+  if (commandName !== 'validate' && hasValidationSelectorOptions(parsed.values)) {
+    return null;
+  }
+
+  if (commandName === 'validate') {
+    if (positionals.length > 0) {
+      return null;
+    }
+
+    const ruleIds = readStringListOption(parsed.values.rule);
+    const groups = readStringListOption(parsed.values.group);
+    const severities = readStringListOption(parsed.values.severity);
+
+    if (ruleIds === null || groups === null || severities === null) {
+      return null;
+    }
+
+    const selection = resolveValidationRuleSelection({
+      ruleIds,
+      groups,
+      severities
+    });
+    if (selection === null) {
+      return null;
+    }
+
+    return {
+      name: 'validate',
+      architectureRoot: resolve(architecture),
+      repositoryRoot: readOptionalResolvedPath(parsed.values.repository),
+      selection,
+      json: parsed.values.json === true
+    };
   }
 
   if (commandName === 'pack') {
@@ -812,7 +867,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
 }
 
 function parseCliArgs(argv: readonly string[]): {
-  readonly values: Record<string, string | boolean | undefined>;
+  readonly values: Record<string, CliOptionValue>;
   readonly positionals: readonly string[];
 } | null {
   try {
@@ -829,13 +884,26 @@ function parseCliArgs(argv: readonly string[]): {
   }
 }
 
-function readStringOption(value: string | boolean | undefined): string | null {
+function readStringOption(value: CliOptionValue): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
-function readOptionalResolvedPath(value: string | boolean | undefined): string | undefined {
+function readStringListOption(value: CliOptionValue): readonly string[] | null {
+  if (value === undefined) return [];
+  const rawValues = typeof value === 'string' ? [value] : Array.isArray(value) ? value : null;
+  if (rawValues === null) return null;
+  const values = rawValues.flatMap((rawValue) => rawValue.split(',')).map((rawValue) => rawValue.trim());
+  if (values.some((rawValue) => rawValue.length === 0)) return null;
+  return [...new Set(values)];
+}
+
+function readOptionalResolvedPath(value: CliOptionValue): string | undefined {
   const path = readStringOption(value);
   return path === null ? undefined : resolve(path);
+}
+
+function hasValidationSelectorOptions(values: Readonly<Record<string, CliOptionValue>>): boolean {
+  return values.rule !== undefined || values.group !== undefined || values.severity !== undefined;
 }
 
 function printResult(result: ValidationResult, json: boolean): void {
