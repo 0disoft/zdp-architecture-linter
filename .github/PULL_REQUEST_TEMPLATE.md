@@ -8,6 +8,7 @@
 
 - [ ] `bun run check`
 - [ ] `bun test`
+- [ ] `bun run validate:self-contained`
 - [ ] 필요한 fixture 추가 또는 수정
 - [ ] 비밀값, 실제 계정 ID, 결제 payload, 고객 원문 데이터 없음
 

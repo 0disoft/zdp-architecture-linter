@@ -1,0 +1,15 @@
+repositories:
+  - name: zdp-architecture-linter
+    status: active
+    repo_stage: deploy_unit
+    kind: tooling
+    area: architecture
+    purpose: ZDP architecture contract validation CLI.
+    owner: 0disoft
+    risk_level: low
+    agent_review:
+      status: candidate
+      cadence: none
+      run_scope: none
+      output_policy: none
+      reason: Self-contained CI fixture does not model canonical agent-review enrollment.
