@@ -10,7 +10,13 @@ interface CachedValidator {
   readonly validate: ValidateFunction;
 }
 
+interface PendingValidator {
+  readonly source: string;
+  readonly promise: Promise<ValidateFunction>;
+}
+
 const validators = new Map<string, CachedValidator>();
+const pendingValidators = new Map<string, PendingValidator>();
 let cacheHits = 0;
 let cacheMisses = 0;
 
@@ -30,20 +36,33 @@ export async function compileJsonSchemaFile(input: {
     return cached.validate;
   }
 
+  const pending = pendingValidators.get(cacheKey);
+  if (pending?.source === source) {
+    cacheHits += 1;
+    return pending.promise;
+  }
+
   cacheMisses += 1;
-  const schema = JSON.parse(source) as AnySchema;
-  const ajv = new Ajv2020({
-    allErrors: true,
-    strict: false,
-    ...(input.validateFormats === false ? { validateFormats: false } : {})
-  });
-  const validate = ajv.compile(schema);
+  const promise = Promise.resolve().then(() =>
+    compileJsonSchemaSource(source, input.validateFormats)
+  );
+  pendingValidators.set(cacheKey, { source, promise });
 
-  validators.delete(cacheKey);
-  validators.set(cacheKey, { source, validate });
-  evictOldestValidators();
+  try {
+    const validate = await promise;
 
-  return validate;
+    if (pendingValidators.get(cacheKey)?.promise === promise) {
+      validators.delete(cacheKey);
+      validators.set(cacheKey, { source, validate });
+      evictOldestValidators();
+    }
+
+    return validate;
+  } finally {
+    if (pendingValidators.get(cacheKey)?.promise === promise) {
+      pendingValidators.delete(cacheKey);
+    }
+  }
 }
 
 export function getJsonSchemaValidatorCacheStats(): {
@@ -56,6 +75,20 @@ export function getJsonSchemaValidatorCacheStats(): {
     hits: cacheHits,
     misses: cacheMisses
   };
+}
+
+function compileJsonSchemaSource(
+  source: string,
+  validateFormats: boolean | undefined
+): ValidateFunction {
+  const schema = JSON.parse(source) as AnySchema;
+  const ajv = new Ajv2020({
+    allErrors: true,
+    strict: false,
+    ...(validateFormats === false ? { validateFormats: false } : {})
+  });
+
+  return ajv.compile(schema);
 }
 
 function evictOldestValidators(): void {

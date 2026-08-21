@@ -53,6 +53,7 @@ import {
 } from './event-rules.ts';
 import { validateEventSchemaReferences } from './event-schema-validation.ts';
 import { validateFixtureExpectations } from './fixture-validation.ts';
+import { runTasksInOrder } from './ordered-task-runner.ts';
 import { validateRepositoryServiceFixtureExpectations } from './repository-service-fixture-validation.ts';
 import {
   buildProviderCatalogWebhookPolicy,
@@ -218,22 +219,21 @@ async function validateRepositoryContractRegistry(input: {
   readonly repositoryRoot: string | undefined;
   readonly repositoryServiceContract: unknown;
 }): Promise<readonly Diagnostic[]> {
-  if (input.repositoryRoot === undefined) {
+  const repositoryRoot = input.repositoryRoot;
+  if (repositoryRoot === undefined) {
     return [];
   }
 
-  const diagnostics: Diagnostic[] = [];
-
-  for (const validateRepositoryContract of REPOSITORY_CONTRACT_VALIDATORS) {
-    diagnostics.push(
-      ...(await validateRepositoryContract({
-        repositoryRoot: input.repositoryRoot,
+  const diagnosticGroups = await runTasksInOrder<readonly Diagnostic[]>(
+    REPOSITORY_CONTRACT_VALIDATORS.map((validateRepositoryContract) => () =>
+      validateRepositoryContract({
+        repositoryRoot,
         repositoryServiceContract: input.repositoryServiceContract
-      }))
-    );
-  }
+      })
+    )
+  );
 
-  return diagnostics;
+  return diagnosticGroups.flat();
 }
 
 /**
@@ -326,69 +326,84 @@ export async function validateArchitecture(
     datastoreIndex
   );
 
-  const fixtureDiagnostics = await validateFixtureExpectations({
-    architectureRoot,
-    repositoryIndex,
-    datastoreIndex,
-    dataClassIndex,
-    eventIndex,
-    serviceDataCatalogPolicy,
-    serviceDataOwnershipPolicy,
-    ledgerDatastoreDependencyPolicy,
-    aiUserDataPolicy,
-    aiSensitiveDataPolicy,
-    moneyMovementPolicy,
-    paymentDataFrontendPolicy,
-    creditMonetizationPolicy,
-    providerContractPolicy,
-    providerWebhookPolicy,
-    tierOperationalContractPolicy,
-    tierCriticalControlsPolicy,
-    tier3RiskyExperimentPolicy,
-    publicApiContractPolicy,
-    tokenRawChainConsumptionPolicy
-  });
-  const repositoryServiceFixtureDiagnostics =
-    await validateRepositoryServiceFixtureExpectations({
-      architectureRoot,
-      repositoryIndex,
-      serviceIndex,
-      dataClassIndex,
-      datastoreIndex,
-      eventIndex,
-      externalProviderIndex
-    });
-  const serviceSchemaDiagnostics = await validateServiceSchemaFixtures(
-    architectureRoot
-  );
-  const supportSourceRegistrationFixtureDiagnostics =
-    await validateSupportSourceRegistrationFixtures({
-      architectureRoot,
-      catalog: catalogs.supportSourceAdapters
-    });
-  const repositoryServiceDiagnostics =
-    repositoryRoot === undefined
-      ? []
-      : await validateRepositoryServiceContract({
-          architectureRoot,
-          repositoryRoot,
-          repositoryServiceContract
-        });
-  const repositoryBaselineDiagnostics = await validateRepositoryBaselineFiles(
-    repositoryRoot
-  );
-  const repositoryMarkdownDiagnostics =
-    repositoryRoot === undefined
-      ? []
-      : await validateRepositoryRootMarkdownFiles({
-          repositoryRoot,
-          repositoryServiceContract: repositoryServiceContract?.value ?? null,
-          repositoryIndex
-        });
-  const repositoryContractDiagnostics = await validateRepositoryContractRegistry({
-    repositoryRoot,
-    repositoryServiceContract: repositoryServiceContract?.value ?? null
-  });
+  const [
+    fixtureDiagnostics,
+    repositoryServiceFixtureDiagnostics,
+    serviceSchemaDiagnostics,
+    supportSourceRegistrationFixtureDiagnostics,
+    repositoryServiceDiagnostics,
+    repositoryBaselineDiagnostics,
+    repositoryMarkdownDiagnostics,
+    repositoryContractDiagnostics,
+    eventSchemaDiagnostics
+  ] = await runTasksInOrder<readonly Diagnostic[]>([
+    () =>
+      validateFixtureExpectations({
+        architectureRoot,
+        repositoryIndex,
+        datastoreIndex,
+        dataClassIndex,
+        eventIndex,
+        serviceDataCatalogPolicy,
+        serviceDataOwnershipPolicy,
+        ledgerDatastoreDependencyPolicy,
+        aiUserDataPolicy,
+        aiSensitiveDataPolicy,
+        moneyMovementPolicy,
+        paymentDataFrontendPolicy,
+        creditMonetizationPolicy,
+        providerContractPolicy,
+        providerWebhookPolicy,
+        tierOperationalContractPolicy,
+        tierCriticalControlsPolicy,
+        tier3RiskyExperimentPolicy,
+        publicApiContractPolicy,
+        tokenRawChainConsumptionPolicy
+      }),
+    () =>
+      validateRepositoryServiceFixtureExpectations({
+        architectureRoot,
+        repositoryIndex,
+        serviceIndex,
+        dataClassIndex,
+        datastoreIndex,
+        eventIndex,
+        externalProviderIndex
+      }),
+    () => validateServiceSchemaFixtures(architectureRoot),
+    () =>
+      validateSupportSourceRegistrationFixtures({
+        architectureRoot,
+        catalog: catalogs.supportSourceAdapters
+      }),
+    () =>
+      repositoryRoot === undefined
+        ? []
+        : validateRepositoryServiceContract({
+            architectureRoot,
+            repositoryRoot,
+            repositoryServiceContract
+          }),
+    () => validateRepositoryBaselineFiles(repositoryRoot),
+    () =>
+      repositoryRoot === undefined
+        ? []
+        : validateRepositoryRootMarkdownFiles({
+            repositoryRoot,
+            repositoryServiceContract: repositoryServiceContract?.value ?? null,
+            repositoryIndex
+          }),
+    () =>
+      validateRepositoryContractRegistry({
+        repositoryRoot,
+        repositoryServiceContract: repositoryServiceContract?.value ?? null
+      }),
+    () =>
+      validateEventSchemaReferences({
+        architectureRoot,
+        value: catalogs.events
+      })
+  ]);
   const repositoryServiceContractCatalog = graph.repositoryServiceContractCatalog;
   const repositoryServicePolicyDiagnostics =
     repositoryServiceContractCatalog === null
@@ -488,10 +503,7 @@ export async function validateArchitecture(
         catalogs.dataClasses,
         datastoreIndex
       ),
-      ...(await validateEventSchemaReferences({
-        architectureRoot,
-        value: catalogs.events
-      })),
+      ...eventSchemaDiagnostics,
       ...validateEventCatalog(catalogs.events),
       ...validateEventDataClassReferences(catalogs.events, dataClassIndex),
       ...validateEventPiiFloor(catalogs.events, dataClassIndex),
