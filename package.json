@@ -12,7 +12,8 @@
     "profile:validation": "bun scripts/profile-validation-performance.ts",
     "test": "bun test",
     "validate:architecture": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture",
-    "validate:self": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture --repository ."
+    "validate:self": "bun src/cli.ts validate --architecture ../../docs/zdp-architecture --repository .",
+    "validate:self-contained": "bun src/cli.ts validate --architecture fixtures/self-architecture --repository ."
   },
   "dependencies": {
     "ajv": "^8.20.0",

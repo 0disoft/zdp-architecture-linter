@@ -23,6 +23,12 @@ Status: Active
 | `credential-vault-rules-test` | credential vault 계약 규칙 집중 검증 | `zdp_architecture_linter_credential_vault_rules_test` |
 | `privacy-rules-test` | privacy access 계약 규칙 집중 검증 | `zdp_architecture_linter_privacy_rules_test` |
 
+## CI 전용 self-contained 검증
+
+`bun run validate:self-contained`는 `fixtures/self-architecture`와 실제 저장소 루트를 결합해 CLI 로딩, `service.yaml` 연결, baseline 파일, automation 검사를 수행하는 CI implementation alias다. 중앙 `zdp-architecture` 정책을 검증하지 않으며 `self-architecture-validation` 또는 `architecture-fast-validation`을 대체하지 않는다.
+
+Ubuntu의 `CI / validate`는 이 명령을 typecheck와 full test 뒤에 실행한다. pull request의 `CI / windows-cli-smoke`는 같은 명령만 실행해 Windows 경로와 CLI 실행을 확인하며 full test는 반복하지 않는다. 에이전트는 이 package script를 독립 실행 권한으로 취급하지 않는다.
+
 ## 선택 기준
 
 - 문서 라우터나 agent instruction만 바뀌면 `self-architecture-validation`을 우선 실행하고, root 문서 정책이 바뀌었으면 `architecture-fast-validation`도 실행한다.
