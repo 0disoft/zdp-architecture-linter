@@ -80,7 +80,7 @@ const CLI_USAGE_LINES = [
   '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
   '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
   '  zdp-arch check-split --architecture <path> [--json]',
-  '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]',
+  '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--fail-on-new-error] [--json]',
   '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
   '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]',
@@ -114,6 +114,9 @@ const CLI_OPTION_CONFIG = {
   },
   head: {
     type: 'string'
+  },
+  'fail-on-new-error': {
+    type: 'boolean'
   },
   stage: {
     type: 'string'
@@ -175,6 +178,7 @@ interface ParsedDiffCommand {
   readonly architectureRoot: string;
   readonly base: string;
   readonly head?: string;
+  readonly failOnNewError: boolean;
   readonly json: boolean;
 }
 
@@ -481,7 +485,12 @@ async function main(argv: readonly string[]): Promise<number> {
           console.log(formatArchitectureDiffReportText(report));
         }
 
-        return 0;
+        return command.failOnNewError &&
+          report.diagnostics.added.some(
+            (diagnostic) => diagnostic.severity === 'error'
+          )
+          ? 1
+          : 0;
       } finally {
         await Promise.all(snapshots.map((snapshot) => snapshot.cleanup()));
       }
@@ -756,6 +765,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       base,
       head: readStringOption(parsed.values.head) ?? undefined,
+      failOnNewError: parsed.values['fail-on-new-error'] === true,
       json: parsed.values.json === true
     };
   }

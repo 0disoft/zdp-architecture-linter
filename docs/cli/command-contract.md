@@ -25,13 +25,15 @@ Status: Active
 | `compliance` | 선택 repository의 계약 선언, 정적 검증, 구현·live 증거 상태를 분리해 report-only로 출력한다. | 없음 | `src/contract-compliance-report.ts`, `src/validation.ts` |
 | `pack` | 특정 repo/task를 위한 bounded LLM task pack을 만든다. | 선택된 `--out`만 | `src/architecture-pack-report.ts` |
 | `check-split` | split trigger와 repository registration drift를 점검한다. | 없음 | `src/split-rules.ts`, `src/cli.ts` |
-| `diff` | base/head 사이의 catalog 핵심 ID와 진단 변화량을 비교한다. | 임시 snapshot만 | `src/architecture-diff-report.ts`, `src/git-architecture-snapshot.ts` |
+| `diff` | base/head 사이의 catalog 핵심 ID와 진단 변화량을 비교하고, 선택적으로 새 error를 CI에서 차단한다. | 임시 snapshot만 | `src/architecture-diff-report.ts`, `src/git-architecture-snapshot.ts` |
 | `doctor` | architecture root와 repository root의 읽기 가능성, Git 상태, validation readiness를 점검한다. | 없음 | `src/architecture-doctor-report.ts` |
 | `normalize` | architecture registry를 정규화해 출력하거나 freshness check를 수행한다. | 선택된 `--out`만 | `src/architecture-normalize-report.ts`, `src/generated-output.ts` |
 | `list repos` | repository catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 | `list services` | service catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 
 `diff`의 `--base`와 `--head`는 비어 있지 않고 앞뒤 또는 제어 공백이 없으며 `-`로 시작하지 않는 Git revision이어야 한다. 현재 작업 트리를 뜻하는 `worktree`는 `--head`에서만 허용한다.
+
+`diff`는 기본적으로 report-only이며 진단 변화가 있어도 비교 보고서를 출력한 뒤 exit `0`을 반환한다. `--fail-on-new-error`를 지정하면 base에는 없고 head에 새로 추가된 `severity: error` 진단이 하나라도 있을 때 같은 보고서를 출력한 뒤 exit `1`을 반환한다. base와 head에 모두 존재하는 기존 error, 새 warning, 해결된 진단은 이 gate를 실패시키지 않는다.
 
 ## Side effect policy
 
