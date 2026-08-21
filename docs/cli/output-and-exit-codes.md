@@ -19,6 +19,10 @@ Status: Active
 
 잘못된 명령, 필수 옵션 누락, 알 수 없는 옵션과 충돌하는 옵션도 exit `1`을 반환한다. 별도의 usage 전용 exit code는 사용하지 않는다.
 
+`diff`는 기본적으로 비교 보고서만 생성하므로 새 진단이 있어도 exit `0`을 반환한다. `--fail-on-new-error`를 지정한 경우에만 `diagnostics.added`에 `severity: error`가 하나 이상 있으면 exit `1`을 반환한다. base에 이미 존재한 error, 새 warning, 해결된 진단은 차단 조건이 아니다.
+
+`diff --fail-on-new-error --json`이 새 error를 발견해 exit `1`을 반환해도 완전한 diff report JSON은 stdout에 유지하고 stderr에는 별도 실패 문구를 쓰지 않는다. 따라서 CI는 종료 코드로 차단 여부를 판단하면서 같은 JSON의 `diagnostics.added`에서 원인을 읽을 수 있다.
+
 `diff`의 `--base` 또는 `--head`가 비어 있거나, 앞뒤·제어 공백을 포함하거나, `-`로 시작하면 Git을 실행하지 않고 invalid argument로 exit `1`을 반환한다.
 
 새 exit code를 추가하려면 `src/cli.ts`, CLI tests, README, 이 문서를 함께 바꾼다.

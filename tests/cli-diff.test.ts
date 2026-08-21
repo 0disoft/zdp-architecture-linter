@@ -95,13 +95,94 @@ repositories:
     );
   }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);
 
+  test('keeps new errors report-only unless the failure gate is enabled', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({}),
+      async ({ architectureRoot }) => {
+        await initGitRepository(architectureRoot);
+        await writeFile(
+          join(architectureRoot, 'catalogs/services.yaml'),
+          `
+services:
+  - id: orphan-api
+    repo: zdp-missing-repository
+`.trimStart(),
+          'utf8'
+        );
+
+        const commonArgs = [
+          'diff',
+          '--architecture',
+          architectureRoot,
+          '--base',
+          'HEAD',
+          '--json'
+        ] as const;
+        const reportOnlyResult = await runCli(commonArgs);
+
+        expect(reportOnlyResult.exitCode).toBe(0);
+        expect(reportOnlyResult.stderr).toBe('');
+
+        const report = JSON.parse(reportOnlyResult.stdout) as DiffCliReport;
+        expect(report.diagnostics.added).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              ruleId: 'ZDP-REF-001',
+              severity: 'error'
+            })
+          ])
+        );
+
+        const gatedResult = await runCli([
+          ...commonArgs,
+          '--fail-on-new-error'
+        ]);
+
+        expect(gatedResult.exitCode).toBe(1);
+        expect(gatedResult.stderr).toBe('');
+        expect(JSON.parse(gatedResult.stdout)).toEqual(report);
+      }
+    );
+  }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);
+
+  test('does not fail for errors that already exist in the base ref', async () => {
+    await withArchitectureFiles(
+      createMinimalArchitectureFiles({
+        'catalogs/services.yaml': `
+services:
+  - id: orphan-api
+    repo: zdp-missing-repository
+`
+      }),
+      async ({ architectureRoot }) => {
+        await initGitRepository(architectureRoot);
+
+        const result = await runCli([
+          'diff',
+          '--architecture',
+          architectureRoot,
+          '--base',
+          'HEAD',
+          '--fail-on-new-error',
+          '--json'
+        ]);
+
+        expect(result.exitCode).toBe(0);
+        expect(result.stderr).toBe('');
+
+        const report = JSON.parse(result.stdout) as DiffCliReport;
+        expect(report.diagnostics.added).toEqual([]);
+      }
+    );
+  }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);
+
   test('prints usage when base ref is missing', async () => {
     const result = await runCli(['diff', '--architecture', '.']);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--json]'
+      'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--fail-on-new-error] [--json]'
     );
   });
 
@@ -166,6 +247,12 @@ interface DiffCliReport {
       readonly added: readonly string[];
       readonly changed: readonly string[];
     };
+  };
+  readonly diagnostics: {
+    readonly added: ReadonlyArray<{
+      readonly ruleId: string;
+      readonly severity: 'error' | 'warning';
+    }>;
   };
   readonly riskNotes: readonly string[];
 }
