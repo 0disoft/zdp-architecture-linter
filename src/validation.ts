@@ -337,7 +337,7 @@ async function validateRepositoryContractRegistry(input: {
   readonly repositoryServiceContract: unknown;
   readonly selection: ValidationRuleSelection | undefined;
 }): Promise<readonly Diagnostic[]> {
-  const repositoryRoot = repositoryRoot;
+  const repositoryRoot = input.repositoryRoot;
   if (repositoryRoot === undefined) return [];
   const selected = REPOSITORY_CONTRACT_VALIDATORS.filter((registration) =>
     isValidationRuleSelected(registration.ruleId, input.selection)
@@ -368,8 +368,8 @@ export async function validateArchitecture(
     'context' in input
       ? input.context
       : await loadValidationContext({
-          architectureRoot,
-          repositoryRoot
+          architectureRoot: input.architectureRoot,
+          repositoryRoot: input.repositoryRoot
         });
   const { architectureRoot, repositoryRoot, catalogSchemaPreflight } = loadedContext;
   if (catalogSchemaPreflight.validation.diagnostics.length > 0) {
