@@ -96,7 +96,7 @@ describe('selective validate CLI', () => {
       'catalog.unknown'
     ]);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('[--rule <id>]...');
   });
