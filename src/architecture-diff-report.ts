@@ -9,6 +9,7 @@ import {
 import {
   validateEventSchemaCompatibility
 } from './event-schema-compatibility.ts';
+import { createStateTransitionDiagnostics } from './state-transition-diff.ts';
 
 export interface ArchitectureDiffReport {
   readonly changes: ArchitectureCatalogChanges;
@@ -24,6 +25,7 @@ export interface ArchitectureCatalogChanges {
   readonly services: CatalogCollectionDiff;
   readonly datastores: CatalogCollectionDiff;
   readonly events: CatalogCollectionDiff;
+  readonly operationalAssets?: CatalogCollectionDiff;
 }
 
 export interface CatalogCollectionDiff {
@@ -37,6 +39,7 @@ export interface CreateArchitectureDiffReportInput {
   readonly headCatalogs: ArchitectureCatalogs;
   readonly baseDiagnostics: readonly Diagnostic[];
   readonly headDiagnostics: readonly Diagnostic[];
+  readonly observedAt?: Date;
 }
 
 interface CollectionItem {
@@ -45,6 +48,12 @@ interface CollectionItem {
 }
 
 type CollectionName = keyof ArchitectureCatalogChanges;
+
+const EMPTY_COLLECTION_DIFF: CatalogCollectionDiff = {
+  added: [],
+  removed: [],
+  changed: []
+};
 
 export function createArchitectureDiffReport(
   input: CreateArchitectureDiffReportInput
@@ -69,25 +78,44 @@ export function createArchitectureDiffReport(
     input.baseCatalogs,
     input.headCatalogs
   );
+  const operationalAssets = diffCollection(
+    getCollection(input.baseCatalogs.operationalAssets?.assets, 'id'),
+    getCollection(input.headCatalogs.operationalAssets?.assets, 'id')
+  );
+  const diagnostics = diffDiagnostics(
+    input.baseDiagnostics,
+    [...input.headDiagnostics, ...compatibilityDiagnostics]
+  );
+  const transitionDiagnostics = createStateTransitionDiagnostics({
+    baseCatalogs: input.baseCatalogs,
+    headCatalogs: input.headCatalogs,
+    observedAt: input.observedAt
+  });
 
   return {
     changes: {
       repositories,
       services,
       datastores,
-      events
+      events,
+      operationalAssets
     },
-    diagnostics: diffDiagnostics(
-      input.baseDiagnostics,
-      [...input.headDiagnostics, ...compatibilityDiagnostics]
-    ),
+    diagnostics: {
+      added: [...diagnostics.added, ...transitionDiagnostics],
+      resolved: diagnostics.resolved
+    },
     riskNotes: [
       ...createRepositoryRiskNotes(
         input.baseCatalogs,
         input.headCatalogs,
         repositories
       ),
-      ...createServiceRiskNotes(input.baseCatalogs, input.headCatalogs, services)
+      ...createServiceRiskNotes(input.baseCatalogs, input.headCatalogs, services),
+      ...createOperationalAssetRiskNotes(
+        input.baseCatalogs,
+        input.headCatalogs,
+        operationalAssets
+      )
     ]
   };
 }
@@ -105,6 +133,11 @@ export function formatArchitectureDiffReportText(
     ...formatCollection('datastores', report.changes.datastores),
     '',
     ...formatCollection('events', report.changes.events),
+    '',
+    ...formatCollection(
+      'operationalAssets',
+      report.changes.operationalAssets ?? EMPTY_COLLECTION_DIFF
+    ),
     '',
     '## diagnostics',
     `- added: ${report.diagnostics.added.length}`,
@@ -211,7 +244,14 @@ function createRepositoryRiskNotes(
   const headById = mapById(
     getCollection(headCatalogs.repositories.repositories, 'name')
   );
-  const fields = ['repo_stage', 'kind', 'owner', 'risk_level', 'area', 'agent_review'];
+  const fields = [
+    'repo_stage',
+    'kind',
+    'owner',
+    'risk_level',
+    'area',
+    'agent_review'
+  ];
 
   return diff.changed.flatMap((id) =>
     createFieldChangeNotes({
@@ -239,12 +279,42 @@ function createServiceRiskNotes(
     'data.payment_data',
     'data.crypto_key_material',
     'runtime',
-    'tier'
+    'tier',
+    'status'
   ];
 
   return diff.changed.flatMap((id) =>
     createFieldChangeNotes({
       collection: 'services',
+      id,
+      baseValue: baseById.get(id),
+      headValue: headById.get(id),
+      fields
+    })
+  );
+}
+
+function createOperationalAssetRiskNotes(
+  baseCatalogs: ArchitectureCatalogs,
+  headCatalogs: ArchitectureCatalogs,
+  diff: CatalogCollectionDiff
+): readonly string[] {
+  const baseById = mapById(
+    getCollection(baseCatalogs.operationalAssets?.assets, 'id')
+  );
+  const headById = mapById(
+    getCollection(headCatalogs.operationalAssets?.assets, 'id')
+  );
+  const fields = [
+    'status',
+    'environment',
+    'criticality',
+    'security.public_access'
+  ];
+
+  return diff.changed.flatMap((id) =>
+    createFieldChangeNotes({
+      collection: 'operationalAssets',
       id,
       baseValue: baseById.get(id),
       headValue: headById.get(id),
