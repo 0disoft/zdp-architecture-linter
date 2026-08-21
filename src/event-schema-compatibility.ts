@@ -496,16 +496,10 @@ function loadVersionedEventSchemas(
   readonly byFamily: ReadonlyMap<string, readonly VersionedEventSchema[]>;
 } {
   const directory = join(architectureRoot, EVENT_SCHEMA_DIRECTORY);
-  let entries: ReturnType<typeof readdirSync>;
+  const entries = readEventSchemaDirectory(directory);
 
-  try {
-    entries = readdirSync(directory, { withFileTypes: true });
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return { byPath: new Map(), byFamily: new Map() };
-    }
-
-    throw error;
+  if (entries === null) {
+    return { byPath: new Map(), byFamily: new Map() };
   }
 
   const schemas = entries
@@ -545,6 +539,21 @@ function loadVersionedEventSchemas(
   );
 
   return { byPath, byFamily };
+}
+
+function readEventSchemaDirectory(directory: string) {
+  try {
+    return readdirSync(directory, {
+      withFileTypes: true,
+      encoding: 'utf8'
+    });
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 function loadVersionedEventSchema(input: {
