@@ -2,6 +2,9 @@ import {
   buildArchitectureGraph,
   type ArchitectureGraph
 } from './architecture-graph.ts';
+import {
+  registerArchitectureCatalogSourceRoot
+} from './architecture-source-root.ts';
 import type { ArchitectureCatalogs } from './catalog-loader.ts';
 import {
   loadArchitectureCatalogSchemaPreflight,
@@ -63,6 +66,9 @@ export function createValidationContext(
       ? undefined
       : Promise.resolve(input.repositoryServiceContract);
   let graphPromise: Promise<ArchitectureGraph> | undefined;
+  const catalogs = input.catalogSchemaPreflight.catalogs;
+
+  registerArchitectureCatalogSourceRoot(catalogs, input.architectureRoot);
 
   const getRepositoryServiceContract = (): Promise<
     RepositoryServiceContract | null
@@ -76,7 +82,7 @@ export function createValidationContext(
     (graphPromise ??= getRepositoryServiceContract().then(
       (repositoryServiceContract) =>
         buildArchitectureGraph({
-          catalogs: input.catalogSchemaPreflight.catalogs,
+          catalogs,
           repositoryServiceContract: repositoryServiceContract?.value ?? null
         })
     ));
@@ -85,7 +91,7 @@ export function createValidationContext(
     architectureRoot: input.architectureRoot,
     repositoryRoot: input.repositoryRoot,
     catalogSchemaPreflight: input.catalogSchemaPreflight,
-    catalogs: input.catalogSchemaPreflight.catalogs,
+    catalogs,
     getRepositoryServiceContract,
     getGraph
   };
