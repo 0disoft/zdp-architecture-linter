@@ -52,6 +52,7 @@ import {
   writeGeneratedArchitectureFile
 } from './generated-output.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
+import { createSarifReport } from './sarif-report.ts';
 import { validateArchitecture } from './validation.ts';
 import {
   resolveValidationRuleSelection,
@@ -75,7 +76,7 @@ type CliOptionValue = string | boolean | readonly string[] | undefined;
 
 const CLI_USAGE_LINES = [
   'Usage:',
-  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json | --format sarif]',
   '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
@@ -97,6 +98,9 @@ const CLI_OPTION_CONFIG = {
   },
   json: {
     type: 'boolean'
+  },
+  format: {
+    type: 'string'
   },
   repo: {
     type: 'string'
@@ -148,6 +152,7 @@ interface ParsedValidateCommand {
   readonly repositoryRoot?: string;
   readonly selection: ValidationRuleSelection;
   readonly json: boolean;
+  readonly sarif: boolean;
 }
 
 interface ParsedGraphCommand {
@@ -671,7 +676,7 @@ async function main(argv: readonly string[]): Promise<number> {
       repositoryRoot: command.repositoryRoot,
       selection: command.selection
     });
-    printResult(result, command.json);
+    printResult(result, command.json, command.sarif);
 
     return hasErrors(result) ? 1 : 0;
   } catch (error) {
@@ -710,7 +715,10 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     return null;
   }
 
-  if (commandName !== 'validate' && hasValidationSelectorOptions(parsed.values)) {
+  if (
+    commandName !== 'validate' &&
+    (hasValidationSelectorOptions(parsed.values) || parsed.values.format !== undefined)
+  ) {
     return null;
   }
 
@@ -722,8 +730,15 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     const ruleIds = readStringListOption(parsed.values.rule);
     const groups = readStringListOption(parsed.values.group);
     const severities = readStringListOption(parsed.values.severity);
+    const format = readStringOption(parsed.values.format);
 
-    if (ruleIds === null || groups === null || severities === null) {
+    if (
+      ruleIds === null ||
+      groups === null ||
+      severities === null ||
+      (format !== null && format !== 'sarif') ||
+      (format === 'sarif' && parsed.values.json === true)
+    ) {
       return null;
     }
 
@@ -741,7 +756,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       architectureRoot: resolve(architecture),
       repositoryRoot: readOptionalResolvedPath(parsed.values.repository),
       selection,
-      json: parsed.values.json === true
+      json: parsed.values.json === true,
+      sarif: format === 'sarif'
     };
   }
 
@@ -906,7 +922,16 @@ function hasValidationSelectorOptions(values: Readonly<Record<string, CliOptionV
   return values.rule !== undefined || values.group !== undefined || values.severity !== undefined;
 }
 
-function printResult(result: ValidationResult, json: boolean): void {
+function printResult(
+  result: ValidationResult,
+  json: boolean,
+  sarif = false
+): void {
+  if (sarif) {
+    console.log(JSON.stringify(createSarifReport(result), null, 2));
+    return;
+  }
+
   if (json) {
     console.log(JSON.stringify(result, null, 2));
     return;

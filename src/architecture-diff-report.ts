@@ -1,5 +1,8 @@
 import type { ArchitectureCatalogs } from './catalog-loader.ts';
-import type { Diagnostic } from './diagnostics.ts';
+import {
+  getDiagnosticFingerprint,
+  type Diagnostic
+} from './diagnostics.ts';
 
 export interface ArchitectureDiffReport {
   readonly changes: ArchitectureCatalogChanges;
@@ -253,13 +256,10 @@ function mapById(items: readonly CollectionItem[]): Map<string, unknown> {
 }
 
 function diagnosticKey(diagnostic: Diagnostic): string {
-  return [
-    diagnostic.ruleId,
-    diagnostic.severity,
-    diagnostic.file,
-    diagnostic.path,
-    diagnostic.message
-  ].join('|');
+  return JSON.stringify([
+    getDiagnosticFingerprint(diagnostic),
+    diagnostic.severity
+  ]);
 }
 
 function stableStringify(value: unknown): string {

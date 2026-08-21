@@ -8,7 +8,9 @@ Status: Active
 
 - `--architecture <path>`는 `zdp-architecture` 루트를 가리킨다.
 - `--repository <path>` 또는 `--repo <repo>`는 검증 대상 저장소 루트 또는 task pack 대상 repo ID를 가리킨다.
-- `--json`은 자동화가 읽을 수 있는 JSON을 stdout으로 출력한다.
+- `--json`은 자동화가 읽을 수 있는 기존 ZDP JSON을 stdout으로 출력한다.
+- `validate --format sarif`는 같은 validation 결과를 SARIF 2.1.0으로 stdout에 출력한다.
+- `--json`과 `--format sarif`는 함께 사용할 수 없고, SARIF는 `validate`에서만 허용한다.
 - 잘못된 명령, 필수 옵션 누락, 충돌하는 옵션을 포함한 모든 실패는 exit `1`을 반환한다.
 - `--json`을 요청한 CLI 자체 실패는 `zdp.architecture.cli-error.v1` envelope 하나만 stdout에 출력하고 stderr를 비운다.
 - JSON 모드의 예상하지 못한 실행 오류는 원문 오류를 되비추지 않고 `command_failed`로 redaction한다. 사람이 실행한 text mode는 수정에 필요한 상세 오류를 stderr로 출력한다.
@@ -19,7 +21,7 @@ Status: Active
 
 | Command | Purpose | Writes | Primary modules |
 | --- | --- | --- | --- |
-| `validate` | architecture root와 선택 repository root의 계약을 검증한다. `--rule`, `--group`, `--severity`로 실행 범위를 줄일 수 있다. | 없음 | `src/validation.ts`, `src/rule-registry.ts`, `src/*-rules.ts`, `src/rules/**` |
+| `validate` | architecture root와 선택 repository root의 계약을 검증하고 text, ZDP JSON 또는 SARIF로 출력한다. `--rule`, `--group`, `--severity`로 실행 범위를 줄일 수 있다. | 없음 | `src/validation.ts`, `src/rule-registry.ts`, `src/sarif-report.ts`, `src/*-rules.ts`, `src/rules/**` |
 | `graph` | repository, service, datastore, data class, event, provider 관계를 graph edge로 출력한다. | 없음 | `src/architecture-graph*.ts` |
 | `explain` | 진단 ID와 source proof를 사람이 고칠 수 있게 설명한다. | 없음 | `src/diagnostic-explain-report.ts` |
 | `compliance` | 선택 repository의 계약 선언, 정적 검증, 구현·live 증거 상태를 분리해 report-only로 출력한다. | 없음 | `src/contract-compliance-report.ts`, `src/validation.ts` |
@@ -34,6 +36,16 @@ Status: Active
 `diff`의 `--base`와 `--head`는 비어 있지 않고 앞뒤 또는 제어 공백이 없으며 `-`로 시작하지 않는 Git revision이어야 한다. 현재 작업 트리를 뜻하는 `worktree`는 `--head`에서만 허용한다.
 
 `diff`는 기본적으로 report-only이며 진단 변화가 있어도 비교 보고서를 출력한 뒤 exit `0`을 반환한다. `--fail-on-new-error`를 지정하면 base에는 없고 head에 새로 추가된 `severity: error` 진단이 하나라도 있을 때 같은 보고서를 출력한 뒤 exit `1`을 반환한다. base와 head에 모두 존재하는 기존 error, 새 warning, 해결된 진단은 이 gate를 실패시키지 않는다.
+
+## Validate output selection
+
+아무 출력 옵션도 없으면 사람이 읽는 text를 출력한다. `--json`은 기존 `ValidationResult` JSON을 유지한다. `--format sarif`는 진단을 SARIF 2.1.0 `runs[0].results`로 변환한다. 출력 형식은 validation의 성공·실패 판정을 바꾸지 않는다.
+
+```shell
+zdp-arch validate --architecture ../zdp-architecture --repository . --format sarif > zdp-architecture.sarif
+```
+
+SARIF fingerprint, location, rule descriptor 계약은 `docs/cli/sarif.md`가 소유한다.
 
 ## Selective validate contract
 
