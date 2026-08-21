@@ -7,6 +7,7 @@ Status: Active
 ## Source of truth
 
 - CLI command contract: `docs/cli/command-contract.md`
+- Selective validation and rule registry: `docs/cli/selective-validation.md`
 - CLI output and exit code contract: `docs/cli/output-and-exit-codes.md`
 - Linter/system boundary: `docs/architecture/00-system-boundary.md`
 - Rule source map: `docs/architecture/01-rule-source-map.md`

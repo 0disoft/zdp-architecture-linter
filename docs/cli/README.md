@@ -7,6 +7,7 @@ Status: Active
 ## Documents
 
 - `command-contract.md`: 명령별 입력, 출력, side effect, 금지 동작
+- `selective-validation.md`: rule registry metadata와 `--rule`, `--group`, `--severity` 계약
 - `output-and-exit-codes.md`: JSON 출력과 exit code 계약
 
 ## Ownership
