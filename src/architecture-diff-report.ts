@@ -1,8 +1,14 @@
+import {
+  getArchitectureCatalogSourceRoot
+} from './architecture-source-root.ts';
 import type { ArchitectureCatalogs } from './catalog-loader.ts';
 import {
   getDiagnosticFingerprint,
   type Diagnostic
 } from './diagnostics.ts';
+import {
+  validateEventSchemaCompatibility
+} from './event-schema-compatibility.ts';
 
 export interface ArchitectureDiffReport {
   readonly changes: ArchitectureCatalogChanges;
@@ -59,6 +65,10 @@ export function createArchitectureDiffReport(
     getCollection(input.baseCatalogs.events.events, 'id'),
     getCollection(input.headCatalogs.events.events, 'id')
   );
+  const compatibilityDiagnostics = createEventSchemaCompatibilityDiagnostics(
+    input.baseCatalogs,
+    input.headCatalogs
+  );
 
   return {
     changes: {
@@ -67,7 +77,10 @@ export function createArchitectureDiffReport(
       datastores,
       events
     },
-    diagnostics: diffDiagnostics(input.baseDiagnostics, input.headDiagnostics),
+    diagnostics: diffDiagnostics(
+      input.baseDiagnostics,
+      [...input.headDiagnostics, ...compatibilityDiagnostics]
+    ),
     riskNotes: [
       ...createRepositoryRiskNotes(
         input.baseCatalogs,
@@ -100,6 +113,26 @@ export function formatArchitectureDiffReportText(
     '## risk notes',
     ...formatList(report.riskNotes)
   ].join('\n');
+}
+
+function createEventSchemaCompatibilityDiagnostics(
+  baseCatalogs: ArchitectureCatalogs,
+  headCatalogs: ArchitectureCatalogs
+): readonly Diagnostic[] {
+  const baseArchitectureRoot = getArchitectureCatalogSourceRoot(baseCatalogs);
+  const headArchitectureRoot = getArchitectureCatalogSourceRoot(headCatalogs);
+
+  if (
+    baseArchitectureRoot === undefined ||
+    headArchitectureRoot === undefined
+  ) {
+    return [];
+  }
+
+  return validateEventSchemaCompatibility({
+    baseArchitectureRoot,
+    headArchitectureRoot
+  });
 }
 
 function diffCollection(
