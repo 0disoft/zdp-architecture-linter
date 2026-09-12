@@ -865,10 +865,32 @@ function validateTokenIdentityContract(value: unknown): readonly Diagnostic[] {
       ruleId: TOKEN_IDENTITY_RULE_ID,
       file: TOKEN_IDENTITY_FILE,
       path: 'token_identity.default_candidate',
-      expected: 'ZDP_ENTITLEMENT',
+      expected: 'ZDP_ECOSYSTEM_COIN',
       message:
-        'Token Identity Contract must keep `ZDP_ENTITLEMENT` as the first candidate identity.'
+        'Token Identity Contract must use `ZDP_ECOSYSTEM_COIN` as the public coin identity under ADR-0052.'
     }),
+    ...validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: 'right_sources.ZDP_ECOSYSTEM_COIN',
+      expected: 'sui_coin_supply_and_ownership',
+      message: 'Public coin supply and ownership must come from Sui, not the credit ledger.'
+    }),
+    ...[
+      'ecosystem_coin_credit_same_balance_allowed',
+      'ecosystem_coin_entitlement_same_balance_allowed',
+      'fixed_credit_conversion_allowed',
+      'automatic_credit_conversion_allowed',
+      'coin_required_for_general_services'
+    ].flatMap((field) => validateExactValue({
+      value,
+      ruleId: TOKEN_IDENTITY_RULE_ID,
+      file: TOKEN_IDENTITY_FILE,
+      path: `rights_separation.${field}`,
+      expected: false,
+      message: `Doubloon identity must declare rights_separation.${field} as false under ADR-0052.`
+    })),
     ...validateRequiredStringEntries({
       value,
       ruleId: TOKEN_IDENTITY_RULE_ID,

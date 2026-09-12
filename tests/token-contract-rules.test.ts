@@ -5,6 +5,30 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTokenContracts } from '../src/token-contract-rules.ts';
 
 describe('token contract rules', () => {
+  test.each([
+    ['ZDP_ECOSYSTEM_COIN', 'ZDP_ENTITLEMENT', 'token_identity.default_candidate'],
+    ['sui_coin_supply_and_ownership', 'zdp-money-platform_ledger', 'right_sources.ZDP_ECOSYSTEM_COIN'],
+    ...[
+      'ecosystem_coin_credit_same_balance_allowed',
+      'ecosystem_coin_entitlement_same_balance_allowed',
+      'fixed_credit_conversion_allowed',
+      'automatic_credit_conversion_allowed',
+      'coin_required_for_general_services'
+    ].map((field) => [`${field}: false`, `${field}: true`, `rights_separation.${field}`])
+  ])('rejects Doubloon identity drift at %s', async (from, to, path) => {
+    const files = createValidTokenProtocolFiles();
+    files['contracts/token-identity.yaml'] = files['contracts/token-identity.yaml']!.replace(from, to);
+    await withRepositoryRoot(files, async (repositoryRoot) => {
+      const diagnostics = await validateRepositoryTokenContracts({
+        repositoryRoot,
+        repositoryServiceContract: createTokenProtocolServiceContract()
+      });
+      expect(diagnostics).toContainEqual(expect.objectContaining({
+        ruleId: 'ZDP-TOKEN-006', severity: 'error', path
+      }));
+    });
+  });
+
   test('passes when token protocol declares authority and custody controls', async () => {
     await withRepositoryRoot(createValidTokenProtocolFiles(), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTokenContracts({
@@ -563,7 +587,7 @@ rights_separation:
           file: 'contracts/token-identity.yaml',
           path: 'token_identity.default_candidate',
           message:
-            'Token Identity Contract must keep `ZDP_ENTITLEMENT` as the first candidate identity.'
+            'Token Identity Contract must use `ZDP_ECOSYSTEM_COIN` as the public coin identity under ADR-0052.'
         });
         expect(diagnostics).toContainEqual({
           ruleId: 'ZDP-TOKEN-006',
@@ -1109,7 +1133,7 @@ contract:
   owner: zdp-token-protocol
   status: lab_only_no_mainnet
 token_identity:
-  default_candidate: ZDP_ENTITLEMENT
+  default_candidate: ZDP_ECOSYSTEM_COIN
   required_policy_fields:
     - holder_claim
     - issuer_obligation
@@ -1123,11 +1147,17 @@ token_identity:
     - authority_approval_conditions
   merged_balances: []
 right_sources:
+  ZDP_ECOSYSTEM_COIN: sui_coin_supply_and_ownership
   ZDP_ENTITLEMENT: core_access_and_money_entitlement
   ZDP_CREDIT: zdp-money-platform_ledger
   ZDP_SETTLEMENT_UNIT: forbidden_until_legal_tax_risk_review
   ZDP_GOVERNANCE: forbidden_initial_launch
 rights_separation:
+  ecosystem_coin_credit_same_balance_allowed: false
+  ecosystem_coin_entitlement_same_balance_allowed: false
+  fixed_credit_conversion_allowed: false
+  automatic_credit_conversion_allowed: false
+  coin_required_for_general_services: false
   entitlement_credit_same_balance_allowed: false
   money_ledger_replaced_by_chain_allowed: false
   membership_as_cash_allowed: false
