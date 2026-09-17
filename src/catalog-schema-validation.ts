@@ -33,6 +33,7 @@ export async function loadArchitectureCatalogSchemaPreflight(
 export async function validateArchitectureCatalogSchemas(input: {
   readonly architectureRoot: string;
   readonly catalogs: ArchitectureCatalogs;
+  readonly observedAt?: Date;
 }): Promise<ValidationResult> {
   const diagnostics = (
     await Promise.all([
@@ -54,7 +55,8 @@ export async function validateArchitectureCatalogSchemas(input: {
       }),
       validateOperationalAssetCatalogSchema({
         architectureRoot: input.architectureRoot,
-        value: input.catalogs.operationalAssets
+        value: input.catalogs.operationalAssets,
+        observedAt: input.observedAt
       }),
       validateSupportSourceAdapterCatalogSchema({
         architectureRoot: input.architectureRoot,

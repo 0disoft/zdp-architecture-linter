@@ -6,11 +6,12 @@ import {
   type CreateArchitectureDiffReportInput
 } from './architecture-diff-core.ts';
 import { diffArchitectureInputs, type ArchitectureInputChange } from './architecture-input-diff.ts';
+import type { DiffProvenance } from './diff-provenance.ts';
 export type { ArchitectureCatalogChanges, CatalogCollectionDiff, CreateArchitectureDiffReportInput } from './architecture-diff-core.ts';
 export interface ArchitectureDiffReport extends CoreReport {
   readonly inputChanges?: readonly ArchitectureInputChange[];
+  readonly provenance?: DiffProvenance;
 }
-
 export function createArchitectureDiffReport(input: CreateArchitectureDiffReportInput): ArchitectureDiffReport {
   return { ...createCoreReport(input), inputChanges: diffArchitectureInputs(input.baseCatalogs, input.headCatalogs) };
 }
@@ -24,7 +25,12 @@ export function formatArchitectureDiffReportText(report: ArchitectureDiffReport)
     ...Object.entries(change.collections).map(([name, collection]) =>
       `  ${name}: added=${collection.added.join(',') || 'none'} removed=${collection.removed.join(',') || 'none'} changed=${collection.changed.join(',') || 'none'}`)
   ]) ?? [];
+  const provenance = report.provenance;
   return [summary.slice(0, headingEnd), '', '## added diagnostics', ...details,
+    ...(provenance === undefined ? [] : ['', '## provenance',
+      `observedAt: ${provenance.observedAt}`, `linter: ${provenance.tool.version}; Bun: ${provenance.tool.bunVersion}`,
+      `base: ${provenance.base.requestedRef}; commit=${provenance.base.commit ?? 'worktree'}; sha256=${provenance.base.input.sha256}`,
+      `head: ${provenance.head.requestedRef}; commit=${provenance.head.commit ?? 'worktree'}; sha256=${provenance.head.input.sha256}`]),
     ...(report.inputChanges === undefined ? [] : ['', '## input changes', ...(changes.length > 0 ? changes : ['No input changes.'])]),
     summary.slice(headingEnd)
   ].join('\n');
