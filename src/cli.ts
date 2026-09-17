@@ -312,7 +312,7 @@ async function main(argv: readonly string[]): Promise<number> {
         if (command.check) {
           const checkResult = await checkGeneratedArchitectureFile({ architectureRoot: command.architectureRoot, outputPath: command.out, contents });
           if (!checkResult.matches) {
-            const remediation = 'zdp-arch normalize --architecture <path> --out generated/registry.json'.replace('generated/registry.json', command.out);
+            const remediation = `zdp-arch normalize --architecture <path> --out ${command.out}`;
             throw new CliFailure({
               code: 'generated_output_stale',
               message: `Generated registry is stale: ${checkResult.path}\nRun \`${remediation}\` to regenerate it.`,
