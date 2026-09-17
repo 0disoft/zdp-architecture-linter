@@ -11,6 +11,7 @@ import { validateRepositoryCatalogSchema } from './repository-schema-validation.
 import { validateSupportSourceAdapterCatalogSchema } from './support-source-registry-validation.ts';
 import { validateRuleCatalogShapes } from './rule-catalog-shape.ts';
 import { validateCoreCatalogShapes } from './core-catalog-shape.ts';
+import { validateCatalogIdentities } from './catalog-identities.ts';
 
 export interface ArchitectureCatalogSchemaPreflight {
   readonly catalogs: ArchitectureCatalogs;
@@ -29,7 +30,8 @@ export async function validateArchitectureCatalogSchemas(input: {
 }): Promise<ValidationResult> {
   const inputDiagnostics = [
     ...validateRuleCatalogShapes(input.catalogs),
-    ...validateCoreCatalogShapes(input.catalogs)
+    ...validateCoreCatalogShapes(input.catalogs),
+    ...validateCatalogIdentities(input.catalogs)
   ];
   if (inputDiagnostics.length > 0) return { diagnostics: inputDiagnostics };
   const diagnostics = (await Promise.all([
