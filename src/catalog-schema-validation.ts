@@ -12,6 +12,7 @@ import {
 } from './diagnostics.ts';
 import { validateRepositoryCatalogSchema } from './repository-schema-validation.ts';
 import { validateSupportSourceAdapterCatalogSchema } from './support-source-registry-validation.ts';
+import { validateRuleCatalogShapes } from './rule-catalog-shape.ts';
 
 export interface ArchitectureCatalogSchemaPreflight {
   readonly catalogs: ArchitectureCatalogs;
@@ -34,6 +35,9 @@ export async function validateArchitectureCatalogSchemas(input: {
   readonly architectureRoot: string;
   readonly catalogs: ArchitectureCatalogs;
 }): Promise<ValidationResult> {
+  const policyDiagnostics = validateRuleCatalogShapes(input.catalogs);
+  if (policyDiagnostics.length > 0) return { diagnostics: policyDiagnostics };
+
   const diagnostics = (
     await Promise.all([
       validateRepositoryCatalogSchema({
