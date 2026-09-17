@@ -16,49 +16,21 @@ export async function validateRepositoryCatalogSchema(input: {
   const validate = await compileRepositorySchema(input.architectureRoot);
   const valid = validate(input.value);
   const errors = validate.errors ?? [];
-
-  return valid
-    ? []
-    : [
-        {
-          ruleId: REPOSITORY_SCHEMA_RULE_ID,
-          severity: 'error',
-          file: REPOSITORY_CATALOG_FILE,
-          path: toDiagnosticPath(errors[0]),
-          message: `Repository catalog is invalid: ${formatSchemaErrors(errors)}`
-        }
-      ];
+  return valid ? [] : [{
+    ruleId: REPOSITORY_SCHEMA_RULE_ID, severity: 'error', file: REPOSITORY_CATALOG_FILE,
+    path: toDiagnosticPath(errors[0]), message: `Repository catalog is invalid: ${formatSchemaErrors(errors)}`
+  }];
 }
-
-async function compileRepositorySchema(
-  architectureRoot: string
-): Promise<ValidateFunction> {
-  return compileJsonSchemaFile({
-    absolutePath: join(architectureRoot, REPOSITORY_SCHEMA_FILE)
-  });
+async function compileRepositorySchema(architectureRoot: string): Promise<ValidateFunction> {
+  return compileJsonSchemaFile({ absolutePath: join(architectureRoot, REPOSITORY_SCHEMA_FILE), allowedRoot: architectureRoot });
 }
-
 function formatSchemaErrors(errors: readonly ErrorObject[]): string {
-  const summary = errors
-    .slice(0, SCHEMA_ERROR_DISPLAY_LIMIT)
-    .map((error) => `${toDiagnosticPath(error)} ${error.message ?? 'is invalid'}`)
-    .join('; ');
+  const summary = errors.slice(0, SCHEMA_ERROR_DISPLAY_LIMIT).map((error) => `${toDiagnosticPath(error)} ${error.message ?? 'is invalid'}`).join('; ');
   const remaining = errors.length - SCHEMA_ERROR_DISPLAY_LIMIT;
-
-  return remaining > 0
-    ? `${summary}; and ${remaining} more schema error${remaining === 1 ? '' : 's'}`
-    : summary;
+  return remaining > 0 ? `${summary}; and ${remaining} more schema error${remaining === 1 ? '' : 's'}` : summary;
 }
-
 function toDiagnosticPath(error: ErrorObject | undefined): string {
-  if (error === undefined) {
-    return 'schema';
-  }
-
-  const instancePath = error.instancePath
-    .split('/')
-    .filter((segment) => segment.length > 0)
-    .join('.');
-
-  return instancePath.length > 0 ? instancePath : 'schema';
+  if (error === undefined) return 'schema';
+  const path = error.instancePath.split('/').filter((segment) => segment.length > 0).join('.');
+  return path.length > 0 ? path : 'schema';
 }

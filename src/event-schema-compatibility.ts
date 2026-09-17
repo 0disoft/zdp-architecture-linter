@@ -1,14 +1,14 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { readdirSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import type { Diagnostic } from './diagnostics.ts';
 import { findBreakingChanges } from './event-schema-comparison.ts';
+import { readRootBoundTextSync, resolveRootBoundPathSync } from './root-bound-input.ts';
 
 const EVENT_SCHEMA_DIRECTORY = 'schemas/events';
 const EVENT_SCHEMA_FILE_PATTERN = /^(.+)\.v([1-9][0-9]*)\.json$/;
 const SAME_VERSION_RULE_ID = 'ZDP-EVENT-004';
 const BREAKING_VERSION_RULE_ID = 'ZDP-EVENT-005';
 const BREAKING_CHANGE_DISPLAY_LIMIT = 5;
-
 interface VersionedEventSchema { readonly path: string; readonly family: string; readonly version: number; readonly schema: unknown; }
 interface CompatibilityMetadata { readonly classification?: unknown; readonly previous_schema_ref?: unknown; readonly consumer_migration_refs?: unknown; }
 
@@ -23,11 +23,9 @@ export function validateEventSchemaCompatibility(input: { readonly baseArchitect
       continue;
     }
     const breakingChanges = findBreakingChanges({ baseSchema: baseSchema.schema, headSchema: headSchema.schema, ignoreVersionIdentity: false });
-    if (breakingChanges.length > 0) diagnostics.push(createBreakingChangeDiagnostic({
-      ruleId: SAME_VERSION_RULE_ID, file: path,
+    if (breakingChanges.length > 0) diagnostics.push(createBreakingChangeDiagnostic({ ruleId: SAME_VERSION_RULE_ID, file: path,
       messagePrefix: `Published event schema \`${path}\` changed incompatibly without a version bump`, breakingChanges,
-      remediation: 'Restore the existing version or create the next .vN.json schema and provide consumer migration evidence.'
-    }));
+      remediation: 'Restore the existing version or create the next .vN.json schema and provide consumer migration evidence.' }));
   }
   for (const headSchema of headSchemas.byPath.values()) {
     if (baseSchemas.byPath.has(headSchema.path)) continue;
@@ -35,15 +33,12 @@ export function validateEventSchemaCompatibility(input: { readonly baseArchitect
     if (previousSchema === null) continue;
     const breakingChanges = findBreakingChanges({ baseSchema: previousSchema.schema, headSchema: headSchema.schema, ignoreVersionIdentity: true });
     if (breakingChanges.length === 0) continue;
-    const metadataErrors = validateBreakingVersionMetadata({ architectureRoot: input.headArchitectureRoot, schema: headSchema, previousSchema });
-    if (metadataErrors.length > 0) diagnostics.push({
-      ruleId: BREAKING_VERSION_RULE_ID, severity: 'error', file: headSchema.path, path: 'schema.x-zdp-compatibility',
-      message: `Breaking event schema version \`${headSchema.path}\` requires explicit consumer migration evidence: ${metadataErrors.join('; ')}. Breaking changes: ${formatBreakingChanges(breakingChanges)}.`
-    });
+    const errors = validateBreakingVersionMetadata({ architectureRoot: input.headArchitectureRoot, schema: headSchema, previousSchema });
+    if (errors.length > 0) diagnostics.push({ ruleId: BREAKING_VERSION_RULE_ID, severity: 'error', file: headSchema.path, path: 'schema.x-zdp-compatibility',
+      message: `Breaking event schema version \`${headSchema.path}\` requires explicit consumer migration evidence: ${errors.join('; ')}. Breaking changes: ${formatBreakingChanges(breakingChanges)}.` });
   }
   return diagnostics.sort((left, right) => left.file.localeCompare(right.file) || left.ruleId.localeCompare(right.ruleId));
 }
-
 function validateBreakingVersionMetadata(input: { readonly architectureRoot: string; readonly schema: VersionedEventSchema; readonly previousSchema: VersionedEventSchema; }): readonly string[] {
   if (!isRecord(input.schema.schema)) return ['schema root must be an object'];
   const metadata = input.schema.schema['x-zdp-compatibility'];
@@ -53,15 +48,14 @@ function validateBreakingVersionMetadata(input: { readonly architectureRoot: str
   if (typedMetadata.classification !== 'breaking') errors.push('classification must be `breaking`');
   if (typedMetadata.previous_schema_ref !== input.previousSchema.path) errors.push(`previous_schema_ref must be \`${input.previousSchema.path}\``);
   if (!Array.isArray(typedMetadata.consumer_migration_refs) || typedMetadata.consumer_migration_refs.length === 0 || typedMetadata.consumer_migration_refs.some((value) => typeof value !== 'string' || value.trim().length === 0)) {
-    errors.push('consumer_migration_refs must contain at least one non-empty Markdown reference');
-    return errors;
+    errors.push('consumer_migration_refs must contain at least one non-empty Markdown reference'); return errors;
   }
   const refs = typedMetadata.consumer_migration_refs.map((value) => (value as string).trim());
   if (new Set(refs).size !== refs.length) errors.push('consumer_migration_refs must not contain duplicates');
   for (const ref of refs) {
     const pathError = validateMigrationReferencePath(ref);
     if (pathError !== null) { errors.push(pathError); continue; }
-    try { readFileSync(join(input.architectureRoot, ref.split('#', 1)[0] ?? ''), 'utf8'); }
+    try { readRootBoundTextSync(input.architectureRoot, ref.split('#', 1)[0] ?? ''); }
     catch (error) {
       if (isMissingPathError(error)) { errors.push(`consumer migration reference \`${ref}\` does not exist`); continue; }
       throw error;
@@ -70,37 +64,25 @@ function validateBreakingVersionMetadata(input: { readonly architectureRoot: str
   return errors;
 }
 function validateMigrationReferencePath(value: string): string | null {
-  const filePath = value.split('#', 1)[0] ?? '';
-  const segments = filePath.split('/');
-  if (filePath.length === 0 || isAbsolute(filePath) || filePath.includes('\\') || segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
-      !(filePath.startsWith('docs/') || filePath.startsWith('adr/')) || !filePath.endsWith('.md')) {
+  const path = value.split('#', 1)[0] ?? '';
+  if (path.length === 0 || isAbsolute(path) || path.includes('\\') || path.split('/').some((part) => part === '' || part === '.' || part === '..') || !(path.startsWith('docs/') || path.startsWith('adr/')) || !path.endsWith('.md')) {
     return `consumer migration reference \`${value}\` must point to a Markdown file under \`docs/\` or \`adr/\` without path traversal`;
   }
   return null;
 }
-function loadVersionedEventSchemas(architectureRoot: string): {
-  readonly byPath: ReadonlyMap<string, VersionedEventSchema>;
-  readonly byFamily: ReadonlyMap<string, readonly VersionedEventSchema[]>;
-} {
+function loadVersionedEventSchemas(root: string): { readonly byPath: ReadonlyMap<string, VersionedEventSchema>; readonly byFamily: ReadonlyMap<string, readonly VersionedEventSchema[]>; } {
   let entries;
-  try { entries = readdirSync(join(architectureRoot, EVENT_SCHEMA_DIRECTORY), { withFileTypes: true, encoding: 'utf8' }); }
-  catch (error) {
-    if (isMissingPathError(error)) return { byPath: new Map(), byFamily: new Map() };
-    throw error;
-  }
-  const schemas = entries.filter((entry) => entry.isFile()).flatMap((entry) => {
+  try { entries = readdirSync(resolveRootBoundPathSync(root, EVENT_SCHEMA_DIRECTORY), { withFileTypes: true, encoding: 'utf8' }); }
+  catch (error) { if (isMissingPathError(error)) return { byPath: new Map(), byFamily: new Map() }; throw error; }
+  const schemas = entries.filter((entry) => entry.isFile() || entry.isSymbolicLink()).flatMap((entry) => {
     const match = EVENT_SCHEMA_FILE_PATTERN.exec(entry.name);
     if (match === null) return [];
     const path = `${EVENT_SCHEMA_DIRECTORY}/${entry.name}`;
-    return [{ path, family: match[1] ?? '', version: Number.parseInt(match[2] ?? '', 10), schema: JSON.parse(readFileSync(join(architectureRoot, path), 'utf8')) as unknown }];
+    return [{ path, family: match[1] ?? '', version: Number.parseInt(match[2] ?? '', 10), schema: JSON.parse(readRootBoundTextSync(root, path)) as unknown }];
   });
   const byPath = new Map(schemas.map((schema) => [schema.path, schema]));
   const byFamily = new Map<string, VersionedEventSchema[]>();
-  for (const schema of schemas) {
-    const family = byFamily.get(schema.family) ?? [];
-    family.push(schema);
-    byFamily.set(schema.family, family);
-  }
+  for (const schema of schemas) { const family = byFamily.get(schema.family) ?? []; family.push(schema); byFamily.set(schema.family, family); }
   for (const family of byFamily.values()) family.sort((left, right) => left.version - right.version);
   return { byPath, byFamily };
 }
