@@ -1,4 +1,5 @@
 import { createArchitectureDiffReport, formatArchitectureDiffReportText } from './architecture-diff-report.ts';
+import { assertComparablePreflight } from './diff-preflight.ts';
 import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { validateArchitecture } from './validation.ts';
 import { loadValidationContext } from './validation-context.ts';
@@ -11,7 +12,6 @@ export interface DiffCommand {
   readonly json: boolean;
 }
 
-/** Keep snapshot cleanup and diff execution separate from argument parsing. */
 export async function runCliDiff(command: DiffCommand): Promise<number> {
   const snapshots: Awaited<ReturnType<typeof loadArchitectureSnapshot>>[] = [];
   try {
@@ -23,6 +23,10 @@ export async function runCliDiff(command: DiffCommand): Promise<number> {
       loadValidationContext({ architectureRoot: baseSnapshot.root }),
       loadValidationContext({ architectureRoot: headSnapshot.root })
     ]);
+    assertComparablePreflight({
+      base: baseContext.catalogSchemaPreflight.validation,
+      head: headContext.catalogSchemaPreflight.validation
+    });
     const [baseValidation, headValidation] = await Promise.all([
       validateArchitecture({ context: baseContext }),
       validateArchitecture({ context: headContext })
