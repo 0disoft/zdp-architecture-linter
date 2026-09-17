@@ -6,10 +6,7 @@ import {
   createArchitectureDoctorReport,
   formatArchitectureDoctorReportText
 } from './architecture-doctor-report.ts';
-import {
-  createArchitectureDiffReport,
-  formatArchitectureDiffReportText
-} from './architecture-diff-report.ts';
+import { runCliDiff } from './cli-diff.ts';
 import {
   createArchitecturePackReport,
   formatArchitecturePackReportText
@@ -51,7 +48,6 @@ import {
   checkGeneratedArchitectureFile,
   writeGeneratedArchitectureFile
 } from './generated-output.ts';
-import { loadArchitectureSnapshot } from './git-architecture-snapshot.ts';
 import { createSarifReport } from './sarif-report.ts';
 import { validateArchitecture } from './validation.ts';
 import {
@@ -91,60 +87,23 @@ const CLI_USAGE_LINES = [
 ] as const;
 
 const CLI_OPTION_CONFIG = {
-  architecture: {
-    type: 'string'
-  },
-  repository: {
-    type: 'string'
-  },
-  json: {
-    type: 'boolean'
-  },
-  format: {
-    type: 'string'
-  },
-  repo: {
-    type: 'string'
-  },
-  task: {
-    type: 'string'
-  },
-  out: {
-    type: 'string'
-  },
-  check: {
-    type: 'boolean'
-  },
-  base: {
-    type: 'string'
-  },
-  head: {
-    type: 'string'
-  },
-  'fail-on-new-error': {
-    type: 'boolean'
-  },
-  stage: {
-    type: 'string'
-  },
-  area: {
-    type: 'string'
-  },
-  'agent-review-status': {
-    type: 'string'
-  },
-  rule: {
-    type: 'string',
-    multiple: true
-  },
-  group: {
-    type: 'string',
-    multiple: true
-  },
-  severity: {
-    type: 'string',
-    multiple: true
-  }
+  architecture: { type: 'string' },
+  repository: { type: 'string' },
+  json: { type: 'boolean' },
+  format: { type: 'string' },
+  repo: { type: 'string' },
+  task: { type: 'string' },
+  out: { type: 'string' },
+  check: { type: 'boolean' },
+  base: { type: 'string' },
+  head: { type: 'string' },
+  'fail-on-new-error': { type: 'boolean' },
+  stage: { type: 'string' },
+  area: { type: 'string' },
+  'agent-review-status': { type: 'string' },
+  rule: { type: 'string', multiple: true },
+  group: { type: 'string', multiple: true },
+  severity: { type: 'string', multiple: true }
 } as const;
 
 interface ParsedValidateCommand {
@@ -155,34 +114,29 @@ interface ParsedValidateCommand {
   readonly json: boolean;
   readonly sarif: boolean;
 }
-
 interface ParsedGraphCommand {
   readonly name: 'graph';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly json: boolean;
 }
-
 interface ParsedExplainCommand {
   readonly name: 'explain';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly json: boolean;
 }
-
 interface ParsedComplianceCommand {
   readonly name: 'compliance';
   readonly architectureRoot: string;
   readonly repositoryRoot: string;
   readonly json: boolean;
 }
-
 interface ParsedCheckSplitCommand {
   readonly name: 'check-split';
   readonly architectureRoot: string;
   readonly json: boolean;
 }
-
 interface ParsedPackCommand {
   readonly name: 'pack';
   readonly architectureRoot: string;
@@ -192,7 +146,6 @@ interface ParsedPackCommand {
   readonly check: boolean;
   readonly json: boolean;
 }
-
 interface ParsedDiffCommand {
   readonly name: 'diff';
   readonly architectureRoot: string;
@@ -201,14 +154,12 @@ interface ParsedDiffCommand {
   readonly failOnNewError: boolean;
   readonly json: boolean;
 }
-
 interface ParsedDoctorCommand {
   readonly name: 'doctor';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
   readonly json: boolean;
 }
-
 interface ParsedNormalizeCommand {
   readonly name: 'normalize';
   readonly architectureRoot: string;
@@ -217,7 +168,6 @@ interface ParsedNormalizeCommand {
   readonly check: boolean;
   readonly json: boolean;
 }
-
 interface ParsedListCommand {
   readonly name: 'list';
   readonly architectureRoot: string;
@@ -241,444 +191,165 @@ interface ParsedListCommand {
 async function main(argv: readonly string[]): Promise<number> {
   const jsonRequested = isJsonRequested(argv);
   const command = parseCommand(argv);
-
   if (command === null) {
     const failure = new CliFailure({
       code: 'invalid_arguments',
       message: ['Invalid command or arguments.', '', ...CLI_USAGE_LINES].join('\n'),
       publicMessage: 'Invalid command or arguments.',
-      details: {
-        usage: CLI_USAGE_LINES.slice(1).map((line) => line.trim())
-      }
+      details: { usage: CLI_USAGE_LINES.slice(1).map((line) => line.trim()) }
     });
     printCliFailure(failure, jsonRequested);
     return 1;
   }
-
   try {
     if (command.name === 'graph') {
-      const context = await loadValidationContext({
-        architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot
-      });
-
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
       if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
         printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
-
       const graph = await context.getGraph();
       const report = createArchitectureGraphReport(graph);
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatArchitectureGraphReportText(report));
-      }
-
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatArchitectureGraphReportText(report));
       return 0;
     }
-
     if (command.name === 'explain') {
-      const context = await loadValidationContext({
-        architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot
-      });
-      const [result, graph] = await Promise.all([
-        validateArchitecture({ context }),
-        context.getGraph()
-      ]);
-      const report = createDiagnosticExplainReport({
-        validation: result,
-        graph
-      });
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatDiagnosticExplainReportText(report));
-      }
-
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
+      const [result, graph] = await Promise.all([validateArchitecture({ context }), context.getGraph()]);
+      const report = createDiagnosticExplainReport({ validation: result, graph });
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatDiagnosticExplainReportText(report));
       return hasErrors(result) ? 1 : 0;
     }
-
     if (command.name === 'compliance') {
       let report: ContractComplianceReport;
       try {
-        const context = await loadValidationContext({
-          architectureRoot: command.architectureRoot,
-          repositoryRoot: command.repositoryRoot
-        });
-        const [serviceContract, validation] = await Promise.all([
-          context.getRepositoryServiceContract(),
-          validateArchitecture({ context })
-        ]);
-        report = createContractComplianceReport({
-          repositoryRoot: command.repositoryRoot,
-          serviceContractDeclared: serviceContract !== null,
-          validation
-        });
+        const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
+        const [serviceContract, validation] = await Promise.all([context.getRepositoryServiceContract(), validateArchitecture({ context })]);
+        report = createContractComplianceReport({ repositoryRoot: command.repositoryRoot, serviceContractDeclared: serviceContract !== null, validation });
       } catch {
-        const failure = createContractComplianceFailureReport({
-          repositoryRoot: command.repositoryRoot
-        });
-
-        if (command.json) {
-          console.log(JSON.stringify(failure, null, 2));
-        } else {
-          console.error(
-            'zdp-arch compliance: repository or architecture input is unreadable or invalid'
-          );
-        }
-
+        const failure = createContractComplianceFailureReport({ repositoryRoot: command.repositoryRoot });
+        if (command.json) console.log(JSON.stringify(failure, null, 2));
+        else console.error('zdp-arch compliance: repository or architecture input is unreadable or invalid');
         return 1;
       }
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatContractComplianceReportText(report));
-      }
-
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatContractComplianceReportText(report));
       return report.status === 'failed' ? 1 : 0;
     }
-
     if (command.name === 'check-split') {
-      const result = await validateArchitecture({
-        architectureRoot: command.architectureRoot
-      });
-      const splitResult: ValidationResult = {
-        diagnostics: result.diagnostics.filter(
-          (diagnostic) => diagnostic.ruleId === 'ZDP-SPLIT-001'
-        )
-      };
-
-      printResult(splitResult, command.json);
-
-      return hasErrors(splitResult) ? 1 : 0;
-    }
-
-    if (command.name === 'pack') {
-      const context = await loadValidationContext({
-        architectureRoot: command.architectureRoot
-      });
-
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot });
       if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
         printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
-
+      const result = await validateArchitecture({ context });
+      const splitResult: ValidationResult = {
+        diagnostics: result.diagnostics.filter((diagnostic) => diagnostic.ruleId === 'ZDP-SPLIT-001')
+      };
+      printResult(splitResult, command.json);
+      return hasErrors(splitResult) ? 1 : 0;
+    }
+    if (command.name === 'pack') {
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot });
+      if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
+        printResult(context.catalogSchemaPreflight.validation, command.json);
+        return 1;
+      }
       const graph = await context.getGraph();
-      const report = createArchitecturePackReport({
-        graph,
-        repo: command.repo,
-        task: command.task
-      });
-
+      const report = createArchitecturePackReport({ graph, repo: command.repo, task: command.task });
       if (command.out !== undefined) {
         const contents = `${formatArchitecturePackReportText(report)}\n`;
-
         if (command.check) {
-          const checkResult = await checkGeneratedArchitectureFile({
-            architectureRoot: command.architectureRoot,
-            outputPath: command.out,
-            contents
-          });
-
+          const checkResult = await checkGeneratedArchitectureFile({ architectureRoot: command.architectureRoot, outputPath: command.out, contents });
           if (!checkResult.matches) {
-            const remediation =
-              `zdp-arch pack --architecture <path> --repo ${command.repo} ` +
-              `--task "${command.task}" --out ${command.out}`;
-
+            const remediation = `zdp-arch pack --architecture <path> --repo ${command.repo} --task "${command.task}" --out ${command.out}`;
             throw new CliFailure({
               code: 'generated_output_stale',
               message: `Generated pack is stale: ${checkResult.path}\nRun \`${remediation}\` to regenerate it.`,
               publicMessage: 'Generated pack is stale.',
-              details: {
-                path: command.out,
-                remediation
-              }
+              details: { path: command.out, remediation }
             });
           }
-
-          if (command.json) {
-            console.log(
-              JSON.stringify(
-                {
-                  status: 'up-to-date',
-                  path: checkResult.path,
-                  bytes: checkResult.bytes
-                },
-                null,
-                2
-              )
-            );
-          } else {
-            console.log(`zdp-arch: generated pack is up to date (${checkResult.path})`);
-          }
-
+          if (command.json) console.log(JSON.stringify({ status: 'up-to-date', path: checkResult.path, bytes: checkResult.bytes }, null, 2));
+          else console.log(`zdp-arch: generated pack is up to date (${checkResult.path})`);
           return 0;
         }
-
-        const writeResult = await writeGeneratedArchitectureFile({
-          architectureRoot: command.architectureRoot,
-          outputPath: command.out,
-          contents
-        });
-
-        if (command.json) {
-          console.log(
-            JSON.stringify(
-              {
-                status: 'written',
-                path: writeResult.path,
-                bytes: writeResult.bytes
-              },
-              null,
-              2
-            )
-          );
-        } else {
-          console.log(`zdp-arch: wrote ${writeResult.path}`);
-        }
-
+        const writeResult = await writeGeneratedArchitectureFile({ architectureRoot: command.architectureRoot, outputPath: command.out, contents });
+        if (command.json) console.log(JSON.stringify({ status: 'written', path: writeResult.path, bytes: writeResult.bytes }, null, 2));
+        else console.log(`zdp-arch: wrote ${writeResult.path}`);
         return 0;
       }
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatArchitecturePackReportText(report));
-      }
-
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatArchitecturePackReportText(report));
       return 0;
     }
-
-    if (command.name === 'diff') {
-      const snapshots: Awaited<ReturnType<typeof loadArchitectureSnapshot>>[] = [];
-
-      try {
-        const baseSnapshot = await loadArchitectureSnapshot({
-          architectureRoot: command.architectureRoot,
-          ref: command.base
-        });
-        snapshots.push(baseSnapshot);
-
-        const headSnapshot = await loadArchitectureSnapshot({
-          architectureRoot: command.architectureRoot,
-          ref: command.head
-        });
-        snapshots.push(headSnapshot);
-
-        const [baseContext, headContext] = await Promise.all([
-          loadValidationContext({ architectureRoot: baseSnapshot.root }),
-          loadValidationContext({ architectureRoot: headSnapshot.root })
-        ]);
-        const [baseValidation, headValidation] = await Promise.all([
-          validateArchitecture({ context: baseContext }),
-          validateArchitecture({ context: headContext })
-        ]);
-        const report = createArchitectureDiffReport({
-          baseCatalogs: baseContext.catalogs,
-          headCatalogs: headContext.catalogs,
-          baseDiagnostics: baseValidation.diagnostics,
-          headDiagnostics: headValidation.diagnostics
-        });
-
-        if (command.json) {
-          console.log(JSON.stringify(report, null, 2));
-        } else {
-          console.log(formatArchitectureDiffReportText(report));
-        }
-
-        return command.failOnNewError &&
-          report.diagnostics.added.some(
-            (diagnostic) => diagnostic.severity === 'error'
-          )
-          ? 1
-          : 0;
-      } finally {
-        await Promise.all(snapshots.map((snapshot) => snapshot.cleanup()));
-      }
-    }
-
+    if (command.name === 'diff') return await runCliDiff(command);
     if (command.name === 'doctor') {
-      const report = await createArchitectureDoctorReport({
-        architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot
-      });
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatArchitectureDoctorReportText(report));
-      }
-
+      const report = await createArchitectureDoctorReport({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatArchitectureDoctorReportText(report));
       return report.status === 'error' ? 1 : 0;
     }
-
     if (command.name === 'normalize') {
-      const context = await loadValidationContext({
-        architectureRoot: command.architectureRoot,
-        repositoryRoot: command.repositoryRoot
-      });
-
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
       if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
         printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
-
-      const [graph, result] = await Promise.all([
-        context.getGraph(),
-        validateArchitecture({ context })
-      ]);
-      const report = createArchitectureNormalizeReport({
-        graph,
-        validation: result
-      });
-
+      const [graph, result] = await Promise.all([context.getGraph(), validateArchitecture({ context })]);
+      const report = createArchitectureNormalizeReport({ graph, validation: result });
       if (command.out !== undefined) {
         if (hasErrors(result)) {
           const operation = command.check ? 'check' : 'write';
-          const message = command.check
-            ? 'Refusing to check generated registry because validation has errors.'
-            : 'Refusing to write generated registry because validation has errors.';
-
-          throw new CliFailure({
-            code: 'validation_failed',
-            message,
-            details: {
-              operation,
-              errorCount: result.diagnostics.filter(
-                (diagnostic) => diagnostic.severity === 'error'
-              ).length
-            }
-          });
+          const message = command.check ? 'Refusing to check generated registry because validation has errors.' : 'Refusing to write generated registry because validation has errors.';
+          throw new CliFailure({ code: 'validation_failed', message, details: {
+            operation, errorCount: result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length
+          } });
         }
-
         const contents = `${JSON.stringify(report, null, 2)}\n`;
-
         if (command.check) {
-          const checkResult = await checkGeneratedArchitectureFile({
-            architectureRoot: command.architectureRoot,
-            outputPath: command.out,
-            contents
-          });
-
+          const checkResult = await checkGeneratedArchitectureFile({ architectureRoot: command.architectureRoot, outputPath: command.out, contents });
           if (!checkResult.matches) {
-            const remediation =
-              `zdp-arch normalize --architecture <path> --out ${command.out}`;
-
+            const remediation = 'zdp-arch normalize --architecture <path> --out generated/registry.json'.replace('generated/registry.json', command.out);
             throw new CliFailure({
               code: 'generated_output_stale',
               message: `Generated registry is stale: ${checkResult.path}\nRun \`${remediation}\` to regenerate it.`,
-              publicMessage: 'Generated registry is stale.',
-              details: {
-                path: command.out,
-                remediation
-              }
+              publicMessage: 'Generated registry is stale.', details: { path: command.out, remediation }
             });
           }
-
-          if (command.json) {
-            console.log(
-              JSON.stringify(
-                {
-                  status: 'up-to-date',
-                  path: checkResult.path,
-                  bytes: checkResult.bytes
-                },
-                null,
-                2
-              )
-            );
-          } else {
-            console.log(`zdp-arch: generated registry is up to date (${checkResult.path})`);
-          }
-
+          if (command.json) console.log(JSON.stringify({ status: 'up-to-date', path: checkResult.path, bytes: checkResult.bytes }, null, 2));
+          else console.log(`zdp-arch: generated registry is up to date (${checkResult.path})`);
           return 0;
         }
-
-        const writeResult = await writeGeneratedArchitectureFile({
-          architectureRoot: command.architectureRoot,
-          outputPath: command.out,
-          contents
-        });
-
-        if (command.json) {
-          console.log(
-            JSON.stringify(
-              {
-                status: 'written',
-                path: writeResult.path,
-                bytes: writeResult.bytes
-              },
-              null,
-              2
-            )
-          );
-        } else {
-          console.log(`zdp-arch: wrote ${writeResult.path}`);
-        }
-
+        const writeResult = await writeGeneratedArchitectureFile({ architectureRoot: command.architectureRoot, outputPath: command.out, contents });
+        if (command.json) console.log(JSON.stringify({ status: 'written', path: writeResult.path, bytes: writeResult.bytes }, null, 2));
+        else console.log(`zdp-arch: wrote ${writeResult.path}`);
         return 0;
       }
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatArchitectureNormalizeReportText(report));
-      }
-
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatArchitectureNormalizeReportText(report));
       return hasErrors(result) ? 1 : 0;
     }
-
     if (command.name === 'list') {
-      const context = await loadValidationContext({
-        architectureRoot: command.architectureRoot
-      });
-
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot });
       if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
         printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
       }
-
       const graph = await context.getGraph();
-      const report =
-        command.listKind === 'repos'
-          ? createArchitectureListReport({
-              graph,
-              kind: 'repos',
-              filters: {
-                stage: command.filters.stage,
-                area: command.filters.area,
-                agentReviewStatus: command.filters.agentReviewStatus
-              }
-            })
-          : createArchitectureListReport({
-              graph,
-              kind: 'services',
-              filters: {
-                repo: command.filters.repo
-              }
-            });
-
-      if (command.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        console.log(formatArchitectureListReportText(report));
-      }
-
+      const report = command.listKind === 'repos'
+        ? createArchitectureListReport({ graph, kind: 'repos', filters: {
+          stage: command.filters.stage, area: command.filters.area, agentReviewStatus: command.filters.agentReviewStatus
+        } })
+        : createArchitectureListReport({ graph, kind: 'services', filters: { repo: command.filters.repo } });
+      if (command.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatArchitectureListReportText(report));
       return 0;
     }
-
-    const result = await validateArchitecture({
-      architectureRoot: command.architectureRoot,
-      repositoryRoot: command.repositoryRoot,
-      selection: command.selection
-    });
+    const result = await validateArchitecture({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot, selection: command.selection });
     printResult(result, command.json, command.sarif);
-
     return hasErrors(result) ? 1 : 0;
   } catch (error) {
     printCliFailure(error, command.json);
@@ -688,198 +359,67 @@ async function main(argv: readonly string[]): Promise<number> {
 
 function parseCommand(argv: readonly string[]): ParsedCommand | null {
   const parsed = parseCliArgs(argv);
-
-  if (parsed === null) {
-    return null;
-  }
-
+  if (parsed === null) return null;
   const [commandName, ...positionals] = parsed.positionals;
-
-  if (
-    commandName !== 'validate' &&
-    commandName !== 'graph' &&
-    commandName !== 'explain' &&
-    commandName !== 'compliance' &&
-    commandName !== 'pack' &&
-    commandName !== 'check-split' &&
-    commandName !== 'diff' &&
-    commandName !== 'doctor' &&
-    commandName !== 'normalize' &&
-    commandName !== 'list'
-  ) {
-    return null;
-  }
-
+  if (commandName !== 'validate' && commandName !== 'graph' && commandName !== 'explain' &&
+      commandName !== 'compliance' && commandName !== 'pack' && commandName !== 'check-split' &&
+      commandName !== 'diff' && commandName !== 'doctor' && commandName !== 'normalize' && commandName !== 'list') return null;
   const architecture = readStringOption(parsed.values.architecture);
-
-  if (architecture === null) {
-    return null;
-  }
-
-  if (
-    commandName !== 'validate' &&
-    (hasValidationSelectorOptions(parsed.values) || parsed.values.format !== undefined)
-  ) {
-    return null;
-  }
-
+  if (architecture === null) return null;
+  if (commandName !== 'validate' && (hasValidationSelectorOptions(parsed.values) || parsed.values.format !== undefined)) return null;
   if (commandName === 'validate') {
-    if (positionals.length > 0) {
-      return null;
-    }
-
+    if (positionals.length > 0) return null;
     const ruleIds = readStringListOption(parsed.values.rule);
     const groups = readStringListOption(parsed.values.group);
     const severities = readStringListOption(parsed.values.severity);
     const format = readStringOption(parsed.values.format);
-
-    if (
-      ruleIds === null ||
-      groups === null ||
-      severities === null ||
-      (format !== null && format !== 'sarif') ||
-      (format === 'sarif' && parsed.values.json === true)
-    ) {
-      return null;
-    }
-
-    const selection = resolveValidationRuleSelection({
-      ruleIds,
-      groups,
-      severities
-    });
-    if (selection === null) {
-      return null;
-    }
-
-    return {
-      name: 'validate',
-      architectureRoot: resolve(architecture),
-      repositoryRoot: readOptionalResolvedPath(parsed.values.repository),
-      selection,
-      json: parsed.values.json === true,
-      sarif: format === 'sarif'
-    };
+    if (ruleIds === null || groups === null || severities === null ||
+        (format !== null && format !== 'sarif') || (format === 'sarif' && parsed.values.json === true)) return null;
+    const selection = resolveValidationRuleSelection({ ruleIds, groups, severities });
+    if (selection === null) return null;
+    return { name: 'validate', architectureRoot: resolve(architecture), repositoryRoot: readOptionalResolvedPath(parsed.values.repository), selection, json: parsed.values.json === true, sarif: format === 'sarif' };
   }
-
   if (commandName === 'pack') {
-    if (positionals.length > 0) {
-      return null;
-    }
-
+    if (positionals.length > 0) return null;
     const repo = readStringOption(parsed.values.repo);
     const task = readStringOption(parsed.values.task);
-
-    if (repo === null || task === null) {
-      return null;
-    }
-
+    if (repo === null || task === null) return null;
     const out = readStringOption(parsed.values.out);
     const check = parsed.values.check === true;
-
-    if (check && out === null) {
-      return null;
-    }
-
-    return {
-      name: 'pack',
-      architectureRoot: resolve(architecture),
-      repo,
-      task,
-      out: out ?? undefined,
-      check,
-      json: parsed.values.json === true
-    };
+    if (check && out === null) return null;
+    return { name: 'pack', architectureRoot: resolve(architecture), repo, task, out: out ?? undefined, check, json: parsed.values.json === true };
   }
-
   if (commandName === 'diff') {
-    if (positionals.length > 0) {
-      return null;
-    }
-
+    if (positionals.length > 0) return null;
     const base = readStringOption(parsed.values.base);
-
-    if (base === null) {
-      return null;
-    }
-
-    return {
-      name: 'diff',
-      architectureRoot: resolve(architecture),
-      base,
-      head: readStringOption(parsed.values.head) ?? undefined,
-      failOnNewError: parsed.values['fail-on-new-error'] === true,
-      json: parsed.values.json === true
-    };
+    if (base === null) return null;
+    return { name: 'diff', architectureRoot: resolve(architecture), base, head: readStringOption(parsed.values.head) ?? undefined, failOnNewError: parsed.values['fail-on-new-error'] === true, json: parsed.values.json === true };
   }
-
   if (commandName === 'list') {
     const [listKind, ...extraPositionals] = positionals;
-
-    if (
-      extraPositionals.length > 0 ||
-      (listKind !== 'repos' && listKind !== 'services')
-    ) {
-      return null;
-    }
-
-    return {
-      name: 'list',
-      architectureRoot: resolve(architecture),
-      listKind,
-      filters: {
-        stage: readStringOption(parsed.values.stage) ?? undefined,
-        area: readStringOption(parsed.values.area) ?? undefined,
-        agentReviewStatus:
-          readStringOption(parsed.values['agent-review-status']) ?? undefined,
-        repo: readStringOption(parsed.values.repo) ?? undefined
-      },
-      json: parsed.values.json === true
-    };
+    if (extraPositionals.length > 0 || (listKind !== 'repos' && listKind !== 'services')) return null;
+    return { name: 'list', architectureRoot: resolve(architecture), listKind, filters: {
+      stage: readStringOption(parsed.values.stage) ?? undefined,
+      area: readStringOption(parsed.values.area) ?? undefined,
+      agentReviewStatus: readStringOption(parsed.values['agent-review-status']) ?? undefined,
+      repo: readStringOption(parsed.values.repo) ?? undefined
+    }, json: parsed.values.json === true };
   }
-
   if (commandName === 'compliance') {
-    if (positionals.length > 0) {
-      return null;
-    }
-
+    if (positionals.length > 0) return null;
     const repositoryRoot = readOptionalResolvedPath(parsed.values.repository);
-    if (repositoryRoot === undefined) {
-      return null;
-    }
-
-    return {
-      name: 'compliance',
-      architectureRoot: resolve(architecture),
-      repositoryRoot,
-      json: parsed.values.json === true
-    };
+    if (repositoryRoot === undefined) return null;
+    return { name: 'compliance', architectureRoot: resolve(architecture), repositoryRoot, json: parsed.values.json === true };
   }
-
-  if (positionals.length > 0) {
-    return null;
-  }
-
+  if (positionals.length > 0) return null;
   const out = readStringOption(parsed.values.out);
   const check = parsed.values.check === true;
-
-  if (commandName === 'normalize' && check && out === null) {
-    return null;
-  }
-
+  if (commandName === 'normalize' && check && out === null) return null;
   return {
-    name: commandName,
-    architectureRoot: resolve(architecture),
-    repositoryRoot:
-      commandName === 'check-split'
-        ? undefined
-        : readOptionalResolvedPath(parsed.values.repository),
-    out:
-      commandName === 'normalize'
-        ? out ?? undefined
-        : undefined,
-    check: commandName === 'normalize' && check,
-    json: parsed.values.json === true
+    name: commandName, architectureRoot: resolve(architecture),
+    repositoryRoot: commandName === 'check-split' ? undefined : readOptionalResolvedPath(parsed.values.repository),
+    out: commandName === 'normalize' ? out ?? undefined : undefined,
+    check: commandName === 'normalize' && check, json: parsed.values.json === true
   };
 }
 
@@ -888,23 +428,12 @@ function parseCliArgs(argv: readonly string[]): {
   readonly positionals: readonly string[];
 } | null {
   try {
-    const parsed = parseArgs({
-      args: [...argv],
-      options: CLI_OPTION_CONFIG,
-      allowPositionals: true,
-      strict: true
-    });
-
-    return parsed;
-  } catch {
-    return null;
-  }
+    return parseArgs({ args: [...argv], options: CLI_OPTION_CONFIG, allowPositionals: true, strict: true });
+  } catch { return null; }
 }
-
 function readStringOption(value: CliOptionValue): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
-
 function readStringListOption(value: CliOptionValue): readonly string[] | null {
   if (value === undefined) return [];
   const rawValues = typeof value === 'string' ? [value] : Array.isArray(value) ? value : null;
@@ -913,53 +442,24 @@ function readStringListOption(value: CliOptionValue): readonly string[] | null {
   if (values.some((rawValue) => rawValue.length === 0)) return null;
   return [...new Set(values)];
 }
-
 function readOptionalResolvedPath(value: CliOptionValue): string | undefined {
   const path = readStringOption(value);
   return path === null ? undefined : resolve(path);
 }
-
 function hasValidationSelectorOptions(values: Readonly<Record<string, CliOptionValue>>): boolean {
   return values.rule !== undefined || values.group !== undefined || values.severity !== undefined;
 }
-
-function printResult(
-  result: ValidationResult,
-  json: boolean,
-  sarif = false
-): void {
-  if (sarif) {
-    console.log(JSON.stringify(createSarifReport(result), null, 2));
-    return;
-  }
-
-  if (json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (result.diagnostics.length === 0) {
-    console.log('zdp-arch: validation passed');
-    return;
-  }
-
-  for (const diagnostic of result.diagnostics) {
-    console.log(formatDiagnostic(diagnostic));
-  }
+function printResult(result: ValidationResult, json: boolean, sarif = false): void {
+  if (sarif) { console.log(JSON.stringify(createSarifReport(result), null, 2)); return; }
+  if (json) { console.log(JSON.stringify(result, null, 2)); return; }
+  if (result.diagnostics.length === 0) { console.log('zdp-arch: validation passed'); return; }
+  for (const diagnostic of result.diagnostics) console.log(formatDiagnostic(diagnostic));
 }
-
 function isJsonRequested(argv: readonly string[]): boolean {
-  return argv.some(
-    (argument) => argument === '--json' || argument.startsWith('--json=')
-  );
+  return argv.some((argument) => argument === '--json' || argument.startsWith('--json='));
 }
-
 function printCliFailure(error: unknown, json: boolean): void {
-  if (json) {
-    console.log(JSON.stringify(createCliErrorReport(error), null, 2));
-    return;
-  }
-
+  if (json) { console.log(JSON.stringify(createCliErrorReport(error), null, 2)); return; }
   console.error(formatCliFailureText(error));
 }
 
