@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep, win32 } from 'node:path';
 import { promisify } from 'node:util';
 import { buildHardenedGitArgs } from './git-command.ts';
+import { readGitTreeBlobs, type SnapshotReadLimits } from './git-snapshot-reader.ts';
+export { parseGitTreePaths } from './git-tree-paths.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,6 +19,7 @@ export interface ArchitectureSnapshot {
 export async function loadArchitectureSnapshot(input: {
   readonly architectureRoot: string;
   readonly ref?: string;
+  readonly limits?: Partial<SnapshotReadLimits>;
 }): Promise<ArchitectureSnapshot> {
   if (input.ref === undefined || input.ref === 'worktree') {
     return { root: input.architectureRoot, requestedRef: 'worktree', cleanup: async () => {} };
@@ -24,16 +27,18 @@ export async function loadArchitectureSnapshot(input: {
   const commit = await resolveSnapshotCommit(input.architectureRoot, input.ref);
   const snapshotRoot = await mkdtemp(join(tmpdir(), 'zdp-arch-diff-'));
   try {
-    const files = await listGitFiles(input.architectureRoot, commit);
+    const files = await readGitTreeBlobs(input.architectureRoot, commit, input.limits);
+    const destinations = new Set<string>();
     for (const file of files) {
-      const absolutePath = resolveSnapshotPath(snapshotRoot, file);
+      const absolutePath = resolveSnapshotPath(snapshotRoot, file.path);
+      const key = process.platform === 'win32' ? absolutePath.toLowerCase() : absolutePath;
+      if (destinations.has(key)) throw new Error('Git snapshot paths alias the same destination.');
+      destinations.add(key);
       await mkdir(dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, await readGitFile(input.architectureRoot, commit, file));
+      await writeFile(absolutePath, file.content, { flag: 'wx' });
     }
     return {
-      root: snapshotRoot,
-      requestedRef: input.ref,
-      resolvedRef: commit,
+      root: snapshotRoot, requestedRef: input.ref, resolvedRef: commit,
       cleanup: async () => { await rm(snapshotRoot, { recursive: true, force: true }); }
     };
   } catch (error) {
@@ -59,7 +64,6 @@ export function assertSafeSnapshotRef(ref: string): void {
 }
 
 export function resolveSnapshotPath(snapshotRoot: string, file: string): string {
-  // Git paths use '/', not the host platform's separator. Never trim names.
   const segments = file.split('/');
   if (file.length === 0 || file.includes('\0') || isAbsolute(file) || win32.isAbsolute(file) ||
       /^[A-Za-z]:/.test(file) || segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
@@ -79,34 +83,9 @@ export function resolveSnapshotPath(snapshotRoot: string, file: string): string 
   return normalize(absolutePath);
 }
 
-export function parseGitTreePaths(output: Buffer): readonly string[] {
-  if (output.length === 0) return [];
-  if (output[output.length - 1] !== 0) throw new Error('Git tree path output must be NUL terminated.');
-  const decoder = new TextDecoder('utf-8', { fatal: true });
-  const paths: string[] = [];
-  let start = 0;
-  while (start < output.length) {
-    const end = output.indexOf(0, start);
-    if (end === start || end < 0) throw new Error('Git tree output contains an empty or unterminated path.');
-    paths.push(decoder.decode(output.subarray(start, end)));
-    start = end + 1;
-  }
-  return paths;
-}
-
-async function listGitFiles(repositoryRoot: string, ref: string): Promise<readonly string[]> {
-  const { stdout } = await execGit(repositoryRoot, ['ls-tree', '-r', '-z', '--name-only', ref]);
-  return parseGitTreePaths(stdout);
-}
-
-async function readGitFile(repositoryRoot: string, ref: string, file: string): Promise<Buffer> {
-  const { stdout } = await execGit(repositoryRoot, ['show', `${ref}:${file}`]);
-  return stdout;
-}
-
 async function execGit(repositoryRoot: string, args: readonly string[]): Promise<{ readonly stdout: Buffer; readonly stderr: Buffer }> {
   const result = await execFileAsync('git', buildSnapshotGitArgs(repositoryRoot, args), {
-    encoding: 'buffer', maxBuffer: 50 * 1024 * 1024
+    encoding: 'buffer', maxBuffer: 50 * 1024 * 1024, timeout: 30000
   });
   return { stdout: result.stdout, stderr: result.stderr };
 }
