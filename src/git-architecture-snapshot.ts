@@ -9,6 +9,8 @@ const execFileAsync = promisify(execFile);
 
 export interface ArchitectureSnapshot {
   readonly root: string;
+  readonly requestedRef?: string;
+  readonly resolvedRef?: string;
   readonly cleanup: () => Promise<void>;
 }
 
@@ -17,25 +19,37 @@ export async function loadArchitectureSnapshot(input: {
   readonly ref?: string;
 }): Promise<ArchitectureSnapshot> {
   if (input.ref === undefined || input.ref === 'worktree') {
-    return { root: input.architectureRoot, cleanup: async () => {} };
+    return { root: input.architectureRoot, requestedRef: 'worktree', cleanup: async () => {} };
   }
-  assertSafeSnapshotRef(input.ref);
+  const commit = await resolveSnapshotCommit(input.architectureRoot, input.ref);
   const snapshotRoot = await mkdtemp(join(tmpdir(), 'zdp-arch-diff-'));
   try {
-    const files = await listGitFiles(input.architectureRoot, input.ref);
+    const files = await listGitFiles(input.architectureRoot, commit);
     for (const file of files) {
       const absolutePath = resolveSnapshotPath(snapshotRoot, file);
       await mkdir(dirname(absolutePath), { recursive: true });
-      await writeFile(absolutePath, await readGitFile(input.architectureRoot, input.ref, file));
+      await writeFile(absolutePath, await readGitFile(input.architectureRoot, commit, file));
     }
     return {
       root: snapshotRoot,
+      requestedRef: input.ref,
+      resolvedRef: commit,
       cleanup: async () => { await rm(snapshotRoot, { recursive: true, force: true }); }
     };
   } catch (error) {
     await rm(snapshotRoot, { recursive: true, force: true });
     throw error;
   }
+}
+
+export async function resolveSnapshotCommit(repositoryRoot: string, ref: string): Promise<string> {
+  assertSafeSnapshotRef(ref);
+  const { stdout } = await execGit(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]);
+  const commit = stdout.toString('ascii').trim();
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit)) {
+    throw new Error('Git revision did not resolve to a full commit object id.');
+  }
+  return commit;
 }
 
 export function assertSafeSnapshotRef(ref: string): void {
