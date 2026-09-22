@@ -58,8 +58,16 @@ export function validateRuleCatalogShape(value: unknown, file: string): readonly
       }
       if (field !== 'require_values') {
         for (const [key, candidates] of Object.entries(assertions)) {
+          if (field === 'forbid_values' && (
+            typeof candidates === 'boolean' ||
+            (typeof candidates === 'string' && candidates.trim().length > 0) ||
+            (isRecord(candidates) && Object.keys(candidates).length > 0 && Object.entries(candidates).every(([field, choices]) =>
+              field.trim().length > 0 && Array.isArray(choices) && choices.every((choice) => typeof choice === 'string' && choice.trim().length > 0)))
+          )) continue;
           if (!Array.isArray(candidates) || candidates.some((candidate) => typeof candidate !== 'string' || candidate.trim().length === 0)) {
-            fail(`${path}.assertions.${field}.${key}`, 'Assertion choices must be an array of non-empty strings.');
+            fail(`${path}.assertions.${field}.${key}`, field === 'forbid_values'
+              ? 'Forbidden values must be a non-empty string, boolean, string array, or field-to-string-array predicate.'
+              : 'Assertion choices must be an array of non-empty strings.');
           }
         }
       }

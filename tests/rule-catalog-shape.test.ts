@@ -12,6 +12,14 @@ describe('policy input shape preflight', () => {
   test('keeps an explicitly empty rule list valid', () => {
     expect(validateRuleCatalogShape({ rules: [] }, file)).toEqual([]);
   });
+  test('accepts the scalar and datastore predicate forms used by central policy', () => {
+    for (const forbidden of [true, false, 'json_rpc', ['ledger_postgres'], { datastore_owner_area: ['core', 'money'] }]) {
+      expect(validateRuleCatalogShape({ rules: [{ id: 'policy', assertions: { forbid_values: { field: forbidden } } }] }, 'rules/token.rules.yaml')).toEqual([]);
+    }
+    for (const forbidden of [null, '', {}, { datastore_owner_area: 'core' }, [null]]) {
+      expect(validateRuleCatalogShape({ rules: [{ id: 'policy', assertions: { forbid_values: { field: forbidden } } }] }, 'rules/token.rules.yaml').length).toBeGreaterThan(0);
+    }
+  });
   test('rejects malformed interpreted assertions and duplicate rule ids', () => {
     for (const assertions of [null, [], 'disabled', { require_values: [] }, { require_any: { 'dependencies.services': 'ledger' } }, { require_values: { 'audit.required': 'true' } }]) {
       expect(validateRuleCatalogShape({ rules: [{ id: 'ZDP-MONEY-001', assertions }] }, file).length).toBeGreaterThan(0);

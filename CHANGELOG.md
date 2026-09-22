@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.44.1
+
+- 중앙 정책 게이트의 `forbid_values`에 쓰이던 boolean·스칼라 문자열·field→문자열 배열 객체 형식을 새 preflight가 거부하던 회귀를 고쳐 기존 형식은 허용하고 잘못된 형식은 계속 거부한다.
+
 ## 0.44.0
 
 - 리뷰된 PR #13-#29 17건을 통합해 policy/core shape와 duplicate identity preflight를 정리했다.
