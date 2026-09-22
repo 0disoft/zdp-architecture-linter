@@ -12,7 +12,7 @@ export async function validateRepositoryCatalogSchema(input: {
   readonly architectureRoot: string;
   readonly value: RepositoriesCatalog;
 }): Promise<readonly Diagnostic[]> {
-  const validate = await compileJsonSchemaFile({ absolutePath: join(input.architectureRoot, REPOSITORY_SCHEMA_FILE) });
+  const validate = await compileJsonSchemaFile({ absolutePath: join(input.architectureRoot, REPOSITORY_SCHEMA_FILE), allowedRoot: input.architectureRoot });
   if (validate(input.value)) return [];
   const errors = validate.errors ?? [];
   return (errors.length > 0 ? errors : [undefined]).map((error) => createSchemaDiagnostic(error, input.value));

@@ -140,7 +140,14 @@ services:
 
         expect(gatedResult.exitCode).toBe(1);
         expect(gatedResult.stderr).toBe('');
-        expect(JSON.parse(gatedResult.stdout)).toEqual(report);
+        const gatedReport = JSON.parse(gatedResult.stdout);
+        const originalReport = JSON.parse(reportOnlyResult.stdout);
+        for (const result of [originalReport, gatedReport]) {
+          expect(new Date(result.provenance.observedAt).toISOString()).toBe(result.provenance.observedAt);
+        }
+        // Separate CLI invocations observe different instants; all other evidence must agree.
+        expect({ ...gatedReport, provenance: { ...gatedReport.provenance, observedAt: null } })
+          .toEqual({ ...originalReport, provenance: { ...originalReport.provenance, observedAt: null } });
       }
     );
   }, GIT_BACKED_CLI_TEST_TIMEOUT_MS);

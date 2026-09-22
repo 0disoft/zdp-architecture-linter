@@ -1,5 +1,16 @@
 # 변경 내역
 
+## 0.44.0
+
+- 리뷰된 PR #13-#29 17건을 통합해 policy/core shape와 duplicate identity preflight를 정리했다.
+- check-split과 diff를 fail-closed로 분리하고 baseline 전환 보호를 추가했다.
+- 진단 fingerprint를 안정화하고 상세 schema error를 제공한다.
+- event 호환성 제약을 고정하고 root-contained file read를 강제한다.
+- immutable bounded batch Git snapshot과 complete catalog diff를 지원한다.
+- explicit source root와 timestamp/tool/commit/hash provenance를 기록한다.
+- integration 수정이 allowedRoot와 개별 schema error를 함께 보존하고 observedAt과 preflight를 함께 유지한다.
+- CLI regression은 달라지는 observation timestamp만 제외하고 evidence를 비교한다.
+
 ## Unreleased
 
 - `ZDP-LIBS-001`이 기존 단일 validator와 base/generated catalog wrapper로 분리된 validator를 모두 검증하되, 각 파일의 책임 증거를 따로 요구하도록 확장했다.
