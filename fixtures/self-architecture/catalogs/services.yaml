@@ -1,0 +1,5 @@
+services:
+  - id: architecture-linter
+    repo: zdp-architecture-linter
+    status: experiment
+    tier: tier3

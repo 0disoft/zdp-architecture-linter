@@ -131,7 +131,8 @@ service:
           status: 'failed',
           repositoryRoot,
           error: {
-            code: 'repository_or_architecture_input_unreadable_or_invalid'
+            code: 'repository_or_architecture_input_unreadable_or_invalid',
+            message: 'Repository or architecture input is unreadable or invalid.'
           }
         });
         expect(result.stdout).not.toContain('service: [');
@@ -143,11 +144,10 @@ service:
     const result = await runCli([
       'compliance',
       '--architecture',
-      'architecture-root',
-      '--json'
+      'architecture-root'
     ]);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch compliance --architecture <path> --repository <path> [--json]'

@@ -101,7 +101,8 @@ describe('contract compliance report', () => {
       status: 'failed',
       repositoryRoot: 'C:/workspace/zdp-test-repository',
       error: {
-        code: 'repository_or_architecture_input_unreadable_or_invalid'
+        code: 'repository_or_architecture_input_unreadable_or_invalid',
+        message: 'Repository or architecture input is unreadable or invalid.'
       }
     });
   });

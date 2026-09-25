@@ -263,7 +263,7 @@ services:
   test('prints usage when repo or task is missing', async () => {
     const result = await runCli(['pack', '--architecture', '.']);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]'
@@ -285,7 +285,7 @@ services:
           '--check'
         ]);
 
-        expect(result.exitCode).toBe(2);
+        expect(result.exitCode).toBe(1);
         expect(result.stdout).toBe('');
         expect(result.stderr).toContain(
           'zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]'

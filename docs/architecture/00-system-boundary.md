@@ -9,6 +9,7 @@ Status: Active
 ## Owns
 
 - architecture source loader
+- command-scoped validation context that reuses catalog preflight, repository service contract, and architecture graph inputs
 - service/repository/datastore/data class/event/provider reference validation
 - repository baseline and root contract validation
 - cross-cutting safety gates for money, privacy, credential, AI user data, public API error, public discovery, i18n, accessibility, security header, feed, asset, color, performance contracts

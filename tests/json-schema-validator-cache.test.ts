@@ -28,6 +28,26 @@ describe('JSON Schema validator cache', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test('deduplicates concurrent compilation for the same unchanged source', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zdp-schema-cache-concurrent-'));
+    const schemaPath = join(root, 'schema.json');
+
+    try {
+      await writeFile(schemaPath, createSchema('value'), 'utf8');
+
+      const [first, second, third] = await Promise.all([
+        compileJsonSchemaFile({ absolutePath: schemaPath }),
+        compileJsonSchemaFile({ absolutePath: schemaPath }),
+        compileJsonSchemaFile({ absolutePath: schemaPath })
+      ]);
+
+      expect(second).toBe(first);
+      expect(third).toBe(first);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function createSchema(requiredField: string): string {

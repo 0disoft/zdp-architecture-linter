@@ -43,6 +43,7 @@ export interface ContractComplianceFailureReport {
   readonly repositoryRoot: string;
   readonly error: {
     readonly code: 'repository_or_architecture_input_unreadable_or_invalid';
+    readonly message: 'Repository or architecture input is unreadable or invalid.';
   };
 }
 
@@ -131,7 +132,8 @@ export function createContractComplianceFailureReport(input: {
     status: 'failed',
     repositoryRoot: input.repositoryRoot,
     error: {
-      code: 'repository_or_architecture_input_unreadable_or_invalid'
+      code: 'repository_or_architecture_input_unreadable_or_invalid',
+      message: 'Repository or architecture input is unreadable or invalid.'
     }
   };
 }

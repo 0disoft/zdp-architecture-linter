@@ -1,10 +1,26 @@
 # 변경 내역
 
+## 0.44.2
+
+- `validate --scope repository`가 다른 운영 자산의 검증일·도메인 만료 진단만 제외한다. 기본 전역 검증, 운영 자산 스키마, 중복 ID와 백업 참조 검사는 유지한다.
+- ADR-0052에 맞춰 `ZDP-TOKEN-006`의 기본 자산을 `ZDP_ECOSYSTEM_COIN`으로 검증한다.
+
+## 0.44.1
+
+- 중앙 정책 게이트의 `forbid_values`에 쓰이던 boolean·스칼라 문자열·field→문자열 배열 객체 형식을 새 preflight가 거부하던 회귀를 고쳐 기존 형식은 허용하고 잘못된 형식은 계속 거부한다.
+
+## 0.44.0
+
+- 리뷰된 PR #13-#29 17건을 통합해 policy/core shape와 duplicate identity preflight를 정리했다.
+- check-split과 diff를 fail-closed로 분리하고 baseline 전환 보호를 추가했다.
+- 진단 fingerprint를 안정화하고 상세 schema error를 제공한다.
+- event 호환성 제약을 고정하고 root-contained file read를 강제한다.
+- immutable bounded batch Git snapshot과 complete catalog diff를 지원한다.
+- explicit source root와 timestamp/tool/commit/hash provenance를 기록한다.
+- integration 수정이 allowedRoot와 개별 schema error를 함께 보존하고 observedAt과 preflight를 함께 유지한다.
+- CLI regression은 달라지는 observation timestamp만 제외하고 evidence를 비교한다.
+
 ## Unreleased
-
-- 0.44.0: `validate --repository <path> --scope repository`가 다른 운영 자산의 검증일·도메인 만료 진단만 제외하도록 추가했다. 기본 전역 검증, 운영 자산 스키마, 중복 ID와 백업 참조 검사는 유지한다.
-
-- 0.43.1: ADR-0052에 맞춰 `ZDP-TOKEN-006`의 기본 자산을 `ZDP_ECOSYSTEM_COIN`으로 변경하고 Sui 소유·공급 정본, 레몬·이용권 잔액 분리, 고정·자동 교환 금지와 일반 서비스의 코인 비필수 정책을 검증한다. 기존 권한·회계·배포 차단은 유지한다.
 
 - `ZDP-LIBS-001`이 기존 단일 validator와 base/generated catalog wrapper로 분리된 validator를 모두 검증하되, 각 파일의 책임 증거를 따로 요구하도록 확장했다.
 - `ZDP-LIBS-001`이 기본 `contracts:check`를 독립 저장소 검사로 유지하고, sibling `zdp-api-contracts`를 읽는 검증은 명시적인 integration scripts에서 실행하도록 검사 경계를 분리했다.

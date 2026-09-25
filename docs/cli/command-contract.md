@@ -32,6 +32,8 @@ Status: Active
 
 `diff`의 `--base`와 `--head`는 비어 있지 않고 앞뒤 또는 제어 공백이 없으며 `-`로 시작하지 않는 Git revision이어야 한다. 현재 작업 트리를 뜻하는 `worktree`는 `--head`에서만 허용한다.
 
+`diff`는 catalog 진단 외에 `schemas/events/*.vN.json`의 버전 호환성도 비교한다. 이미 공개된 같은 버전에서 필수 필드 집합, 기존 property, type, enum 허용값, const, `$ref`, 구조 조합 또는 검증 제약을 호환되지 않게 바꾸거나 기존 버전 파일을 삭제하면 `ZDP-EVENT-004`를 추가한다. 새 파괴적 버전은 `x-zdp-compatibility`에 직전 schema와 실제 소비자 migration Markdown을 연결해야 하며 누락하면 `ZDP-EVENT-005`를 추가한다. `--fail-on-new-error`가 켜져 있으면 두 진단 모두 exit `1`을 만든다.
+
 ## Side effect policy
 
 - `validate`, `graph`, `explain`, `compliance`, `check-split`, `diff`, `doctor`, `list`는 source tree를 수정하지 않는다.

@@ -167,7 +167,7 @@ datastores:
   test('prints usage when list kind is missing', async () => {
     const result = await runCli(['list']);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]'

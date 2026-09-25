@@ -35,3 +35,28 @@ jobs:
 
       - name: Test
         run: bun test
+
+      - name: Validate self-contained repository contract
+        run: bun run validate:self-contained
+
+  windows-cli-smoke:
+    name: windows-cli-smoke
+    if: github.event_name == 'pull_request'
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Smoke test self-contained CLI validation
+        run: bun run validate:self-contained

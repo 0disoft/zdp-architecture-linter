@@ -14,10 +14,10 @@ describe('validate CLI', () => {
       '--unknown-option'
     ]);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--json]'
+      'zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]'
     );
   });
 
@@ -28,7 +28,7 @@ describe('validate CLI', () => {
       ['compliance', '--architecture', '.', '--repository', '.', '--scope', 'repository']
     ]) {
       const result = await runCli(args);
-      expect(result.exitCode).toBe(2);
+      expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Usage:');
     }

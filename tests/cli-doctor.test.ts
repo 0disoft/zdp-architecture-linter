@@ -68,7 +68,7 @@ describe('doctor CLI', () => {
   test('prints usage when architecture is missing', async () => {
     const result = await runCli(['doctor']);
 
-    expect(result.exitCode).toBe(2);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
       'zdp-arch doctor --architecture <path> [--repository <path>] [--json]'
