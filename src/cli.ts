@@ -74,6 +74,9 @@ const CLI_OPTION_CONFIG = {
   repository: {
     type: 'string'
   },
+  scope: {
+    type: 'string'
+  },
   json: {
     type: 'boolean'
   },
@@ -110,6 +113,7 @@ interface ParsedValidateCommand {
   readonly name: 'validate';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly scope: 'global' | 'repository';
   readonly json: boolean;
 }
 
@@ -614,7 +618,8 @@ async function main(argv: readonly string[]): Promise<number> {
 
     const result = await validateArchitecture({
       architectureRoot: command.architectureRoot,
-      repositoryRoot: command.repositoryRoot
+      repositoryRoot: command.repositoryRoot,
+      scope: command.scope
     });
     printResult(result, command.json);
 
@@ -652,6 +657,33 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   const architecture = readStringOption(parsed.values.architecture);
 
   if (architecture === null) {
+    return null;
+  }
+
+  if (commandName === 'validate') {
+    if (positionals.length > 0) {
+      return null;
+    }
+
+    const scope = parsed.values.scope ?? 'global';
+    const repositoryRoot = readOptionalResolvedPath(parsed.values.repository);
+    if (
+      (scope !== 'global' && scope !== 'repository') ||
+      (scope === 'repository' && repositoryRoot === undefined)
+    ) {
+      return null;
+    }
+
+    return {
+      name: 'validate',
+      architectureRoot: resolve(architecture),
+      repositoryRoot,
+      scope,
+      json: parsed.values.json === true
+    };
+  }
+
+  if (parsed.values.scope !== undefined) {
     return null;
   }
 
@@ -822,7 +854,7 @@ function printUsage(): void {
   console.error(
     [
       'Usage:',
-      '  zdp-arch validate --architecture <path> [--repository <path>] [--json]',
+      '  zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--json]',
       '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
       '  zdp-arch compliance --architecture <path> --repository <path> [--json]',

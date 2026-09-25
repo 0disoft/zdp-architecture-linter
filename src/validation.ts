@@ -157,6 +157,7 @@ import { validateSupportSourceRegistrationFixtures } from './support-source-regi
 export interface ValidateArchitectureInput {
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
+  readonly scope?: 'global' | 'repository';
   readonly catalogSchemaPreflight?: ArchitectureCatalogSchemaPreflight;
 }
 
@@ -245,9 +246,15 @@ async function validateRepositoryContractRegistry(input: {
 export async function validateArchitecture(
   input: ValidateArchitectureInput
 ): Promise<ValidationResult> {
+  if (input.scope === 'repository' && input.repositoryRoot === undefined) {
+    throw new Error('Repository validation scope requires a repository root.');
+  }
+
   const catalogSchemaPreflight =
     input.catalogSchemaPreflight ??
-    (await loadArchitectureCatalogSchemaPreflight(input.architectureRoot));
+    (await loadArchitectureCatalogSchemaPreflight(input.architectureRoot, {
+      checkOperationalAssetTimeliness: input.scope !== 'repository'
+    }));
   const { catalogs } = catalogSchemaPreflight;
 
   if (catalogSchemaPreflight.validation.diagnostics.length > 0) {

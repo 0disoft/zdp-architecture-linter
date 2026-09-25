@@ -19,12 +19,14 @@ export interface ArchitectureCatalogSchemaPreflight {
 }
 
 export async function loadArchitectureCatalogSchemaPreflight(
-  architectureRoot: string
+  architectureRoot: string,
+  options: { readonly checkOperationalAssetTimeliness?: boolean } = {}
 ): Promise<ArchitectureCatalogSchemaPreflight> {
   const catalogs = await loadArchitectureCatalogs(architectureRoot);
   const validation = await validateArchitectureCatalogSchemas({
     architectureRoot,
-    catalogs
+    catalogs,
+    checkOperationalAssetTimeliness: options.checkOperationalAssetTimeliness
   });
 
   return { catalogs, validation };
@@ -33,6 +35,7 @@ export async function loadArchitectureCatalogSchemaPreflight(
 export async function validateArchitectureCatalogSchemas(input: {
   readonly architectureRoot: string;
   readonly catalogs: ArchitectureCatalogs;
+  readonly checkOperationalAssetTimeliness?: boolean;
 }): Promise<ValidationResult> {
   const diagnostics = (
     await Promise.all([
@@ -54,7 +57,8 @@ export async function validateArchitectureCatalogSchemas(input: {
       }),
       validateOperationalAssetCatalogSchema({
         architectureRoot: input.architectureRoot,
-        value: input.catalogs.operationalAssets
+        value: input.catalogs.operationalAssets,
+        checkTimeliness: input.checkOperationalAssetTimeliness
       }),
       validateSupportSourceAdapterCatalogSchema({
         architectureRoot: input.architectureRoot,

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- 0.44.0: `validate --repository <path> --scope repository`가 다른 운영 자산의 검증일·도메인 만료 진단만 제외하도록 추가했다. 기본 전역 검증, 운영 자산 스키마, 중복 ID와 백업 참조 검사는 유지한다.
+
 - 0.43.1: ADR-0052에 맞춰 `ZDP-TOKEN-006`의 기본 자산을 `ZDP_ECOSYSTEM_COIN`으로 변경하고 Sui 소유·공급 정본, 레몬·이용권 잔액 분리, 고정·자동 교환 금지와 일반 서비스의 코인 비필수 정책을 검증한다. 기존 권한·회계·배포 차단은 유지한다.
 
 - `ZDP-LIBS-001`이 기존 단일 validator와 base/generated catalog wrapper로 분리된 validator를 모두 검증하되, 각 파일의 책임 증거를 따로 요구하도록 확장했다.

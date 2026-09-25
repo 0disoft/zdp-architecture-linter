@@ -107,6 +107,7 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 ```txt
 zdp-arch validate --architecture <path>
 zdp-arch validate --architecture <path> --repository <path>
+zdp-arch validate --architecture <path> --repository <path> --scope repository
 zdp-arch validate --architecture <path> --json
 zdp-arch graph --architecture <path> --json
 zdp-arch graph --architecture <path> --repository <path> --json
@@ -120,6 +121,8 @@ zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/
 zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] --json
 zdp-arch list services --architecture <path> [--repo <repo>] --json
 ```
+
+`--scope repository`는 선택 저장소의 계약을 확인할 때 전역 운영 자산의 검증일·도메인 만료 진단만 제외한다. 기본 검증과 `--scope global`은 운영 자산의 시간 기반 오류도 계속 차단한다. 운영 자산 변경 완료를 판단할 때는 전역 검증을 사용한다.
 
 `compliance`는 선택한 저장소의 계약 선언, 정적 검증, 구현 증거, live 증거를 분리해 읽기 전용으로 보고한다. 정적 검증 통과만으로 구현 또는 live 상태를 추정하지 않으며, 해당 증거 어댑터가 없는 첫 버전은 두 상태를 `unknown`으로 반환한다. error diagnostic이나 `service.yaml` 누락은 report-only라는 이유로 성공 처리하지 않는다.
 

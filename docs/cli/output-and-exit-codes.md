@@ -16,6 +16,8 @@ Status: Active
 | `0` | 요청한 명령이 성공했고 blocking diagnostics 또는 freshness failure가 없다. |
 | `1` | validation failure, freshness failure, invalid argument, unreadable source, parse error, command contract violation이 있다. |
 
+`validate --scope repository`의 exit `0`은 해당 범위에 남은 차단 진단이 없다는 뜻이다. 이 모드에서 제외한 운영 자산의 시간 기반 오류는 전역 `validate`에서 계속 exit `1`을 만든다.
+
 `diff`의 `--base` 또는 `--head`가 비어 있거나, 앞뒤·제어 공백을 포함하거나, `-`로 시작하면 Git을 실행하지 않고 invalid argument로 exit `1`을 반환한다.
 
 새 exit code를 추가하려면 `src/cli.ts`, CLI tests, README, 이 문서를 함께 바꾼다.

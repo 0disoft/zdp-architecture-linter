@@ -15,6 +15,7 @@ export async function validateOperationalAssetCatalogSchema(input: {
   readonly architectureRoot: string;
   readonly value: OperationalAssetsCatalog | undefined;
   readonly observedAt?: Date;
+  readonly checkTimeliness?: boolean;
 }): Promise<readonly Diagnostic[]> {
   const validate = await compileOperationalAssetSchema(input.architectureRoot);
   const valid = validate(input.value);
@@ -35,7 +36,8 @@ export async function validateOperationalAssetCatalogSchema(input: {
 
   return validateOperationalAssetDrift(
     input.value as ValidOperationalAssetsCatalog,
-    input.observedAt ?? new Date()
+    input.observedAt ?? new Date(),
+    input.checkTimeliness !== false
   );
 }
 
@@ -62,7 +64,8 @@ interface ValidOperationalAsset {
 
 function validateOperationalAssetDrift(
   catalog: ValidOperationalAssetsCatalog,
-  observedAt: Date
+  observedAt: Date,
+  checkTimeliness: boolean
 ): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const assetById = new Map<string, ValidOperationalAsset>();
@@ -84,7 +87,7 @@ function validateOperationalAssetDrift(
       assetById.set(asset.id, asset);
     }
 
-    if (asset.status === 'retired') {
+    if (!checkTimeliness || asset.status === 'retired') {
       return;
     }
 

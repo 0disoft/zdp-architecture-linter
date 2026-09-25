@@ -28,6 +28,8 @@ Status: Active
 | `list repos` | repository catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 | `list services` | service catalog를 필터링해 출력한다. | 없음 | `src/architecture-list-report.ts` |
 
+`validate`의 기본 `--scope global`은 `--repository`를 함께 주더라도 중앙 아키텍처 전체와 선택 저장소를 검증한다. `validate --repository <path> --scope repository`는 저장소 계약 검사 중 다른 운영 자산의 검증일 경과, 미래 검증일, 도메인 만료에 따른 시간 기반 진단만 제외한다. 운영 자산 카탈로그 스키마, 중복 ID, 백업 참조 무결성 및 나머지 아키텍처 규칙은 계속 차단한다. `--scope repository`에는 `--repository`가 필수이며, 다른 명령은 `--scope`를 받지 않는다. 이 모드의 성공은 운영 자산의 최신 상태나 전역 아키텍처 검증 통과를 뜻하지 않는다.
+
 `diff`의 `--base`와 `--head`는 비어 있지 않고 앞뒤 또는 제어 공백이 없으며 `-`로 시작하지 않는 Git revision이어야 한다. 현재 작업 트리를 뜻하는 `worktree`는 `--head`에서만 허용한다.
 
 ## Side effect policy

@@ -104,6 +104,56 @@ describe('operational asset catalog schema validation', () => {
     });
   });
 
+  test('repository scope omits only time-based drift', async () => {
+    await withOperationalAssetSchemaRoot(async (architectureRoot) => {
+      const diagnostics = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        observedAt: new Date('2026-08-08T12:00:00Z'),
+        checkTimeliness: false,
+        value: operationalAssetCatalog([
+          operationalAsset({
+            id: 'domain-example-com',
+            kind: 'domain',
+            evidence: { last_verified_at: '2026-07-08' },
+            lifecycle: { expires_at: '2026-08-08T11:59:59Z' }
+          })
+        ])
+      });
+
+      expect(diagnostics).toEqual([]);
+    });
+  });
+
+  test('repository scope keeps schema and reference failures', async () => {
+    await withOperationalAssetSchemaRoot(async (architectureRoot) => {
+      const invalidSchema = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        checkTimeliness: false,
+        value: operationalAssetCatalog([{ id: 'database-core' }])
+      });
+      expect(invalidSchema).toEqual([
+        expect.objectContaining({ ruleId: 'ZDP-OPS-ASSET-001' })
+      ]);
+
+      const invalidReferences = await validateOperationalAssetCatalogSchema({
+        architectureRoot,
+        checkTimeliness: false,
+        value: operationalAssetCatalog([
+          operationalAsset({
+            id: 'database-core',
+            kind: 'database',
+            details: { backup_asset_id: 'backup-missing' }
+          }),
+          operationalAsset({ id: 'database-core' })
+        ])
+      });
+      expect(invalidReferences.map(({ ruleId, path }) => ({ ruleId, path }))).toEqual([
+        { ruleId: 'ZDP-OPS-ASSET-002', path: 'assets.1.id' },
+        { ruleId: 'ZDP-OPS-ASSET-002', path: 'assets.0.details.backup_asset_id' }
+      ]);
+    });
+  });
+
   test('fails when a non-retired domain has expired', async () => {
     await withOperationalAssetSchemaRoot(async (architectureRoot) => {
       const diagnostics = await validateOperationalAssetCatalogSchema({
