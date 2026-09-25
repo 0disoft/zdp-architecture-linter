@@ -32,7 +32,7 @@ export interface ValidationContext {
  * purpose: Share catalog preflight, repository service contract loading, and graph construction across one CLI command.
  * search: validation context, shared catalog load, shared service contract, memoized architecture graph
  * invariant: One context reads each source at most once and reuses the same graph without persisting stale state across commands.
- * risk: performance, data_consistency
+ * risk: data_consistency
  */
 export async function loadValidationContext(input: LoadValidationContextInput): Promise<ValidationContext> {
   const catalogSchemaPreflight = await loadArchitectureCatalogSchemaPreflight(input.architectureRoot, {

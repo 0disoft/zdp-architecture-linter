@@ -192,7 +192,7 @@ interface RepositoryContractValidatorRegistration {
  * purpose: Locate the metadata-backed registry that fans repository service.yaml contracts into repo-specific policy validators.
  * search: repository contract validator, service.yaml policy, rule registry, selective validation
  * invariant: Every repository-specific validator has a stable registry ID and can be skipped before filesystem work begins.
- * risk: data_consistency, dependency, performance
+ * risk: data_consistency, dependency
  */
 const REPOSITORY_CONTRACT_VALIDATORS: readonly RepositoryContractValidatorRegistration[] = [
   {
@@ -359,7 +359,7 @@ async function validateRepositoryContractRegistry(input: {
  * purpose: Locate the full architecture validation pipeline that combines catalog checks, fixture checks, repository root checks, and contract diagnostics.
  * search: validateArchitecture, diagnostics pipeline, rule selection, fixture validation, repository root
  * invariant: Selectors skip unselected validators while schema preflight remains fail-closed and default execution preserves full validation.
- * risk: data_consistency, state, performance
+ * risk: data_consistency, state
  */
 export async function validateArchitecture(
   input: ValidateArchitectureInput
