@@ -57,7 +57,7 @@ const FEED_NAMED_PATH_PATTERN =
   /(?:^|\/)(?:rss|atom|feed)(?:[./-]|$)|(?:rss|atom|feed)\.(?:xml|json)(?:\/|$)/i;
 const SERVER_ROUTE_PATH_PATTERN = /\/\+server\.(?:ts|tsx|js|jsx)$/i;
 const RUNTIME_FEED_DECLARATION_PATTERN =
-  /\b(?:rss|atom|json feed|feed)\b.*\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b|\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b.*\b(?:rss|atom|json feed|feed)\b/i;
+  /\b(?:rss|atom|json feed)\b.*\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b|\b(?:runtime|worker|server|dynamic|request-time|per-request|database|db)\b.*\b(?:rss|atom|json feed)\b|\b(?:feed runtime|runtime feed)\b/i;
 const STATIC_FEED_MARKER_PATTERN =
   /\b(?:static|build-time|prebuilt|pre-rendered|prerendered|generated at build|정적|빌드 타임)\b/i;
 const FORBIDDEN_CONTEXT_PATTERN =

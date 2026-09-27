@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.44.3
+
+- `ZDP-XCUT-FEED-001`이 내부 문의 알림 feed와 별도 server API를 공개 RSS/Atom/JSON Feed 런타임 생성으로 오인하지 않도록 판별 범위를 좁혔다. 명시적인 런타임 feed 선언과 동적 공개 feed route의 예외·비용·캐시 계약 요구는 유지한다.
+
 ## 0.44.2
 
 - `validate --scope repository`가 다른 운영 자산의 검증일·도메인 만료 진단만 제외한다. 기본 전역 검증, 운영 자산 스키마, 중복 ID와 백업 참조 검사는 유지한다.

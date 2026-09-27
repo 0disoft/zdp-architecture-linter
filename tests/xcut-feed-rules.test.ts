@@ -30,6 +30,38 @@ runtime:
     );
   });
 
+  test('does not treat an internal inquiry feed and server API note as a public feed', async () => {
+    await withRepositoryRoot(
+      {
+        'service.yaml': `
+notes:
+  - The desktop client reads a scoped new-inquiry feed through the Admin BFF and may later request other operations through separately authorized server APIs.
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryFeedContract({
+          repositoryRoot,
+          repositoryServiceContract: {}
+        });
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
+  test('still rejects an explicit runtime feed declaration without the exception contract', async () => {
+    await withRepositoryRoot(
+      { 'service.yaml': 'notes:\n  - Runtime feed generation reads a database.\n' },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryFeedContract({
+          repositoryRoot,
+          repositoryServiceContract: {}
+        });
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0]?.ruleId).toBe('ZDP-XCUT-FEED-001');
+      }
+    );
+  });
+
   test('passes build-time static feed artifacts', async () => {
     await withRepositoryRoot(
       {
