@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 0.44.4
+
+- 중앙 오류 envelope를 참조하는 API 작업 계약의 `errors` 상태 목록을 자체 오류 응답 스키마로 오인하지 않도록 `ZDP-XCUT-ERROR-001` 판별을 좁혔다. 실제 오류 응답 계약의 envelope 검사는 유지한다.
+
 ## 0.44.3
 
 - `ZDP-XCUT-FEED-001`이 내부 문의 알림 feed와 별도 server API를 공개 RSS/Atom/JSON Feed 런타임 생성으로 오인하지 않도록 판별 범위를 좁혔다. 명시적인 런타임 feed 선언과 동적 공개 feed route의 예외·비용·캐시 계약 요구는 유지한다.

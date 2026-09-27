@@ -159,6 +159,31 @@ error_code_catalog:
     );
   });
 
+  test('does not require an inline envelope from a contract that references the shared one', async () => {
+    await withRepositoryRoot(
+      {
+        'contracts/apis/core-api/doubloon-approval.yaml': `
+doubloon_approval:
+  error_envelope_ref: contracts/error-envelope.yaml
+  errors:
+    400: validation_failed
+    503: unavailable
+`
+      },
+      async (repositoryRoot) => {
+        const diagnostics = await validateRepositoryErrorEnvelopeContract({
+          repositoryRoot,
+          repositoryServiceContract: {
+            domain: { public_api: true },
+            api: { exposure: 'public' }
+          }
+        });
+
+        expect(diagnostics).toEqual([]);
+      }
+    );
+  });
+
   test('fails message-only error response contracts', async () => {
     await withRepositoryRoot(
       {

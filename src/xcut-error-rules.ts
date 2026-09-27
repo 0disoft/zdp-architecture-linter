@@ -40,7 +40,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 const PUBLIC_API_EXPOSURES = new Set(['public', 'partner']);
 
 const ERROR_CONTRACT_MARKER_PATTERN =
-  /\b(?:error_envelope|error_response|error response|error schema|error object|standard error|api error|errors)\b/i;
+  /\b(?:error_envelope|error_response|error response|error schema|error object|standard error|api error)\b/i;
 const ROOT_SERVICE_ERROR_CONTRACT_MARKER_PATTERN =
   /\b(?:error_envelope|error_response|error response|error schema|error object|standard error|api error)\b/i;
 const OPENAPI_ERROR_RESPONSE_PATTERN =
