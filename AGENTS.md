@@ -53,7 +53,7 @@
 - 구현이 번거롭다는 이유로 차단 규칙을 경고로 낮추지 않는다.
 - 카탈로그에서 읽을 수 있는 ZDP 저장소 목록을 코드에 하드코딩하지 않는다.
 - 생성물은 생성 원천과 명령이 문서화된 경우에만 추가한다.
-- Agent가 실행하는 검증은 `VALIDATION.md`에 있는 mustflow intent만 사용한다. Raw Bun, package-manager, CLI, registry 생성, watcher, install 명령은 root command contract에 eligible oneshot intent가 있을 때만 실행한다.
+- package scripts, 저장소 도구 또는 CI에 정의된 관련 검증 명령을 직접 실행한다. 별도의 명령 계약 등록은 필요하지 않다.
 
 ## 문서 규칙
 
