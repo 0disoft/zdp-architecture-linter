@@ -26,7 +26,7 @@ Status: Active
 ## 최종 보고에 포함할 것
 
 - 바뀐 규칙 ID, CLI 명령, JSON 필드, fixture, source-of-truth 파일
-- 실행한 mustflow intent 이름과 결과
+- 실행한 명령과 결과
 - 실행하지 못한 검증과 이유
 - `zdp-architecture` 쪽 동기화 필요 여부
 - 남은 drift risk

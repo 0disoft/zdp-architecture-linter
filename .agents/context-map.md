@@ -21,7 +21,7 @@ Profile: cli-tool
 - CLI 표면: `src/cli.ts`, `README.md`, `docs/cli/*`
 - rule implementation: `src/*-rules.ts`, `src/rules/**`
 - fixture and regression evidence: `tests/**/*.test.ts`, `../../docs/zdp-architecture/fixtures/**`
-- command authority: root `.mustflow/config/commands/zdp-platforms.toml`
+- Commands: repository package scripts and CLI implementation.
 
 ## Report boundary
 
