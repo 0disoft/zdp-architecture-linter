@@ -200,6 +200,14 @@ function validateTimestampLines(
             'Timestamp examples and persisted timestamp values must include `Z` or `+00:00` UTC designators.'
         })
       );
+      return;
+    }
+
+    if (TIMESTAMP_FIELD_PATTERN.test(line) &&
+      [...line.matchAll(new RegExp(ISO_TIMESTAMP_VALUE_PATTERN.source, 'g'))]
+        .some(([timestamp]) => !isValidUtcTimestamp(timestamp))) {
+      diagnostics.push(createTimeDiagnostic({ file, path: `line.${index + 1}`,
+        message: 'Timestamp values and examples must use real calendar dates and valid UTC times.' }));
     }
   });
 

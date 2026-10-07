@@ -5,6 +5,18 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('checks calendar values across prose and source contract formats', async () => {
+    for (const file of ['RUNBOOK.md', 'contracts/events.ts', 'contracts/events.sql']) {
+      await withRepositoryRoot({ [file]: 'created_at: "2026-02-30T12:00:00Z"\n' }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
+          .toContainEqual(expect.objectContaining({ file, path: 'line.1' }));
+      });
+      await withRepositoryRoot({ [file]: 'created_at: "2024-02-29T23:59:59.123456+00:00"\n' }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+      });
+    }
+  });
+
   test('rejects numeric timestamps, impossible calendar dates and invalid clock values', async () => {
     for (const value of [1760000000000, true, 'yesterday', 'string', '', '2026-99-99T99:99:99Z',
       '2026-02-29T00:00:00Z', '2026-04-31T00:00:00Z', '2026-10-08T24:00:00Z']) {
