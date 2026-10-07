@@ -49,10 +49,10 @@ export async function loadProvenanceSnapshot(root: string, ref?: string): Promis
     source: { kind: 'git', requestedRef, commit }
   };
 }
-export async function loadDiffValidationContext(architectureRoot: string, observedAt: Date): Promise<ValidationContext> {
+export async function loadDiffValidationContext(architectureRoot: string, observedAt: Date, checkOperationalAssetTimeliness = true): Promise<ValidationContext> {
   if (!Number.isFinite(observedAt.getTime())) throw new Error('Diff observation time must be valid.');
   const catalogs = await loadArchitectureCatalogs(architectureRoot);
-  const validation = await validateArchitectureCatalogSchemas({ architectureRoot, catalogs, observedAt });
+  const validation = await validateArchitectureCatalogSchemas({ architectureRoot, catalogs, observedAt, checkOperationalAssetTimeliness });
   return createValidationContext({ architectureRoot, catalogSchemaPreflight: { catalogs, validation } });
 }
 

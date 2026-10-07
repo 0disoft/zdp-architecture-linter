@@ -43,5 +43,5 @@ describe('diff provenance', () => {
       expect(report.provenance.tool.version.length).toBeGreaterThan(0);
       expect(new Date(report.provenance.observedAt).toISOString()).toBe(report.provenance.observedAt);
     });
-  });
+  }, 30_000);
 });

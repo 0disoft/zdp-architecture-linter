@@ -9,6 +9,7 @@ import { validateArchitecture } from './validation.ts';
 export interface DiffCommand {
   readonly architectureRoot: string; readonly base: string; readonly head?: string;
   readonly failOnNewError: boolean; readonly json: boolean;
+  readonly scope?: 'global' | 'structure';
 }
 export async function runCliDiff(command: DiffCommand): Promise<number> {
   const observedAt = new Date();
@@ -20,7 +21,8 @@ export async function runCliDiff(command: DiffCommand): Promise<number> {
       hashArchitectureInputs(base.snapshot.root), hashArchitectureInputs(head.snapshot.root), readLinterVersion()
     ]);
     const [baseContext, headContext] = await Promise.all([
-      loadDiffValidationContext(base.snapshot.root, observedAt), loadDiffValidationContext(head.snapshot.root, observedAt)
+      loadDiffValidationContext(base.snapshot.root, observedAt, command.scope !== 'structure'),
+      loadDiffValidationContext(head.snapshot.root, observedAt, command.scope !== 'structure')
     ]);
     assertComparablePreflight({ base: baseContext.catalogSchemaPreflight.validation, head: headContext.catalogSchemaPreflight.validation });
     const [baseValidation, headValidation] = await Promise.all([validateArchitecture({ context: baseContext }), validateArchitecture({ context: headContext })]);

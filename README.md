@@ -105,9 +105,11 @@ ZDP 아키텍처 카탈로그와 서비스 계약을 검증하는 CLI 저장소�
 현재 구현된 첫 CLI 표면은 아래와 같다.
 
 ```txt
+zdp-arch capabilities [--json]
 zdp-arch validate --architecture <path>
 zdp-arch validate --architecture <path> --repository <path>
 zdp-arch validate --architecture <path> --repository <path> --scope repository
+zdp-arch validate --architecture <path> --scope structure
 zdp-arch validate --architecture <path> --json
 zdp-arch graph --architecture <path> --json
 zdp-arch graph --architecture <path> --repository <path> --json
@@ -115,14 +117,14 @@ zdp-arch explain --architecture <path> --repository <path> --json
 zdp-arch compliance --architecture <path> --repository <path> --json
 zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] --json
 zdp-arch check-split --architecture <path> --json
-zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] --json
+zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--scope <global|structure>] --json
 zdp-arch doctor --architecture <path> [--repository <path>] --json
-zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] --json
+zdp-arch normalize --architecture <path> [--repository <path>] [--scope <global|structure>] [--out generated/registry.json [--check]] --json
 zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] --json
 zdp-arch list services --architecture <path> [--repo <repo>] --json
 ```
 
-`--scope repository`는 선택 저장소의 계약을 확인할 때 전역 운영 자산의 검증일·도메인 만료 진단만 제외한다. 기본 검증과 `--scope global`은 운영 자산의 시간 기반 오류도 계속 차단한다. 운영 자산 변경 완료를 판단할 때는 전역 검증을 사용한다.
+`--scope`는 세 값을 쓴다. `global`(기본)은 운영자산 신선도 진단을 포함한 모든 검사를 돈다. `structure`는 운영자산 신선도 진단만 빼고 모든 구조 검사를 돈다. `repository`는 전역 검사를 그대로 돌리면서 선택 저장소 검증을 더하고 운영자산 신선도 진단만 제외한다. `structure`는 `validate`·`normalize`·`diff`의 opt-in이고, `normalize`·`diff`는 `global|structure`만 받는다. scope 정의의 정본은 `zdp-architecture`의 `VALIDATION.md`와 `docs/40-architecture-linter-requirements.md`, 운영 정책 의미는 `docs/10-cost-model.md`·`docs/11-operations-observability.md`와 `adr/0069-separate-structural-and-operational-validation.md`다.
 
 `compliance`는 선택한 저장소의 계약 선언, 정적 검증, 구현 증거, live 증거를 분리해 읽기 전용으로 보고한다. 정적 검증 통과만으로 구현 또는 live 상태를 추정하지 않으며, 해당 증거 어댑터가 없는 첫 버전은 두 상태를 `unknown`으로 반환한다. error diagnostic이나 `service.yaml` 누락은 report-only라는 이유로 성공 처리하지 않는다.
 
@@ -168,6 +170,8 @@ fixtures/service-schema/fail/**
 8. 돈, 권한, 개인정보, AI, credential, provider, tier 규칙을 차례로 붙인다. `[대부분 완료, 신규 계약 동기화 중]`
 
 ## 현재 상태
+
+`zdp-arch capabilities [--json]`은 `schemaVersion` `zdp.architecture.capabilities/v1`와 `features`(`structural-validation-v1`, `operating-policy-contract-v1`)를 낸다. 운영 정책 검사는 `catalogs/cost-budgets.yaml`·`catalogs/slo-tiers.yaml`의 `schema_version: "2"`를 신호로 켜지고(v2 이전 schema는 검사하지 않는다), 예산·단위·자동 조치와 SLO 등급·알림 창구·즉시 알림 사건을 검사한다. 이 계약은 아직 게시되지 않은 로컬 작업 사본(0.44.4)에 있고, 패키지 버전은 자동으로 올리지 않는다. 게시 전 계약과 정책 의미의 정본은 `zdp-architecture`의 `VALIDATION.md`, `docs/10-cost-model.md`, `docs/11-operations-observability.md`, `docs/40-architecture-linter-requirements.md`, `adr/0069-separate-structural-and-operational-validation.md`다.
 
 0.39.131부터 `diff` 명령은 Git option처럼 해석될 수 있는 `--base`·`--head` revision을 실행 전에 거부한다. `pack`과 `normalize`의 generated output은 Windows absolute path와 symbolic link·junction을 통한 `generated/` 경계 우회를 차단한다.
 

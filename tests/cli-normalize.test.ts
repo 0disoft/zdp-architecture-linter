@@ -219,7 +219,7 @@ describe('normalize CLI', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
+      'zdp-arch normalize --architecture <path> [--repository <path>] [--scope <global|structure>] [--out generated/registry.json [--check]] [--json]'
     );
   });
 
@@ -237,7 +237,7 @@ describe('normalize CLI', () => {
         expect(result.exitCode).toBe(1);
         expect(result.stdout).toBe('');
         expect(result.stderr).toContain(
-          'zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]'
+          'zdp-arch normalize --architecture <path> [--repository <path>] [--scope <global|structure>] [--out generated/registry.json [--check]] [--json]'
         );
       }
     );

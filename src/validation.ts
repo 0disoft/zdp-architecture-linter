@@ -86,6 +86,7 @@ import {
   validateCostBudgetCatalog,
   validateSloTierCatalog
 } from './operational-catalog-rules.ts';
+import { validateOperatingPolicyExtensions } from './operating-policy-rules.ts';
 import {
   validateServiceDependencyReferences,
   validateRepositoryServiceContractRepositoryReference,
@@ -165,7 +166,7 @@ export type ValidateArchitectureInput =
   | {
       readonly architectureRoot: string;
       readonly repositoryRoot?: string;
-      readonly scope?: 'global' | 'repository';
+      readonly scope?: 'global' | 'repository' | 'structure';
       readonly selection?: ValidationRuleSelection;
     }
   | {
@@ -374,7 +375,7 @@ export async function validateArchitecture(
       : await loadValidationContext({
           architectureRoot: input.architectureRoot,
           repositoryRoot: input.repositoryRoot,
-          checkOperationalAssetTimeliness: input.scope !== 'repository'
+          checkOperationalAssetTimeliness: input.scope !== 'repository' && input.scope !== 'structure'
         });
   const { architectureRoot, repositoryRoot, catalogSchemaPreflight } = loadedContext;
   if (catalogSchemaPreflight.validation.diagnostics.length > 0) {
@@ -498,7 +499,8 @@ export async function validateArchitecture(
     'catalog.operations',
     () => [
       ...validateCostBudgetCatalog(catalogs.costBudgets),
-      ...validateSloTierCatalog(catalogs.sloTiers, repositoryIndex, serviceIndex)
+      ...validateSloTierCatalog(catalogs.sloTiers, repositoryIndex, serviceIndex),
+      ...validateOperatingPolicyExtensions(catalogs.costBudgets, catalogs.sloTiers, catalogs.repositories)
     ]
   );
   const catalogProviderDiagnostics = runSelectedRule(

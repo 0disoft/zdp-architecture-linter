@@ -39,6 +39,14 @@ Ubuntu의 `CI / validate`는 이 명령을 typecheck와 full test 뒤에 실행�
 - `generated/registry.json`을 갱신하거나 registry 출력 계약이 바뀌면 `registry-check`를 실행한다.
 - release, package metadata, public CLI contract가 바뀌면 `full-test`, `self-architecture-validation`, package surface 검증 가능 여부를 함께 보고한다.
 
+## CLI scope·capabilities·운영 정책 계약
+
+`zdp-arch capabilities [--json]`은 `schemaVersion` `zdp.architecture.capabilities/v1`와 `features`(`structural-validation-v1`, `operating-policy-contract-v1`)를 낸다. `--scope global`(기본)은 운영자산 신선도 진단을 포함한 모든 검사를, `--scope structure`는 신선도 진단만 뺀 모든 구조 검사를, `--scope repository`는 전역 검사를 그대로 돌리면서 선택 저장소 검증을 더하고 운영자산 신선도 진단만 제외한다. `structure`는 `validate`·`normalize`·`diff`의 opt-in이고 `normalize`·`diff`는 `global|structure`만 받는다. 운영 정책 검사는 `catalogs/cost-budgets.yaml`·`catalogs/slo-tiers.yaml`의 `schema_version: "2"`가 있을 때 켜지고, v2 이전 schema는 검사하지 않는다. `structure` diff는 새 protected state 진입 증거가 없으면 신선도 진단과 무관하게 계속 실패로 차단한다.
+
+- 이 계약을 덮는 테스트는 `tests/cli-structure-scope.test.ts`(capabilities 광고, structure 검증·registry 생성의 신선도와 스키마 실패 분리, structure diff의 protected state 진입 차단)와 `tests/cli-error-contract.test.ts`다.
+- 이 기능은 아직 게시되지 않은 로컬 작업 사본(0.44.4)에 있고, CI는 게시 커밋 0.44.2를 계속 checkout한다. 패키지 버전은 자동으로 올리지 않으며, 원격 게시·원격 CI 통과는 관측 전에는 주장하지 않는다.
+- scope·CLI 계약 정본은 `zdp-architecture`의 `VALIDATION.md`와 `docs/40-architecture-linter-requirements.md`, 운영 정책 의미는 `docs/10-cost-model.md`·`docs/11-operations-observability.md`와 `adr/0069-separate-structural-and-operational-validation.md`다.
+
 ## Agent command boundary
 
 `package.json`의 `bun run check`, `bun test`, `bun src/cli.ts ...`는 repo-local 구현 alias다. 사람은 `RUNBOOK.md`의 local command를 참고할 수 있지만, 에이전트도 필요한 local command를 직접 실행한다.

@@ -189,7 +189,7 @@ services:
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain(
-      'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--fail-on-new-error] [--json]'
+      'zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--scope <global|structure>] [--fail-on-new-error] [--json]'
     );
   });
 

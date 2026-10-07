@@ -55,6 +55,7 @@ import {
   type ValidationRuleSelection
 } from './rule-registry.ts';
 import { loadValidationContext } from './validation-context.ts';
+import { readLinterVersion } from './diff-provenance.ts';
 
 type ParsedCommand =
   | ParsedValidateCommand
@@ -72,16 +73,17 @@ type CliOptionValue = string | boolean | readonly string[] | undefined;
 
 const CLI_USAGE_LINES = [
   'Usage:',
-  '  zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]',
-  '  zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... --format sarif',
+  '  zdp-arch capabilities [--json]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository|structure>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]',
+  '  zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository|structure>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... --format sarif',
   '  zdp-arch graph --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch explain --architecture <path> [--repository <path>] [--json]',
   '  zdp-arch compliance --architecture <path> --repository <path> [--json]',
   '  zdp-arch pack --architecture <path> --repo <repo> --task <task> [--out generated/llm/task-pack.md [--check]] [--json]',
   '  zdp-arch check-split --architecture <path> [--json]',
-  '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--fail-on-new-error] [--json]',
+  '  zdp-arch diff --architecture <path> --base <git-ref> [--head <git-ref|worktree>] [--scope <global|structure>] [--fail-on-new-error] [--json]',
   '  zdp-arch doctor --architecture <path> [--repository <path>] [--json]',
-  '  zdp-arch normalize --architecture <path> [--repository <path>] [--out generated/registry.json [--check]] [--json]',
+  '  zdp-arch normalize --architecture <path> [--repository <path>] [--scope <global|structure>] [--out generated/registry.json [--check]] [--json]',
   '  zdp-arch list repos --architecture <path> [--stage <repo_stage>] [--area <area>] [--agent-review-status <status>] [--json]',
   '  zdp-arch list services --architecture <path> [--repo <repo>] [--json]'
 ] as const;
@@ -111,7 +113,7 @@ interface ParsedValidateCommand {
   readonly name: 'validate';
   readonly architectureRoot: string;
   readonly repositoryRoot?: string;
-  readonly scope: 'global' | 'repository';
+  readonly scope: 'global' | 'repository' | 'structure';
   readonly selection: ValidationRuleSelection;
   readonly json: boolean;
   readonly sarif: boolean;
@@ -155,6 +157,7 @@ interface ParsedDiffCommand {
   readonly head?: string;
   readonly failOnNewError: boolean;
   readonly json: boolean;
+  readonly scope: 'global' | 'structure';
 }
 interface ParsedDoctorCommand {
   readonly name: 'doctor';
@@ -169,6 +172,7 @@ interface ParsedNormalizeCommand {
   readonly out?: string;
   readonly check: boolean;
   readonly json: boolean;
+  readonly scope: 'global' | 'structure';
 }
 interface ParsedListCommand {
   readonly name: 'list';
@@ -191,6 +195,11 @@ interface ParsedListCommand {
  * risk: config, data_consistency
  */
 async function main(argv: readonly string[]): Promise<number> {
+  if (argv[0] === 'capabilities' && (argv.length === 1 || (argv.length === 2 && argv[1] === '--json'))) {
+    console.log(JSON.stringify({ schemaVersion: 'zdp.architecture.capabilities/v1', version: await readLinterVersion(),
+      features: ['structural-validation-v1', 'operating-policy-contract-v1'] }));
+    return 0;
+  }
   const jsonRequested = isJsonRequested(argv);
   const command = parseCommand(argv);
   if (command === null) {
@@ -295,7 +304,8 @@ async function main(argv: readonly string[]): Promise<number> {
       return report.status === 'error' ? 1 : 0;
     }
     if (command.name === 'normalize') {
-      const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot });
+      const context = await loadValidationContext({ architectureRoot: command.architectureRoot, repositoryRoot: command.repositoryRoot,
+        checkOperationalAssetTimeliness: command.scope !== 'structure' });
       if (catalogSchemaPreflightFailed(context.catalogSchemaPreflight)) {
         printResult(context.catalogSchemaPreflight.validation, command.json);
         return 1;
@@ -368,7 +378,8 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
       commandName !== 'diff' && commandName !== 'doctor' && commandName !== 'normalize' && commandName !== 'list') return null;
   const architecture = readStringOption(parsed.values.architecture);
   if (architecture === null) return null;
-  if (commandName !== 'validate' && (hasValidationSelectorOptions(parsed.values) || parsed.values.format !== undefined || parsed.values.scope !== undefined)) return null;
+  if (commandName !== 'validate' && (hasValidationSelectorOptions(parsed.values) || parsed.values.format !== undefined
+    || (parsed.values.scope !== undefined && commandName !== 'normalize' && commandName !== 'diff'))) return null;
   if (commandName === 'validate') {
     if (positionals.length > 0) return null;
     const ruleIds = readStringListOption(parsed.values.rule);
@@ -381,7 +392,7 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     if (selection === null) return null;
     const scope = parsed.values.scope === undefined ? 'global' : readStringOption(parsed.values.scope);
     const repositoryRoot = readOptionalResolvedPath(parsed.values.repository);
-    if ((scope !== 'global' && scope !== 'repository') || (scope === 'repository' && repositoryRoot === undefined)) return null;
+    if ((scope !== 'global' && scope !== 'repository' && scope !== 'structure') || (scope === 'repository' && repositoryRoot === undefined)) return null;
     return { name: 'validate', architectureRoot: resolve(architecture), repositoryRoot, scope, selection, json: parsed.values.json === true, sarif: format === 'sarif' };
   }
   if (commandName === 'pack') {
@@ -398,7 +409,10 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
     if (positionals.length > 0) return null;
     const base = readStringOption(parsed.values.base);
     if (base === null) return null;
-    return { name: 'diff', architectureRoot: resolve(architecture), base, head: readStringOption(parsed.values.head) ?? undefined, failOnNewError: parsed.values['fail-on-new-error'] === true, json: parsed.values.json === true };
+    const scope = parsed.values.scope === undefined ? 'global' : readStringOption(parsed.values.scope);
+    if (scope !== 'global' && scope !== 'structure') return null;
+    return { name: 'diff', architectureRoot: resolve(architecture), base, head: readStringOption(parsed.values.head) ?? undefined,
+      failOnNewError: parsed.values['fail-on-new-error'] === true, json: parsed.values.json === true, scope };
   }
   if (commandName === 'list') {
     const [listKind, ...extraPositionals] = positionals;
@@ -419,12 +433,17 @@ function parseCommand(argv: readonly string[]): ParsedCommand | null {
   if (positionals.length > 0) return null;
   const out = readStringOption(parsed.values.out);
   const check = parsed.values.check === true;
+  const scope = parsed.values.scope === undefined ? 'global' : readStringOption(parsed.values.scope);
+  if (commandName === 'normalize' && scope !== 'global' && scope !== 'structure') return null;
   if (commandName === 'normalize' && check && out === null) return null;
+  if (commandName === 'normalize') return {
+    name: 'normalize', architectureRoot: resolve(architecture), repositoryRoot: readOptionalResolvedPath(parsed.values.repository),
+    out: out ?? undefined, check, json: parsed.values.json === true, scope: scope as 'global' | 'structure'
+  };
   return {
     name: commandName, architectureRoot: resolve(architecture),
     repositoryRoot: commandName === 'check-split' ? undefined : readOptionalResolvedPath(parsed.values.repository),
-    out: commandName === 'normalize' ? out ?? undefined : undefined,
-    check: commandName === 'normalize' && check, json: parsed.values.json === true
+    json: parsed.values.json === true
   };
 }
 

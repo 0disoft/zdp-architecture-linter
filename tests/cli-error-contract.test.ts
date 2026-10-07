@@ -31,7 +31,7 @@ describe('CLI failure contract', () => {
     });
     const usage = report.error.details.usage;
     expect(Array.isArray(usage) ? usage : []).toContain(
-      'zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]'
+      'zdp-arch validate --architecture <path> [--repository <path>] [--scope <global|repository|structure>] [--rule <id>]... [--group <group>]... [--severity <error|warning>]... [--json]'
     );
   });
 
