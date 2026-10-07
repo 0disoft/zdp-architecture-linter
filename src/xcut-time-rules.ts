@@ -189,9 +189,12 @@ function validateRecurringScheduleContract(
   if (!/\.(?:ya?ml|json)$/i.test(file)) {
     return [];
   }
-  let document: unknown;
-  try { document = parse(source); } catch { return []; }
-  if (!hasScheduleWithoutTimezone(document)) return [];
+  try {
+    if (!hasScheduleWithoutTimezone(parse(source))) return [];
+  } catch {
+    return [createTimeDiagnostic({ file, path: 'document',
+      message: 'Time contract input must be valid YAML/JSON without cyclic aliases or nesting deeper than 128 levels.' })];
+  }
   return [
     createTimeDiagnostic({
       file,
@@ -202,19 +205,31 @@ function validateRecurringScheduleContract(
   ];
 }
 
-function hasScheduleWithoutTimezone(value: unknown, inheritedTimezone = false, schedule = false): boolean {
-  if (Array.isArray(value)) return value.some((item) => hasScheduleWithoutTimezone(item, inheritedTimezone, schedule));
+function hasScheduleWithoutTimezone(value: unknown, inheritedTimezone = false, schedule = false,
+  ancestors = new WeakSet<object>(), depth = 0): boolean {
   if (value === null || typeof value !== 'object') return false;
+  if (depth > 128 || ancestors.has(value)) throw new Error('Invalid time contract graph.');
+  ancestors.add(value);
+  try {
+  if (Array.isArray(value)) return value.some((item) => hasScheduleWithoutTimezone(item, inheritedTimezone, schedule, ancestors, depth + 1));
   const record = value as Record<string, unknown>;
   // JSON Schema describes fields; its schema validator owns requiredness.
   if ('$schema' in record) return false;
-  const timezone = inheritedTimezone || ['timezone', 'time_zone'].some((key) =>
-    typeof record[key] === 'string' && (record[key] as string).trim().length > 0);
+  const timezoneKeys = ['timezone', 'time_zone'].filter(key => Object.hasOwn(record, key));
+  const timezone = timezoneKeys.length === 0 ? inheritedTimezone :
+    timezoneKeys.every(key => validIanaTimezone(record[key])) && new Set(timezoneKeys.map(key => record[key])).size === 1;
   const entries = Object.entries(record);
   const scalarSchedule = entries.some(([key, item]) => SCHEDULE_FIELD_PATTERN.test(key) &&
     item !== null && item !== false && typeof item !== 'object');
   if ((schedule || scalarSchedule) && !timezone) return true;
-  return entries.some(([key, item]) => hasScheduleWithoutTimezone(item, timezone, SCHEDULE_FIELD_PATTERN.test(key)));
+  return entries.some(([key, item]) => hasScheduleWithoutTimezone(item, timezone, SCHEDULE_FIELD_PATTERN.test(key), ancestors, depth + 1));
+  } finally { ancestors.delete(value); }
+}
+
+function validIanaTimezone(value: unknown): boolean {
+  if (typeof value !== 'string' || !value || value !== value.trim() || /^[+-]/.test(value)) return false;
+  try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; }
+  catch { return false; }
 }
 
 async function collectTimeContractFiles(

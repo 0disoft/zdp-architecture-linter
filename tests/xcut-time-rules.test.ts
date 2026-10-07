@@ -5,6 +5,25 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('rejects invalid, offset-only and blank overriding schedule timezones', async () => {
+    for (const timezone of ['Not/AZone', '+09:00', '', ' Asia/Seoul']) {
+      await withRepositoryRoot({ 'contracts/jobs.yaml': `timezone: Asia/Seoul\njobs:\n  - cron: "0 9 * * *"\n    timezone: ${JSON.stringify(timezone)}\n` }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toHaveLength(1);
+      });
+    }
+    await withRepositoryRoot({ 'contracts/jobs.yaml': 'timezone: Asia/Seoul\njobs:\n  - cron: "0 9 * * *"\n' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
+
+  test('reports cyclic YAML as a file diagnostic and continues checking other files', async () => {
+    await withRepositoryRoot({ 'contracts/cyclic.yaml': 'self: &self\n  child: *self\n',
+      'contracts/jobs.yaml': 'cron: "0 9 * * *"\n' }, async repositoryRoot => {
+      const diagnostics = await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} });
+      expect(diagnostics).toHaveLength(2);
+      expect(diagnostics).toContainEqual(expect.objectContaining({ file: 'contracts/cyclic.yaml', path: 'document' }));
+    });
+  });
   test('does not treat calculator names and prose as schedules', async () => {
     await withRepositoryRoot({
       'contracts/conformance.yaml': 'cases:\n  - id: break-even-planning.repeating-quantity\n    description: recurring decimal\n',
