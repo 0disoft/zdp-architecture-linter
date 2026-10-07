@@ -82,11 +82,29 @@ function validateTimeContractSource(
 ): readonly Diagnostic[] {
   return [
     ...(/\.(?:ya?ml|json)$/i.test(file)
-      ? collectTimestampFieldValues(source).flatMap(({ value, line }) =>
-        validateTimestampLines(file, `timestamp: ${value}`, false).map(diagnostic => ({ ...diagnostic, path: `line.${line}` })))
+      ? collectTimestampFieldValues(source).flatMap(({ value, line, literal }) => {
+        const diagnostics = typeof value === 'string'
+          ? [...validateTimestampLines(file, `timestamp: ${value}`, false)] : [];
+        if (diagnostics.length === 0 && literal && value !== null && !isValidUtcTimestamp(value)) {
+          diagnostics.push(createTimeDiagnostic({ file, path: `line.${line}`,
+            message: 'Timestamp values and examples must be valid UTC ISO 8601 strings with real calendar dates and times.' }));
+        }
+        return diagnostics.map(diagnostic => ({ ...diagnostic, path: `line.${line}` }));
+      })
       : validateTimestampLines(file, source)),
     ...validateRecurringScheduleContract(file, source)
   ];
+}
+
+function isValidUtcTimestamp(value: unknown): boolean {
+  if (typeof value !== 'string' || !UTC_ISO_TIMESTAMP_VALUE_PATTERN.test(value)) return false;
+  const [year, month, day, hour, minute, second] = value.slice(0, 19).split(/[-T:]/).map(Number);
+  if (year === undefined || month === undefined || day === undefined || hour === undefined ||
+    minute === undefined || second === undefined) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]! &&
+    hour <= 23 && minute <= 59 && second <= 59;
 }
 
 function validateTimestampLines(

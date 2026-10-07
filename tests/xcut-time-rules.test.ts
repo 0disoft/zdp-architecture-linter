@@ -5,6 +5,29 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('rejects numeric timestamps, impossible calendar dates and invalid clock values', async () => {
+    for (const value of [1760000000000, true, 'yesterday', 'string', '', '2026-99-99T99:99:99Z',
+      '2026-02-29T00:00:00Z', '2026-04-31T00:00:00Z', '2026-10-08T24:00:00Z']) {
+      await withRepositoryRoot({ 'contracts/events.json': JSON.stringify({ created_at: value }) }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
+          .toContainEqual(expect.objectContaining({ path: 'line.1' }));
+      });
+    }
+  });
+
+  test('preserves timestamp schema metadata and nullable values while checking concrete examples', async () => {
+    await withRepositoryRoot({ 'schemas/events.json': JSON.stringify({ properties: {
+      created_at: { type: 'string', format: 'date-time', examples: ['2024-02-29T23:59:59.123456Z'] },
+      updated_at: { type: ['string', 'null'], default: null }, expires_at: 'string'
+    } }) }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+    await withRepositoryRoot({ 'schemas/events.yaml': 'properties:\n  created_at:\n    type: string\n    example: 1760000000000\n' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
+        .toContainEqual(expect.objectContaining({ path: 'line.4' }));
+    });
+  });
+
   test('keeps timestamp fields separate from sibling policy prose and unrelated timestamps', async () => {
     await withRepositoryRoot({ 'contracts/events.json': '{"note":"forbidden","created_at":"2026-10-08T12:00:00+09:00"}' }, async repositoryRoot => {
       expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
