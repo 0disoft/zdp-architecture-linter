@@ -5,6 +5,23 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('keeps timestamp fields separate from sibling policy prose and unrelated timestamps', async () => {
+    await withRepositoryRoot({ 'contracts/events.json': '{"note":"forbidden","created_at":"2026-10-08T12:00:00+09:00"}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
+        .toContainEqual(expect.objectContaining({ path: 'line.1' }));
+    });
+    await withRepositoryRoot({ 'contracts/events.json': '{"created_at":"2026-10-08T03:00:00Z","label":"KST 2026-10-08T12:00:00+09:00"}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
+
+  test('checks folded and aliased timestamp values with their field locations', async () => {
+    await withRepositoryRoot({ 'contracts/events.yaml': 'value: &local "2026-10-08T12:00:00+09:00"\ncreated_at: *local\nexpires_at: >-\n  2026-10-08T12:00:00\n' }, async repositoryRoot => {
+      const diagnostics = await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} });
+      expect(diagnostics.map(diagnostic => diagnostic.path)).toEqual(['line.2', 'line.3']);
+    });
+  });
+
   test('checks every timestamp on a compact JSON line', async () => {
     await withRepositoryRoot({ 'contracts/events.json': '{"created_at":"2026-06-30T00:00:00Z","expires_at":"2026-07-01T00:00:00"}' }, async repositoryRoot => {
       expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toContainEqual(expect.objectContaining({ path: 'line.1' }));

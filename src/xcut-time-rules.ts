@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
+import { collectTimestampFieldValues } from './xcut-time-timestamp-fields.ts';
 
 const TIME_CONTRACT_RULE_ID = 'ZDP-XCUT-TIME-001';
 
@@ -80,20 +81,24 @@ function validateTimeContractSource(
   source: string
 ): readonly Diagnostic[] {
   return [
-    ...validateTimestampLines(file, source),
+    ...(/\.(?:ya?ml|json)$/i.test(file)
+      ? collectTimestampFieldValues(source).flatMap(({ value, line }) =>
+        validateTimestampLines(file, `timestamp: ${value}`, false).map(diagnostic => ({ ...diagnostic, path: `line.${line}` })))
+      : validateTimestampLines(file, source)),
     ...validateRecurringScheduleContract(file, source)
   ];
 }
 
 function validateTimestampLines(
   file: string,
-  source: string
+  source: string,
+  allowPolicyText = true
 ): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const lines = source.split(/\r?\n/);
 
   lines.forEach((line, index) => {
-    if (line.trim().length === 0 || FORBIDDEN_CONTEXT_PATTERN.test(line)) {
+    if (line.trim().length === 0 || (allowPolicyText && FORBIDDEN_CONTEXT_PATTERN.test(line))) {
       return;
     }
 
