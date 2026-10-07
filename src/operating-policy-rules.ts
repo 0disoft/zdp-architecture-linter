@@ -106,3 +106,15 @@ export function validateOperatingPolicyExtensions(cost: unknown, slo: unknown, r
     return validateOperatingPolicies(cost, slo, repositories);
   return [];
 }
+
+export function validateOperatingPolicyVersionTransition(
+  base: { costBudgets?: unknown; sloTiers?: unknown }, head: { costBudgets?: unknown; sloTiers?: unknown }
+): PolicyDiagnostic[] {
+  return ([['costBudgets', 'cost-budgets'], ['sloTiers', 'slo-tiers']] as const).flatMap(([key, file]) => {
+    const before = base[key], after = head[key];
+    if (!row(before) || before.schema_version !== '2' || (row(after) && after.schema_version === '2')) return [];
+    return [{ ruleId: 'ZDP-OPERATING-VERSION-001', severity: 'error' as const,
+      file: `catalogs/${file}.yaml`, path: 'schema_version',
+      message: 'Operating policy version 2 must remain declared; downgrade, removal and unsupported replacements are blocked.' }];
+  });
+}

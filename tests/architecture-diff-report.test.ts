@@ -6,6 +6,19 @@ import {
 } from '../src/architecture-diff-report.ts';
 
 describe('architecture diff report', () => {
+  test('operating v2 cannot be downgraded, removed or replaced by an unsupported version', () => {
+    const baseCatalogs = createCatalogs({ costBudgets: { schema_version: '2' }, sloTiers: { schema_version: '2' } });
+    for (const version of ['1', undefined, '3', 2]) {
+      const headCatalogs = createCatalogs({ costBudgets: { schema_version: version }, sloTiers: { schema_version: version } });
+      const report = createArchitectureDiffReport({ baseCatalogs, headCatalogs, baseDiagnostics: [], headDiagnostics: [] });
+      expect(report.diagnostics.added.filter((d) => d.ruleId === 'ZDP-OPERATING-VERSION-001')).toHaveLength(2);
+    }
+    for (const version of ['1', '2']) {
+      const catalogs = createCatalogs({ costBudgets: { schema_version: version }, sloTiers: { schema_version: version } });
+      expect(createArchitectureDiffReport({ baseCatalogs: catalogs, headCatalogs: catalogs, baseDiagnostics: [], headDiagnostics: [] }).diagnostics.added).toEqual([]);
+    }
+  });
+
   test('summarizes core catalog ID changes and risky field changes', () => {
     const report = createArchitectureDiffReport({
       baseCatalogs: createCatalogs({

@@ -29,8 +29,8 @@ export interface SplitTriggersCatalog { readonly split_triggers?: unknown; }
 export interface ServicesCatalog { readonly services?: unknown; }
 export interface DatastoresCatalog { readonly datastores?: unknown; }
 export interface DataClassesCatalog { readonly schema_version?: unknown; readonly data_classes?: unknown; readonly deletion_pipeline?: unknown; }
-export interface CostBudgetsCatalog { readonly service_budgets?: unknown; readonly product_unit_budgets?: unknown; readonly automatic_action_policies?: unknown; }
-export interface SloTiersCatalog { readonly tiers?: unknown; readonly service_tier_mapping?: unknown; }
+export interface CostBudgetsCatalog { readonly schema_version?: unknown; readonly service_budgets?: unknown; readonly product_unit_budgets?: unknown; readonly automatic_action_policies?: unknown; }
+export interface SloTiersCatalog { readonly schema_version?: unknown; readonly tiers?: unknown; readonly service_tier_mapping?: unknown; }
 export interface EventsCatalog { readonly events?: unknown; }
 export interface ExternalProvidersCatalog { readonly providers?: unknown; }
 export interface OperationalAssetsCatalog { readonly schema_version?: unknown; readonly policy?: unknown; readonly assets?: unknown; }

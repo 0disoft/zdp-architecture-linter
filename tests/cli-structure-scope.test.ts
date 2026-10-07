@@ -9,6 +9,24 @@ const staleAssets = JSON.stringify({ policy: { review_interval_days: 30 }, asset
   security: { public_access: false }, evidence: { last_verified_at: '2000-01-01' }
 }] });
 
+test('CLI rejects removing v2 declarations even when the head validates as legacy v1', async () => {
+  const files = createMinimalArchitectureFiles({});
+  for (const name of ['cost-budgets', 'slo-tiers']) {
+    const path = `catalogs/${name}.yaml`;
+    files[path] = `schema_version: "2"\n${files[path]}`;
+  }
+  await withArchitectureFiles(files, async ({ architectureRoot }) => {
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'core.hooksPath=', '-c', 'commit.gpgsign=false',
+      '-c', 'user.name=Version Test', '-c', 'user.email=version@example.invalid', '-C', architectureRoot, ...args], { stdio: 'pipe' });
+    git('init'); git('add', '--all'); git('commit', '-m', 'v2 fixture');
+    for (const name of ['cost-budgets', 'slo-tiers']) await writeFile(join(architectureRoot, `catalogs/${name}.yaml`), files[`catalogs/${name}.yaml`].replace('schema_version: "2"', 'schema_version: "1"'));
+    expect((await runCli(['validate', '--architecture', architectureRoot, '--scope', 'structure', '--json'])).exitCode).toBe(0);
+    const result = await runCli(['diff', '--architecture', architectureRoot, '--scope', 'structure', '--base', 'HEAD', '--fail-on-new-error', '--json']);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout).diagnostics.added.filter((d: { ruleId: string }) => d.ruleId === 'ZDP-OPERATING-VERSION-001')).toHaveLength(2);
+  });
+}, 30_000);
+
 test('capabilities explicitly advertises the structural and operating-policy contracts', async () => {
   const result = await runCli(['capabilities', '--json']);
   expect(result.exitCode).toBe(0);

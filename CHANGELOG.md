@@ -1,5 +1,9 @@
 # 변경 내역
 
+## 미게시 변경 (Unreleased)
+
+- `catalogs/cost-budgets.yaml`·`catalogs/slo-tiers.yaml` `schema_version`의 v1 호환은 유지하되, v2 base에서 head가 v1·누락·미지원 버전으로 내려가는 후퇴를 `ZDP-OPERATING-VERSION-001` fail-closed error로 차단한다.
+
 ## 0.44.4
 
 - 중앙 오류 envelope를 참조하는 API 작업 계약의 `errors` 상태 목록을 자체 오류 응답 스키마로 오인하지 않도록 `ZDP-XCUT-ERROR-001` 판별을 좁혔다. 실제 오류 응답 계약의 envelope 검사는 유지한다.

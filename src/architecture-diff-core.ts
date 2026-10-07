@@ -3,6 +3,7 @@ import type { ArchitectureCatalogs } from './catalog-loader.ts';
 import { getStableDiagnosticFingerprint, type Diagnostic } from './diagnostics.ts';
 import { validateEventSchemaCompatibility } from './event-schema-compatibility.ts';
 import { createStateTransitionDiagnostics } from './state-transition-diff.ts';
+import { validateOperatingPolicyVersionTransition } from './operating-policy-rules.ts';
 
 export type EventSchemaCompatibilityStatus =
   | { readonly status: 'checked' }
@@ -40,7 +41,8 @@ export function createArchitectureDiffReport(input: CreateArchitectureDiffReport
   const transitionDiagnostics = createStateTransitionDiagnostics({ baseCatalogs: input.baseCatalogs, headCatalogs: input.headCatalogs, observedAt: input.observedAt });
   return {
     changes: { repositories, services, datastores, events, operationalAssets },
-    diagnostics: { added: [...diagnostics.added, ...transitionDiagnostics], resolved: diagnostics.resolved },
+    diagnostics: { added: [...diagnostics.added, ...transitionDiagnostics,
+      ...validateOperatingPolicyVersionTransition(input.baseCatalogs, input.headCatalogs)], resolved: diagnostics.resolved },
     eventSchemaCompatibility: compatibility.result,
     riskNotes: [
       ...createRepositoryRiskNotes(input.baseCatalogs, input.headCatalogs, repositories),
