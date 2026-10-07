@@ -5,6 +5,23 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('checks every timestamp on a compact JSON line', async () => {
+    await withRepositoryRoot({ 'contracts/events.json': '{"created_at":"2026-06-30T00:00:00Z","expires_at":"2026-07-01T00:00:00"}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toContainEqual(expect.objectContaining({ path: 'line.1' }));
+    });
+    await withRepositoryRoot({ 'contracts/events.json': '{"created_at":"2026-06-30T00:00:00Z","expires_at":"2026-07-01T00:00:00+00:00"}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
+
+  test('validates schedules in schema-referencing configurations while skipping actual schema definitions', async () => {
+    await withRepositoryRoot({ 'contracts/jobs.json': '{"$schema":"https://example.invalid/jobs.schema.json","recurring_schedule":{"cron":"0 9 * * *"}}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toHaveLength(1);
+    });
+    await withRepositoryRoot({ 'schemas/jobs.json': '{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"recurring_schedule":{"type":"object","properties":{"cron":{"type":"string"}}}}}' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
   test('rejects invalid, offset-only and blank overriding schedule timezones', async () => {
     for (const timezone of ['Not/AZone', '+09:00', '', ' Asia/Seoul']) {
       await withRepositoryRoot({ 'contracts/jobs.yaml': `timezone: Asia/Seoul\njobs:\n  - cron: "0 9 * * *"\n    timezone: ${JSON.stringify(timezone)}\n` }, async repositoryRoot => {

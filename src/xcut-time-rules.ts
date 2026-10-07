@@ -55,7 +55,7 @@ const LOCAL_FORMATTING_PATTERN =
 const ISO_TIMESTAMP_VALUE_PATTERN =
   /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00|[+-]\d{2}:\d{2})?/;
 const UTC_ISO_TIMESTAMP_VALUE_PATTERN =
-  /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)/;
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$/;
 const NON_UTC_ISO_TIMESTAMP_OFFSET_PATTERN =
   /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?!\+00:00)[+-]\d{2}:\d{2}/;
 const SCHEDULE_FIELD_PATTERN = /^(?:recurring_schedule|recurring|recurrence|rrule|cron(?:_expression)?|wall_time|repeat(?:s|ed|ing)?)$/i;
@@ -166,7 +166,8 @@ function validateTimestampLines(
     if (
       TIMESTAMP_FIELD_PATTERN.test(line) &&
       ISO_TIMESTAMP_VALUE_PATTERN.test(line) &&
-      !UTC_ISO_TIMESTAMP_VALUE_PATTERN.test(line)
+      [...line.matchAll(new RegExp(ISO_TIMESTAMP_VALUE_PATTERN.source, 'g'))]
+        .some(([timestamp]) => !UTC_ISO_TIMESTAMP_VALUE_PATTERN.test(timestamp))
     ) {
       diagnostics.push(
         createTimeDiagnostic({
@@ -214,7 +215,7 @@ function hasScheduleWithoutTimezone(value: unknown, inheritedTimezone = false, s
   if (Array.isArray(value)) return value.some((item) => hasScheduleWithoutTimezone(item, inheritedTimezone, schedule, ancestors, depth + 1));
   const record = value as Record<string, unknown>;
   // JSON Schema describes fields; its schema validator owns requiredness.
-  if ('$schema' in record) return false;
+  if (isJsonSchemaDefinition(record)) return false;
   const timezoneKeys = ['timezone', 'time_zone'].filter(key => Object.hasOwn(record, key));
   const timezone = timezoneKeys.length === 0 ? inheritedTimezone :
     timezoneKeys.every(key => validIanaTimezone(record[key])) && new Set(timezoneKeys.map(key => record[key])).size === 1;
@@ -230,6 +231,12 @@ function validIanaTimezone(value: unknown): boolean {
   if (typeof value !== 'string' || !value || value !== value.trim() || /^[+-]/.test(value)) return false;
   try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; }
   catch { return false; }
+}
+
+function isJsonSchemaDefinition(record: Record<string, unknown>): boolean {
+  // A configuration may reference its own schema with $schema without defining a JSON Schema.
+  return typeof record.$schema === 'string' && /^https?:\/\/json-schema\.org\//.test(record.$schema) &&
+    ['type', 'properties', '$defs', 'definitions', 'allOf', 'anyOf', 'oneOf', '$ref'].some(key => Object.hasOwn(record, key));
 }
 
 async function collectTimeContractFiles(
