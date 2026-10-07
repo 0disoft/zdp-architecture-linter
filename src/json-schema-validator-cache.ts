@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { relative, resolve } from 'node:path';
 import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import type { AnySchema, ValidateFunction } from 'ajv';
 import { readRootBoundText } from './root-bound-input.ts';
 
@@ -47,7 +48,27 @@ export function getJsonSchemaValidatorCacheStats(): { readonly entries: number; 
 function compileJsonSchemaSource(source: string, validateFormats: boolean | undefined): ValidateFunction {
   const schema = JSON.parse(source) as AnySchema;
   const ajv = new Ajv2020({ allErrors: true, strict: false, ...(validateFormats === false ? { validateFormats: false } : {}) });
+  if (validateFormats !== false) {
+    addFormats(ajv);
+    assertKnownFormats(schema, ajv);
+  }
   return ajv.compile(schema);
+}
+function assertKnownFormats(value: unknown, ajv: Ajv2020): void {
+  if (value === null || typeof value !== 'object') return;
+  if (Array.isArray(value)) { value.forEach((item) => assertKnownFormats(item, ajv)); return; }
+  const record = value as Record<string, unknown>;
+  if (typeof record.format === 'string' && !Object.hasOwn(ajv.formats, record.format)) {
+    throw new Error(`Unsupported JSON Schema format: ${record.format}`);
+  }
+  // Only schema-bearing keywords; example payloads may have their own format field.
+  for (const key of ['properties', '$defs', 'definitions', 'patternProperties', 'dependentSchemas']) {
+    const children = record[key];
+    if (children && typeof children === 'object') Object.values(children).forEach((item) => assertKnownFormats(item, ajv));
+  }
+  for (const key of ['items', 'additionalProperties', 'contains', 'not', 'if', 'then', 'else', 'propertyNames', 'allOf', 'anyOf', 'oneOf', 'prefixItems']) {
+    assertKnownFormats(record[key], ajv);
+  }
 }
 function evictOldestValidators(): void {
   while (validators.size > MAX_CACHE_ENTRIES) {

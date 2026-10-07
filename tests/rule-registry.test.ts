@@ -9,6 +9,11 @@ import {
 } from '../src/rule-registry.ts';
 
 describe('validation rule registry', () => {
+  test('accepts the emitted time diagnostic ID as a selector', () => {
+    const selection = resolveValidationRuleSelection({ ruleIds: ['ZDP-XCUT-TIME-001'] });
+    expect(selection).not.toBeNull();
+    expect(isValidationRuleSelected('repository.contract.time', selection!)).toBe(true);
+  });
   test('keeps IDs unique and metadata complete', () => {
     const ids = VALIDATION_RULE_REGISTRY.map((metadata) => metadata.id);
 

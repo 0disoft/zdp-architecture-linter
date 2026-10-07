@@ -650,11 +650,12 @@ export function resolveValidationRuleSelection(
     (input.ruleIds?.length ?? 0) > 0 || (input.groups?.length ?? 0) > 0;
 
   for (const ruleId of input.ruleIds ?? []) {
-    if (!isValidationRuleId(ruleId)) {
+    const canonicalId = ruleId === 'ZDP-XCUT-TIME-001' ? 'repository.contract.time' : ruleId;
+    if (!isValidationRuleId(canonicalId)) {
       return null;
     }
 
-    selectedRuleIds.add(ruleId);
+    selectedRuleIds.add(canonicalId);
   }
 
   for (const group of input.groups ?? []) {

@@ -5,6 +5,20 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('does not treat calculator names and prose as schedules', async () => {
+    await withRepositoryRoot({
+      'contracts/conformance.yaml': 'cases:\n  - id: break-even-planning.repeating-quantity\n    description: recurring decimal\n',
+      'RUNBOOK.md': 'Repeated requests must be idempotent.\n'
+    }, async (repositoryRoot) => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
+
+  test('does not let an unrelated timezone hide an invalid schedule', async () => {
+    await withRepositoryRoot({ 'contracts/jobs.yaml': 'display:\n  timezone: Asia/Seoul\njobs:\n  - cron: "0 9 * * *"\n' }, async (repositoryRoot) => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toHaveLength(1);
+    });
+  });
   test('skips repositories without time contract files', async () => {
     await withRepositoryRoot({}, async (repositoryRoot) => {
       const diagnostics = await validateRepositoryTimeContract({

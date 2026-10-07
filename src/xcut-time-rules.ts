@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
 
 const TIME_CONTRACT_RULE_ID = 'ZDP-XCUT-TIME-001';
@@ -57,9 +58,7 @@ const UTC_ISO_TIMESTAMP_VALUE_PATTERN =
   /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)/;
 const NON_UTC_ISO_TIMESTAMP_OFFSET_PATTERN =
   /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?!\+00:00)[+-]\d{2}:\d{2}/;
-const RECURRING_SCHEDULE_PATTERN =
-  /\b(?:recurring|recurrence|rrule|cron(?:_expression)?|wall_time|repeat(?:s|ed|ing)?|scheduled job|schedule rule)\b/i;
-const TIMEZONE_FIELD_PATTERN = /\b(?:timezone|time_zone)\b/i;
+const SCHEDULE_FIELD_PATTERN = /^(?:recurring_schedule|recurring|recurrence|rrule|cron(?:_expression)?|wall_time|repeat(?:s|ed|ing)?)$/i;
 
 export async function validateRepositoryTimeContract(input: {
   readonly repositoryRoot: string;
@@ -187,10 +186,12 @@ function validateRecurringScheduleContract(
   file: string,
   source: string
 ): readonly Diagnostic[] {
-  if (!RECURRING_SCHEDULE_PATTERN.test(source) || TIMEZONE_FIELD_PATTERN.test(source)) {
+  if (!/\.(?:ya?ml|json)$/i.test(file)) {
     return [];
   }
-
+  let document: unknown;
+  try { document = parse(source); } catch { return []; }
+  if (!hasScheduleWithoutTimezone(document)) return [];
   return [
     createTimeDiagnostic({
       file,
@@ -199,6 +200,21 @@ function validateRecurringScheduleContract(
         'Recurring schedules must store a separate IANA `timezone`/`time_zone` field with wall time, rule, and next UTC run time.'
     })
   ];
+}
+
+function hasScheduleWithoutTimezone(value: unknown, inheritedTimezone = false, schedule = false): boolean {
+  if (Array.isArray(value)) return value.some((item) => hasScheduleWithoutTimezone(item, inheritedTimezone, schedule));
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  // JSON Schema describes fields; its schema validator owns requiredness.
+  if ('$schema' in record) return false;
+  const timezone = inheritedTimezone || ['timezone', 'time_zone'].some((key) =>
+    typeof record[key] === 'string' && (record[key] as string).trim().length > 0);
+  const entries = Object.entries(record);
+  const scalarSchedule = entries.some(([key, item]) => SCHEDULE_FIELD_PATTERN.test(key) &&
+    item !== null && item !== false && typeof item !== 'object');
+  if ((schedule || scalarSchedule) && !timezone) return true;
+  return entries.some(([key, item]) => hasScheduleWithoutTimezone(item, timezone, SCHEDULE_FIELD_PATTERN.test(key)));
 }
 
 async function collectTimeContractFiles(

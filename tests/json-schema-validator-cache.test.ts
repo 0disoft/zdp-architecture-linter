@@ -5,6 +5,20 @@ import { describe, expect, test } from 'bun:test';
 import { compileJsonSchemaFile } from '../src/json-schema-validator-cache.ts';
 
 describe('JSON Schema validator cache', () => {
+  test('validates standard formats and rejects unsupported ones without changing formats-off', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zdp-schema-formats-'));
+    const schemaPath = join(root, 'schema.json');
+    try {
+      await writeFile(schemaPath, JSON.stringify({ type: 'string', format: 'date-time' }));
+      const validate = await compileJsonSchemaFile({ absolutePath: schemaPath });
+      expect(validate('not-a-date')).toBe(false);
+      expect(validate('2026-10-07T00:00:00Z')).toBe(true);
+      const unchecked = await compileJsonSchemaFile({ absolutePath: schemaPath, validateFormats: false });
+      expect(unchecked('not-a-date')).toBe(true);
+      await writeFile(schemaPath, JSON.stringify({ type: 'string', format: 'unsupported-format' }));
+      await expect(compileJsonSchemaFile({ absolutePath: schemaPath })).rejects.toThrow('Unsupported JSON Schema format');
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
   test('reuses an unchanged source and recompiles the same path after a change', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zdp-schema-cache-'));
     const schemaPath = join(root, 'schema.json');
