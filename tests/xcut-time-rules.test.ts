@@ -5,6 +5,19 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('applies UTC and calendar checks to camelCase source timestamp fields', async () => {
+    for (const field of ['createdAt', 'updatedAt', 'nextRunAtUtc', 'eventTime']) {
+      for (const value of ['2026-02-30T12:00:00Z', '2026-10-08T12:00:00+09:00', '2026-10-08T12:00:00']) {
+        await withRepositoryRoot({ 'contracts/events.ts': `export const ${field} = ${JSON.stringify(value)};` }, async repositoryRoot => {
+          expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
+            .toContainEqual(expect.objectContaining({ file: 'contracts/events.ts', path: 'line.1' }));
+        });
+      }
+      await withRepositoryRoot({ 'contracts/events.ts': `export const ${field} = "2024-02-29T12:00:00Z";` }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+      });
+    }
+  });
   test('checks calendar values across prose and source contract formats', async () => {
     for (const file of ['RUNBOOK.md', 'contracts/events.ts', 'contracts/events.sql']) {
       await withRepositoryRoot({ [file]: 'created_at: "2026-02-30T12:00:00Z"\n' }, async repositoryRoot => {

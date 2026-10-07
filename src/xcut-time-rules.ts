@@ -40,7 +40,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 ]);
 
 const TIMESTAMP_FIELD_PATTERN =
-  /\b(?:timestamp|created_at|updated_at|logged_at|occurred_at|available_at|expires_at|scheduled_at|next_run_at(?:_utc)?|event_time|log_time)\b/i;
+  /\b(?:timestamp|created_?at|updated_?at|logged_?at|occurred_?at|available_?at|expires_?at|scheduled_?at|next_?run_?at(?:_?utc)?|event_?time|log_?time)\b/i;
 const FORBIDDEN_CONTEXT_PATTERN =
   /\b(?:forbidden|not allowed|must not|prohibit(?:ed)?|reject(?:ed)?|ban(?:ned)?|금지|허용하지|허용 안|차단)\b/i;
 const TIMESTAMP_WITHOUT_TIME_ZONE_PATTERN =
@@ -52,7 +52,7 @@ const LOCAL_TIMEZONE_PATTERN =
 const LOCAL_TIME_MARKER_PATTERN =
   /\b(?:local time|server local|browser timezone|client timezone|timezone offset only|offset only)\b/i;
 const LOCAL_FORMATTING_PATTERN =
-  /\b(?:timestamp|createdAt|updatedAt|loggedAt|occurredAt|availableAt|expiresAt|scheduledAt|nextRunAt|eventTime|logTime)\b[^;\n]*(?:\.toLocaleString\(|\.toLocaleDateString\(|\.toLocaleTimeString\(|\.toString\(\))/;
+  new RegExp(`${TIMESTAMP_FIELD_PATTERN.source}[^;\\n]*(?:\\.toLocaleString\\(|\\.toLocaleDateString\\(|\\.toLocaleTimeString\\(|\\.toString\\(\\))`, 'i');
 const ISO_TIMESTAMP_VALUE_PATTERN =
   /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00|[+-]\d{2}:\d{2})?/;
 const UTC_ISO_TIMESTAMP_VALUE_PATTERN =
