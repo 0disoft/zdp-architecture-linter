@@ -4,6 +4,19 @@ import {
   stripCommentsAndStringLiterals
 } from '../src/source-proof.ts';
 
+test('masks nested template text while preserving every interpolation and source offset', () => {
+  const source = 'const value = `outer ${`inner ${realProof()} hiddenInner`} hiddenOuter ${secondProof({ nested: true })}`;\nnextProof();';
+  const stripped = stripCommentsAndStringLiterals(source);
+  for (const name of ['realProof', 'secondProof', 'nextProof']) {
+    expect(stripped.indexOf(name)).toBe(source.indexOf(name));
+  }
+  expect(stripped).not.toContain('hiddenInner');
+  expect(stripped).not.toContain('hiddenOuter');
+  expect(stripped).toContain('secondProof({ nested: true })');
+  expect(stripped.length).toBe(source.length);
+  expect(stripped.indexOf('\n')).toBe(source.indexOf('\n'));
+});
+
 test('preserves code after nested template literals', () => {
   const source = [
     "const message = `${items.map((value) => `${value}`).join(', ')}.`;",

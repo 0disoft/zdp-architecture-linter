@@ -9,6 +9,7 @@ export function stripCommentsAndStringLiterals(source: string): string {
     | 'lineComment'
     | 'blockComment' = 'code';
   let templateExpressionDepth = 0;
+  const parentTemplateDepths: number[] = [];
 
   while (index < source.length) {
     const char = source[index];
@@ -55,6 +56,8 @@ export function stripCommentsAndStringLiterals(source: string): string {
       }
 
       if (char === '`') {
+        parentTemplateDepths.push(templateExpressionDepth);
+        templateExpressionDepth = 0;
         result += ' ';
         index += 1;
         state = 'templateString';
@@ -69,7 +72,7 @@ export function stripCommentsAndStringLiterals(source: string): string {
       }
 
       if (templateExpressionDepth > 0 && char === '}') {
-        result += ' ';
+        result += templateExpressionDepth === 1 ? ' ' : char;
         index += 1;
         templateExpressionDepth -= 1;
 
@@ -93,6 +96,7 @@ export function stripCommentsAndStringLiterals(source: string): string {
       }
 
       if (char === '`') {
+        templateExpressionDepth = parentTemplateDepths.pop() ?? 0;
         result += ' ';
         index += 1;
         state = 'code';
