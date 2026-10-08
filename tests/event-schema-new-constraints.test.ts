@@ -4,6 +4,21 @@ import { findBreakingChanges } from '../src/event-schema-comparison.ts';
 const compare = (baseSchema: unknown, headSchema: unknown): readonly string[] => findBreakingChanges({ baseSchema, headSchema, ignoreVersionIdentity: false });
 
 describe('new event schema constraints', () => {
+  test('ignores nested required, type and enum ordering while preserving literal array order', () => {
+    const base = { $defs: { payload: { type: ['object', 'null'], required: ['first', 'second'],
+      properties: { state: { enum: ['ready', 'done'] } } } } };
+    const head = { $defs: { payload: { type: ['null', 'object'], required: ['second', 'first'],
+      properties: { state: { enum: ['done', 'ready'] } } } } };
+    for (const key of ['$defs', 'definitions', 'dependentSchemas']) {
+      expect(compare({ [key]: base.$defs }, { [key]: head.$defs })).toEqual([]);
+    }
+    expect(compare({ allOf: [base] }, { allOf: [head] })).toEqual([]);
+    expect(compare({ allOf: [{ const: ['first', 'second'] }] },
+      { allOf: [{ const: ['second', 'first'] }] })).toContain('schema.allOf changed');
+    expect(compare({ allOf: [{ enum: [['first', 'second']] }] },
+      { allOf: [{ enum: [['second', 'first']] }] })).toContain('schema.allOf changed');
+  });
+
   test('detects introduced enum, const, items and additionalProperties schemas', () => {
     for (const [base, head, keyword] of [
       [{ type: 'string' }, { type: 'string', enum: ['a'] }, 'enum'],

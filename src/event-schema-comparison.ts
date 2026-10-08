@@ -150,6 +150,9 @@ function sortSchema(value: unknown): unknown {
   if (!isRecord(value)) return value;
   return Object.fromEntries(Object.keys(value).filter((key) => !ANNOTATIONS.has(key) && !key.startsWith('x-')).sort().map((key) => {
     const entry = value[key];
+    if ((key === 'required' || key === 'type' || key === 'enum') && Array.isArray(entry)) {
+      return [key, entry.map(sortLiteral).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))];
+    }
     if (SCHEMA_MAPS.has(key) && isRecord(entry)) return [key, Object.fromEntries(Object.keys(entry).sort().map((name) => [name, sortSchema(entry[name])]))];
     return [key, SCHEMA_VALUES.has(key) ? sortSchema(entry) : sortLiteral(entry)];
   }));
