@@ -37,3 +37,7 @@ describe('Git snapshot filenames', () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });
+test('preserves a Unicode BOM character at the start of each Git filename', () => {
+  const names = ['\uFEFFfirst.md', '\uFEFFsecond.md', 'ordinary.md'];
+  expect(parseGitTreePaths(Buffer.from(names.join('\0') + '\0'))).toEqual(names);
+});
