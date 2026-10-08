@@ -33,6 +33,15 @@ export function createStateTransitionDiagnostics(input: {
   }
 
   const observedAt = input.observedAt ?? new Date();
+  if (!Number.isFinite(observedAt.getTime())) {
+    return [{
+      ruleId: POLICY_RULE_ID,
+      severity: 'error',
+      file: POLICY_FILE,
+      path: 'state_transition_evidence',
+      message: 'State transition evidence validation requires a valid observation date.'
+    }];
+  }
 
   return [
     ...validateCollectionTransitions({

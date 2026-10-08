@@ -24,6 +24,20 @@ function catalogs(status: string, evidencePolicy: unknown = policy): Architectur
 }
 
 describe('state transition baseline policy', () => {
+  test('cannot accept stale transition evidence with an invalid observation clock', () => {
+    const head = { ...catalogs('active'), services: { services: [{ id: 'example', status: 'active', transition_evidence: {
+      from_status: 'experiment', to_status: 'active', verified_at: '2026-01-01',
+      evidence_refs: ['repo://example@abc123'], runbook_ref: 'RUNBOOK.md'
+    } }] } };
+    const input = { baseCatalogs: catalogs('experiment'), headCatalogs: head };
+    expect(createStateTransitionDiagnostics({ ...input, observedAt }).length).toBeGreaterThan(0);
+    const invalidClock = createStateTransitionDiagnostics({ ...input, observedAt: new Date(NaN) });
+    expect(invalidClock).toContainEqual(expect.objectContaining({
+      ruleId: 'ZDP-STATE-TRANSITION-000', severity: 'error',
+      message: expect.stringContaining('observation')
+    }));
+  });
+
   test('cannot remove the policy and promote a service in the same diff', () => {
     const head = { ...catalogs('active'), tierRules: { rules: [] } };
     const diagnostics = createStateTransitionDiagnostics({ baseCatalogs: catalogs('experiment'), headCatalogs: head, observedAt });
