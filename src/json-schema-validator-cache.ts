@@ -66,7 +66,7 @@ function assertKnownFormats(value: unknown, ajv: Ajv2020): void {
     const children = record[key];
     if (children && typeof children === 'object') Object.values(children).forEach((item) => assertKnownFormats(item, ajv));
   }
-  for (const key of ['items', 'additionalProperties', 'contains', 'not', 'if', 'then', 'else', 'propertyNames', 'allOf', 'anyOf', 'oneOf', 'prefixItems']) {
+  for (const key of ['items', 'additionalProperties', 'unevaluatedProperties', 'unevaluatedItems', 'contains', 'not', 'if', 'then', 'else', 'propertyNames', 'allOf', 'anyOf', 'oneOf', 'prefixItems']) {
     assertKnownFormats(record[key], ajv);
   }
 }

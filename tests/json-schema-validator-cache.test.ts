@@ -5,6 +5,28 @@ import { describe, expect, test } from 'bun:test';
 import { compileJsonSchemaFile } from '../src/json-schema-validator-cache.ts';
 
 describe('JSON Schema validator cache', () => {
+  test('checks formats in unevaluated schemas without inspecting example payloads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zdp-schema-unevaluated-'));
+    const schemaPath = join(root, 'schema.json');
+    try {
+      for (const keyword of ['unevaluatedProperties', 'unevaluatedItems']) {
+        const type = keyword === 'unevaluatedProperties' ? 'object' : 'array';
+        const schema = { type, [keyword]: { type: 'string', format: 'unsupported-format' } };
+        await writeFile(schemaPath, JSON.stringify(schema));
+        await expect(compileJsonSchemaFile({ absolutePath: schemaPath })).rejects.toThrow('Unsupported JSON Schema format');
+        const unchecked = await compileJsonSchemaFile({ absolutePath: schemaPath, validateFormats: false });
+        expect(unchecked(type === 'object' ? { extra: 'anything' } : ['anything'])).toBe(true);
+        await writeFile(schemaPath, JSON.stringify({
+          type, [keyword]: { type: 'string', format: 'date-time' },
+          examples: [{ format: 'example-data' }]
+        }));
+        const validate = await compileJsonSchemaFile({ absolutePath: schemaPath });
+        expect(validate(type === 'object' ? { extra: 'bad-date' } : ['bad-date'])).toBe(false);
+        expect(validate(type === 'object' ? { extra: '2026-10-08T00:00:00Z' } : ['2026-10-08T00:00:00Z'])).toBe(true);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('validates standard formats and rejects unsupported ones without changing formats-off', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zdp-schema-formats-'));
     const schemaPath = join(root, 'schema.json');
