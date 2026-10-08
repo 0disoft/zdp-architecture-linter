@@ -5,6 +5,17 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('checks assigned source values across lines and ignores unrelated display text', async () => {
+    for (const source of ['export const createdAt = 1760000000000;', 'export const createdAt =\n "2026-02-30T00:00:00Z";',
+      'export const entry = { createdAtUtc: "2026-02-30T00:00:00Z" };', 'entry.updatedAt = new Date().toLocaleString();']) {
+      await withRepositoryRoot({ 'contracts/events.ts': source }, async repositoryRoot => {
+        expect((await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).length).toBeGreaterThan(0);
+      });
+    }
+    await withRepositoryRoot({ 'contracts/events.ts': 'export const createdAt = "2026-10-08T00:00:00Z"; const zone = "KST";' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
   test('applies UTC and calendar checks to camelCase source timestamp fields', async () => {
     for (const field of ['createdAt', 'updatedAt', 'nextRunAtUtc', 'eventTime']) {
       for (const value of ['2026-02-30T12:00:00Z', '2026-10-08T12:00:00+09:00', '2026-10-08T12:00:00']) {
@@ -20,11 +31,11 @@ describe('cross-cutting time rules', () => {
   });
   test('checks calendar values across prose and source contract formats', async () => {
     for (const file of ['RUNBOOK.md', 'contracts/events.ts', 'contracts/events.sql']) {
-      await withRepositoryRoot({ [file]: 'created_at: "2026-02-30T12:00:00Z"\n' }, async repositoryRoot => {
+      await withRepositoryRoot({ [file]: file.endsWith('.ts') ? 'export const created_at = "2026-02-30T12:00:00Z";' : 'created_at: "2026-02-30T12:00:00Z"\n' }, async repositoryRoot => {
         expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} }))
           .toContainEqual(expect.objectContaining({ file, path: 'line.1' }));
       });
-      await withRepositoryRoot({ [file]: 'created_at: "2024-02-29T23:59:59.123456+00:00"\n' }, async repositoryRoot => {
+      await withRepositoryRoot({ [file]: file.endsWith('.ts') ? 'export const created_at = "2024-02-29T23:59:59.123456+00:00";' : 'created_at: "2024-02-29T23:59:59.123456+00:00"\n' }, async repositoryRoot => {
         expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
       });
     }
