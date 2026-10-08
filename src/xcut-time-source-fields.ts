@@ -11,9 +11,14 @@ export interface SourceTimestampField {
 
 const TIMESTAMP_FIELD = /^(?:timestamp|created_?at|updated_?at|logged_?at|occurred_?at|available_?at|expires_?at|scheduled_?at|next_?run_?at|event_?time|log_?time)(?:_?utc)?$/i;
 
+export class SourceTimestampParseError extends Error {
+  constructor() { super('Timestamp source must be valid JavaScript or TypeScript.'); }
+}
+
 /** Inspect assigned expressions without treating sibling display strings as timestamps. */
 export function collectSourceTimestampFields(source: string, file: string): readonly SourceTimestampField[] {
   const tree = parseSync(file, source);
+  if (tree.errors.length > 0) throw new SourceTimestampParseError();
   const result: SourceTimestampField[] = [];
   function record(key: Node, initializer: Expression | null | undefined): void {
     const name = key.type === 'Identifier' ? key.name
@@ -35,7 +40,9 @@ export function collectSourceTimestampFields(source: string, file: string): read
         const callee = node.callee;
         if (callee.type !== 'MemberExpression') return;
         const method = !callee.computed && callee.property.type === 'Identifier' ? callee.property.name
-          : callee.computed && callee.property.type === 'Literal' ? callee.property.value : undefined;
+          : callee.computed && callee.property.type === 'Literal' ? callee.property.value
+            : callee.computed && callee.property.type === 'TemplateLiteral' && callee.property.expressions.length === 0
+              ? callee.property.quasis[0]?.value.cooked : undefined;
         if (typeof method === 'string' && ['toLocaleString', 'toLocaleDateString', 'toLocaleTimeString', 'toString'].includes(method))
           localFormatting = true;
       }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Diagnostic } from './diagnostics.ts';
 import { collectTimestampFieldValues } from './xcut-time-timestamp-fields.ts';
-import { collectSourceTimestampFields } from './xcut-time-source-fields.ts';
+import { collectSourceTimestampFields, SourceTimestampParseError } from './xcut-time-source-fields.ts';
 
 const TIME_CONTRACT_RULE_ID = 'ZDP-XCUT-TIME-001';
 
@@ -23,8 +23,12 @@ const REVIEWED_FILE_EXTENSIONS = [
   '.md',
   '.ts',
   '.tsx',
+  '.mts',
+  '.cts',
   '.js',
   '.jsx',
+  '.mjs',
+  '.cjs',
   '.rs',
   '.sql'
 ] as const;
@@ -81,6 +85,20 @@ function validateTimeContractSource(
   file: string,
   source: string
 ): readonly Diagnostic[] {
+  if (/\.[cm]?[jt]sx?$/i.test(file)) {
+    try {
+      return collectSourceTimestampFields(source, file).flatMap(field => {
+        const invalid = field.literal && field.value !== null && !isValidUtcTimestamp(field.value);
+        const local = field.localFormatting;
+        return invalid || local ? [createTimeDiagnostic({ file, path: `line.${field.line}`,
+          message: local ? 'Timestamp values that cross storage, event, log, or API boundaries must not be produced with locale formatting methods.'
+            : 'Assigned timestamp values must use valid UTC ISO 8601 strings and must not use local formatting.' })] : [];
+      });
+    } catch (error) {
+      if (!(error instanceof SourceTimestampParseError)) throw error;
+      return [createTimeDiagnostic({ file, path: 'document', message: error.message })];
+    }
+  }
   return [
     ...(/\.(?:ya?ml|json)$/i.test(file)
       ? collectTimestampFieldValues(source).flatMap(({ value, line, literal }) => {
@@ -92,15 +110,7 @@ function validateTimeContractSource(
         }
         return diagnostics.map(diagnostic => ({ ...diagnostic, path: `line.${line}` }));
       })
-      : /\.[cm]?[jt]sx?$/i.test(file)
-        ? collectSourceTimestampFields(source, file).flatMap(field => {
-          const invalid = field.literal && field.value !== null && !isValidUtcTimestamp(field.value);
-          const local = field.localFormatting;
-          return invalid || local ? [createTimeDiagnostic({ file, path: `line.${field.line}`,
-            message: local ? 'Timestamp values that cross storage, event, log, or API boundaries must not be produced with locale formatting methods.'
-              : 'Assigned timestamp values must use valid UTC ISO 8601 strings and must not use local formatting.' })] : [];
-        })
-        : validateTimestampLines(file, source)),
+      : validateTimestampLines(file, source)),
     ...validateRecurringScheduleContract(file, source)
   ];
 }

@@ -5,9 +5,17 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('reports malformed source and continues inspecting other contract files', async () => {
+    await withRepositoryRoot({ 'contracts/broken.ts': 'const createdAt = ;',
+      'contracts/events.mts': 'export const createdAt = "2026-02-30T00:00:00Z";' }, async repositoryRoot => {
+      const diagnostics = await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} });
+      expect(diagnostics).toContainEqual(expect.objectContaining({ file: 'contracts/broken.ts', path: 'document' }));
+      expect(diagnostics).toContainEqual(expect.objectContaining({ file: 'contracts/events.mts', path: 'line.1' }));
+    });
+  });
   test('detects computed locale calls while ignoring comments and string arguments', async () => {
     for (const expression of ['new Date()["toLocaleString"]()', 'new Date()?.toLocaleDateString()',
-      'new Date().toLocaleTimeString()', 'new Date()["toString"]()']) {
+      'new Date().toLocaleTimeString()', 'new Date()["toString"]()', 'new Date()[`toLocaleString`]()']) {
       await withRepositoryRoot({ 'contracts/events.ts': `const createdAt = ${expression};` }, async repositoryRoot => {
         expect((await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).length).toBeGreaterThan(0);
       });
