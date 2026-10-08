@@ -17,6 +17,18 @@ test('resolves tags to a commit and records the immutable snapshot source', asyn
     git('add', '--all'); git('commit', '-m', 'base');
     git('tag', '-a', 'snapshot-tag', '-m', 'tag');
     const commit = git('rev-parse', 'HEAD');
+    const limits = { maxFiles: 1 };
+    const input = { architectureRoot: root, ref: 'snapshot-tag', limits };
+    const pending = loadArchitectureSnapshot(input);
+    input.architectureRoot = join(root, 'missing');
+    input.ref = 'changed-ref';
+    limits.maxFiles = 0;
+    const captured = await pending;
+    try {
+      expect(captured.requestedRef).toBe('snapshot-tag');
+      expect(captured.resolvedRef).toBe(commit);
+      expect(await readFile(join(captured.root, 'input.txt'), 'utf8')).toBe('base');
+    } finally { await captured.cleanup(); }
     expect(await resolveSnapshotCommit(root, 'snapshot-tag')).toBe(commit);
     const snapshot = await loadArchitectureSnapshot({ architectureRoot: root, ref: 'snapshot-tag' });
     try {

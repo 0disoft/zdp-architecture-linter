@@ -21,6 +21,7 @@ export async function loadArchitectureSnapshot(input: {
   readonly ref?: string;
   readonly limits?: Partial<SnapshotReadLimits>;
 }): Promise<ArchitectureSnapshot> {
+  input = { ...input, limits: input.limits === undefined ? undefined : { ...input.limits } };
   if (input.ref === undefined || input.ref === 'worktree') {
     return { root: input.architectureRoot, requestedRef: 'worktree', cleanup: async () => {} };
   }
