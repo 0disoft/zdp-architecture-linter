@@ -113,7 +113,8 @@ export async function checkGeneratedArchitectureFile(input: {
 
   try {
     currentContents = await readFile(outputPath, 'utf8');
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
     throw new Error(`Generated output file does not exist: ${outputPath}`);
   }
 
@@ -152,7 +153,7 @@ function isInsideDirectory(candidatePath: string, directoryPath: string): boolea
 
   return (
     relativePath.length > 0 &&
-    !relativePath.startsWith('..') &&
+    relativePath !== '..' && !relativePath.startsWith(`..${sep}`) &&
     !isAbsolute(relativePath) &&
     !relativePath.includes(':')
   );

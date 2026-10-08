@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { writeGeneratedArchitectureFile } from '../src/generated-output.ts';
+import { checkGeneratedArchitectureFile, writeGeneratedArchitectureFile } from '../src/generated-output.ts';
 
 const temporaryRoots: string[] = [];
 
@@ -21,6 +21,20 @@ afterEach(async () => {
 });
 
 describe('generated output writes', () => {
+  test('allows contained dot-prefixed filenames and distinguishes missing files from read failures', async () => {
+    const architectureRoot = await createArchitectureRoot();
+    const input = { architectureRoot, outputPath: 'generated/..registry.json', contents: 'contents' };
+    await writeGeneratedArchitectureFile(input);
+    expect((await checkGeneratedArchitectureFile(input)).matches).toBe(true);
+    await expect(checkGeneratedArchitectureFile({ ...input, outputPath: 'generated/missing.json' }))
+      .rejects.toThrow('does not exist');
+    await mkdir(join(architectureRoot, 'generated', 'directory.json'));
+    let failure: unknown;
+    try { await checkGeneratedArchitectureFile({ ...input, outputPath: 'generated/directory.json' }); }
+    catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).not.toContain('does not exist');
+  });
   test('replaces the final file only after the staged contents are complete', async () => {
     const architectureRoot = await createArchitectureRoot();
     const outputPath = join(architectureRoot, 'generated', 'registry.json');
