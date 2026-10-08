@@ -93,7 +93,7 @@ function groupDiagnosticsByRule(diagnostics: readonly Diagnostic[]): Map<string,
   return grouped;
 }
 function toArtifactUri(file: string): string {
-  const normalized = file.trim().replaceAll('\\', '/').replace(/^\.\/+/, '');
+  const normalized = file.replaceAll('\\', '/').replace(/^\.\/+/, '');
   const segments = normalized.split('/');
   if (normalized.length === 0 || normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized) || segments.some((segment) => segment === '..')) return 'unknown';
   return segments.map((segment) => encodeURIComponent(segment)).join('/');

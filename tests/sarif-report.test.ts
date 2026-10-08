@@ -46,4 +46,13 @@ describe('SARIF report', () => {
     expect(run?.tool.driver.rules).toEqual([]);
     expect(run?.results).toEqual([]);
   });
+  test('preserves whitespace in actual repository filenames', () => {
+    for (const [file, uri] of [
+      [' leading/service.yaml ', '%20leading/service.yaml%20'],
+      ['./catalogs/ 공백.yaml ', 'catalogs/%20%EA%B3%B5%EB%B0%B1.yaml%20']
+    ]) {
+      const run = createSarifReport({ diagnostics: [{ ...ERROR, file: file! }] }).runs[0];
+      expect(run?.results[0]?.locations[0].physicalLocation.artifactLocation.uri).toBe(uri);
+    }
+  });
 });
