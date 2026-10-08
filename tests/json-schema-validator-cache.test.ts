@@ -5,6 +5,22 @@ import { describe, expect, test } from 'bun:test';
 import { compileJsonSchemaFile } from '../src/json-schema-validator-cache.ts';
 
 describe('JSON Schema validator cache', () => {
+  test('captures format mode before reading and never poisons the opposite cache key', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zdp-schema-cache-mode-'));
+    const schemaPath = join(root, 'schema.json');
+    try {
+      await writeFile(schemaPath, JSON.stringify({ type: 'string', format: 'date-time' }));
+      const input = { absolutePath: schemaPath, validateFormats: true };
+      const pending = compileJsonSchemaFile(input);
+      input.validateFormats = false;
+      const validate = await pending;
+      expect(validate('not-a-date')).toBe(false);
+      const cached = await compileJsonSchemaFile({ absolutePath: schemaPath });
+      expect(cached('not-a-date')).toBe(false);
+      expect(cached).toBe(validate);
+      expect((await compileJsonSchemaFile({ absolutePath: schemaPath, validateFormats: false }))('not-a-date')).toBe(true);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
   test('checks formats in unevaluated schemas without inspecting example payloads', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zdp-schema-unevaluated-'));
     const schemaPath = join(root, 'schema.json');

@@ -18,6 +18,7 @@ export async function compileJsonSchemaFile(input: {
   readonly allowedRoot?: string;
   readonly validateFormats?: boolean;
 }): Promise<ValidateFunction> {
+  input = { ...input };
   const absolutePath = resolve(input.absolutePath);
   const cacheKey = `${input.validateFormats === false ? 'formats-off' : 'formats-on'}\0${absolutePath}`;
   // Containment is checked before every cache hit, not only before compilation.
