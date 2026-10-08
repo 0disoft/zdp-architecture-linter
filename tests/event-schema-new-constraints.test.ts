@@ -51,3 +51,11 @@ describe('new event schema constraints', () => {
     expect(compare({ enum: ['a'] }, { enum: ['a', 'b'] })).toEqual([]);
   });
 });
+test('dependentRequired field lists are unordered constraints, including nested schemas', () => {
+  const before = { dependentRequired: { credit: ['billing', 'address'] } };
+  const reordered = { dependentRequired: { credit: ['address', 'billing'] } };
+  expect(compare(before, reordered)).toEqual([]);
+  expect(compare({ allOf: [before] }, { allOf: [reordered] })).toEqual([]);
+  expect(compare(before, { dependentRequired: { credit: ['address'] } })).toContain('schema.dependentRequired changed');
+  expect(compare({ const: before }, { const: reordered }).length).toBeGreaterThan(0);
+});

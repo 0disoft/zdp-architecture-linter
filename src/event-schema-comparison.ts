@@ -140,6 +140,7 @@ function isUnrestricted(value: unknown): boolean {
 }
 function schemaValueEqual(keyword: string, left: unknown, right: unknown): boolean {
   const normalize = (value: unknown): unknown => {
+    if (keyword === 'dependentRequired') return sortDependentRequired(value);
     if (SCHEMA_MAPS.has(keyword) && isRecord(value)) return Object.fromEntries(Object.keys(value).sort().map((name) => [name, sortSchema(value[name])]));
     return SCHEMA_VALUES.has(keyword) ? sortSchema(value) : sortLiteral(value);
   };
@@ -150,12 +151,18 @@ function sortSchema(value: unknown): unknown {
   if (!isRecord(value)) return value;
   return Object.fromEntries(Object.keys(value).filter((key) => !ANNOTATIONS.has(key) && !key.startsWith('x-')).sort().map((key) => {
     const entry = value[key];
+    if (key === 'dependentRequired') return [key, sortDependentRequired(entry)];
     if ((key === 'required' || key === 'type' || key === 'enum') && Array.isArray(entry)) {
       return [key, entry.map(sortLiteral).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))];
     }
     if (SCHEMA_MAPS.has(key) && isRecord(entry)) return [key, Object.fromEntries(Object.keys(entry).sort().map((name) => [name, sortSchema(entry[name])]))];
     return [key, SCHEMA_VALUES.has(key) ? sortSchema(entry) : sortLiteral(entry)];
   }));
+}
+function sortDependentRequired(value: unknown): unknown {
+  if (!isRecord(value)) return sortLiteral(value);
+  return Object.fromEntries(Object.keys(value).sort().map((name) => [name,
+    Array.isArray(value[name]) ? [...value[name]].sort() : sortLiteral(value[name])]));
 }
 function sortLiteral(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortLiteral);
