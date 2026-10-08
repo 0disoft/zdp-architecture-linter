@@ -5,6 +5,20 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('checks timestamp defaults in destructuring and function parameters without duplicate diagnostics', async () => {
+    for (const source of ['const { createdAt = "2026-02-30T00:00:00Z" } = input;',
+      'const { createdAt: value = new Date().toLocaleString() } = input;',
+      'function event(createdAt = 1760000000000) { return { createdAt }; }']) {
+      await withRepositoryRoot({ 'contracts/events.ts': source }, async repositoryRoot => {
+        const diagnostics = await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} });
+        expect(diagnostics).toHaveLength(1);
+        expect(diagnostics[0]?.path).toBe('line.1');
+      });
+    }
+    await withRepositoryRoot({ 'contracts/events.ts': 'const { createdAt = "2026-10-08T00:00:00Z", label = "KST" } = input;' }, async repositoryRoot => {
+      expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+    });
+  });
   test('inspects static template keys and distinguishes string identity from Date local formatting', async () => {
     for (const source of ['const event = { [`createdAt`]: new Date().toLocaleString() };',
       'event[`updatedAt`] = new Date().toString();', 'class Event { [`expiresAt`] = "2026-02-30T00:00:00Z"; }',

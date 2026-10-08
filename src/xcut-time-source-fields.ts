@@ -57,9 +57,13 @@ export function collectSourceTimestampFields(source: string, file: string): read
   const tree = parseSync(file, source);
   if (tree.errors.length > 0) throw new SourceTimestampParseError();
   const result: SourceTimestampField[] = [];
+  const recorded = new Set<string>();
   function record(key: Node, initializer: Expression | null | undefined): void {
     const name = staticName(key);
     if (!name || !initializer || !TIMESTAMP_FIELD.test(name)) return;
+    const identity = `${name}:${initializer.start}`;
+    if (recorded.has(identity)) return;
+    recorded.add(identity);
     let expression = unwrap(initializer);
     while (stringIdentityReceiver(expression)) expression = unwrap(stringIdentityReceiver(expression)!);
     const template = expression.type === 'TemplateLiteral' && expression.expressions.length === 0;
@@ -86,7 +90,11 @@ export function collectSourceTimestampFields(source: string, file: string): read
   }
   new Visitor({
     VariableDeclarator(node) { record(node.id, node.init); },
-    Property(node) { if (node.kind === 'init' && !node.method && (!node.computed || staticKey(node.key))) record(node.key, node.value as Expression); },
+    Property(node) {
+      if (node.kind === 'init' && !node.method && (!node.computed || staticKey(node.key)))
+        record(node.key, node.value.type === 'AssignmentPattern' ? node.value.right : node.value as Expression);
+    },
+    AssignmentPattern(node) { record(node.left, node.right); },
     PropertyDefinition(node) { if (!node.computed || staticKey(node.key)) record(node.key, node.value); },
     AssignmentExpression(node) {
       if (node.operator !== '=') return;
