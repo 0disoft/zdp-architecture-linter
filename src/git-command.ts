@@ -3,6 +3,7 @@ export function buildHardenedGitArgs(
   args: readonly string[]
 ): readonly string[] {
   return [
+    '--no-replace-objects',
     '-c',
     'core.fsmonitor=false',
     '-c',

@@ -66,6 +66,7 @@ describe('architecture doctor report', () => {
 
   test('hardens git status checks against repository-local helper execution', () => {
     expect(buildHardenedGitArgs('/tmp/arch', ['status', '--porcelain'])).toEqual([
+      '--no-replace-objects',
       '-c',
       'core.fsmonitor=false',
       '-c',

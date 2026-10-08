@@ -41,5 +41,12 @@ test('resolves tags to a commit and records the immutable snapshot source', asyn
       expect(snapshot.resolvedRef).toBe(commit);
     } finally { await snapshot.cleanup(); }
     await expect(resolveSnapshotCommit(root, 'HEAD:input.txt')).rejects.toThrow();
+    // Replacement refs must not change content attributed to an immutable commit.
+    git('replace', commit, 'HEAD');
+    const replaced = await loadArchitectureSnapshot({ architectureRoot: root, ref: commit });
+    try {
+      expect(replaced.resolvedRef).toBe(commit);
+      expect(await readFile(join(replaced.root, 'input.txt'), 'utf8')).toBe('base');
+    } finally { await replaced.cleanup(); }
   } finally { await rm(root, { recursive: true, force: true }); }
 });

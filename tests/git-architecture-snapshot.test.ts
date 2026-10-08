@@ -33,6 +33,7 @@ describe('resolveSnapshotPath', () => {
 
   test('uses hardened git args for snapshot reads', () => {
     expect(buildSnapshotGitArgs('/tmp/arch', ['show', 'HEAD:catalogs/services.yaml'])).toEqual([
+      '--no-replace-objects',
       '-c',
       'core.fsmonitor=false',
       '-c',
