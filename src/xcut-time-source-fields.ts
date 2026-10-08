@@ -5,6 +5,7 @@ export interface SourceTimestampField {
   readonly value: unknown;
   readonly literal: boolean;
   readonly expression: string;
+  readonly localFormatting: boolean;
   readonly line: number;
 }
 
@@ -28,7 +29,19 @@ export function collectSourceTimestampFields(source: string, file: string): read
     const value = expression.type === 'Literal' ? expression.value
       : expression.type === 'TemplateLiteral' && template ? expression.quasis[0]?.value.cooked
         : signedNumber ? Number(source.slice(expression.start, expression.end).replace(/\s/g, '')) : undefined;
-    result.push({ name, value, literal: expression.type === 'Literal' || template || signedNumber,
+    let localFormatting = false;
+    new Visitor({
+      CallExpression(node) {
+        const callee = node.callee;
+        if (callee.type !== 'MemberExpression') return;
+        const method = !callee.computed && callee.property.type === 'Identifier' ? callee.property.name
+          : callee.computed && callee.property.type === 'Literal' ? callee.property.value : undefined;
+        if (typeof method === 'string' && ['toLocaleString', 'toLocaleDateString', 'toLocaleTimeString', 'toString'].includes(method))
+          localFormatting = true;
+      }
+    }).visit({ ...tree.program, body: [{ type: 'ExpressionStatement', expression,
+      start: expression.start, end: expression.end }] });
+    result.push({ name, value, localFormatting, literal: expression.type === 'Literal' || template || signedNumber,
       expression: source.slice(expression.start, expression.end),
       line: source.slice(0, expression.start).split('\n').length });
   }

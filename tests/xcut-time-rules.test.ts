@@ -5,6 +5,20 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('detects computed locale calls while ignoring comments and string arguments', async () => {
+    for (const expression of ['new Date()["toLocaleString"]()', 'new Date()?.toLocaleDateString()',
+      'new Date().toLocaleTimeString()', 'new Date()["toString"]()']) {
+      await withRepositoryRoot({ 'contracts/events.ts': `const createdAt = ${expression};` }, async repositoryRoot => {
+        expect((await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).length).toBeGreaterThan(0);
+      });
+    }
+    for (const expression of ['new Date() /* .toLocaleString() */ .toISOString()',
+      'normalize(".toLocaleString()", new Date().toISOString())']) {
+      await withRepositoryRoot({ 'contracts/events.ts': `const createdAt = ${expression};` }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+      });
+    }
+  });
   test('checks assigned source values across lines and ignores unrelated display text', async () => {
     for (const source of ['export const createdAt = 1760000000000;', 'export const createdAt =\n "2026-02-30T00:00:00Z";',
       'export const entry = { createdAtUtc: "2026-02-30T00:00:00Z" };', 'entry.updatedAt = new Date().toLocaleString();']) {

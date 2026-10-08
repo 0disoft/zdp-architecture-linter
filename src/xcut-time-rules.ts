@@ -95,7 +95,7 @@ function validateTimeContractSource(
       : /\.[cm]?[jt]sx?$/i.test(file)
         ? collectSourceTimestampFields(source, file).flatMap(field => {
           const invalid = field.literal && field.value !== null && !isValidUtcTimestamp(field.value);
-          const local = !field.literal && /\.(?:toLocaleString|toLocaleDateString|toLocaleTimeString|toString)\s*\(/.test(field.expression);
+          const local = field.localFormatting;
           return invalid || local ? [createTimeDiagnostic({ file, path: `line.${field.line}`,
             message: local ? 'Timestamp values that cross storage, event, log, or API boundaries must not be produced with locale formatting methods.'
               : 'Assigned timestamp values must use valid UTC ISO 8601 strings and must not use local formatting.' })] : [];
