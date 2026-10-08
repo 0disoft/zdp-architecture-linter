@@ -4,6 +4,16 @@ import {
   stripCommentsAndStringLiterals
 } from '../src/source-proof.ts';
 
+test('does not count test call syntax inside regular expressions as executable proof', () => {
+  const source = [
+    `const pattern = /test('hidden case')/;`,
+    `const escaped = /it("also hidden")\\/tail/;`,
+    `const ratio = total / count;`,
+    `test('real case', () => {});`
+  ].join('\n');
+  expect(extractTestCallNames(source)).toEqual(['real case']);
+});
+
 test('masks nested template text while preserving every interpolation and source offset', () => {
   const source = 'const value = `outer ${`inner ${realProof()} hiddenInner`} hiddenOuter ${secondProof({ nested: true })}`;\nnextProof();';
   const stripped = stripCommentsAndStringLiterals(source);

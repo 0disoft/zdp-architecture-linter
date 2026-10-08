@@ -276,6 +276,14 @@ export function extractTestCallNames(source: string): readonly string[] {
       continue;
     }
 
+    if (char === '/' && canStartRegexLiteral(source, index)) {
+      const regexEnd = readRegexLiteralEnd(source, index);
+      if (regexEnd !== null) {
+        index = regexEnd;
+        continue;
+      }
+    }
+
     if (char === "'" || char === '"' || char === '`') {
       index = skipStringLiteral(source, index);
       continue;
