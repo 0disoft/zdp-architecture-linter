@@ -5,6 +5,23 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryTimeContract } from '../src/xcut-time-rules.ts';
 
 describe('cross-cutting time rules', () => {
+  test('inspects static template keys and distinguishes string identity from Date local formatting', async () => {
+    for (const source of ['const event = { [`createdAt`]: new Date().toLocaleString() };',
+      'event[`updatedAt`] = new Date().toString();', 'class Event { [`expiresAt`] = "2026-02-30T00:00:00Z"; }',
+      'const createdAt = "2026-02-30T00:00:00Z".toString();']) {
+      await withRepositoryRoot({ 'contracts/events.ts': source }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).not.toEqual([]);
+      });
+    }
+    for (const source of ['const createdAt = new Date().toISOString().toString();',
+      'const createdAt = (new Date().toISOString() as string)[`toString`]();',
+      'const createdAt = "2026-10-08T00:00:00Z".toString();',
+      'const event = { [`created${suffix}`]: new Date().toLocaleString() };']) {
+      await withRepositoryRoot({ 'contracts/events.ts': source }, async repositoryRoot => {
+        expect(await validateRepositoryTimeContract({ repositoryRoot, repositoryServiceContract: {} })).toEqual([]);
+      });
+    }
+  });
   test('reports malformed source and continues inspecting other contract files', async () => {
     await withRepositoryRoot({ 'contracts/broken.ts': 'const createdAt = ;',
       'contracts/events.mts': 'export const createdAt = "2026-02-30T00:00:00Z";' }, async repositoryRoot => {
