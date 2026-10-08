@@ -77,7 +77,7 @@ export function validateOperatingPolicies(cost: unknown, slo: unknown, repositor
       if (!row(alerting) || !["always", "business-hours", "next-business-day", "none"].includes(alerting.notification_policy)) {
         fail(sloFile, `tiers[${index}].alerting`, "Notification policy must declare its delivery window."); continue;
       }
-      if (delivery[tier.id] && alerting.notification_policy !== delivery[tier.id])
+      if (Object.hasOwn(delivery, tier.id) && alerting.notification_policy !== delivery[tier.id])
         fail(sloFile, `tiers[${index}].alerting.notification_policy`, "Tier notification window must match its operating policy.");
       if (alerting.notification_policy === "always") {
         for (const field of ["night_delay_minutes", "weekend_delay_minutes"]) if (alerting[field] === null)

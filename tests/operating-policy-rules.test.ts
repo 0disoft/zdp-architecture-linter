@@ -19,6 +19,14 @@ test('current v2 policy is validated by the linter while v1 catalogs remain comp
   expect(validateOperatingPolicyExtensions(...inputs())).toEqual([]);
   expect(validateOperatingPolicyExtensions({ service_budgets: [] }, { tiers: [] }, { repositories: [] })).toEqual([]);
 });
+
+test('prototype-named extra tiers do not inherit a standard notification window', () => {
+  const [cost, slo, repositories] = inputs();
+  for (const id of ['constructor', 'toString', '__proto__']) {
+    slo.tiers.push({ ...slo.tiers.find((tier: any) => tier.id === 'lab'), id });
+  }
+  expect(validateOperatingPolicyExtensions(cost, slo, repositories)).toEqual([]);
+});
 test('silenced critical alerts, missing emergencies and null units are rejected', () => {
   const [cost, slo, repositories] = inputs();
   cost.unit_definitions.answer = null;
