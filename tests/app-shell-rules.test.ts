@@ -5,6 +5,21 @@ import { describe, expect, test } from 'bun:test';
 import { validateRepositoryAppShellContract } from '../src/app-shell-rules.ts';
 
 describe('app shell contract rules', () => {
+  test.each(['valid', 'incomplete', 'missing-check', 'file-dependency'] as const)('Saylo consumer validates replacement gates: %s', async scenario => {
+    const files = createValidAppShellFiles();
+    files['contracts/app-shell.yaml'] = files['contracts/app-shell.yaml']!.replace('provider: zdp-platform-localization', 'provider: "@0disoft/saylo-core"');
+    files['.github/workflows/ci.yml'] = files['.github/workflows/ci.yml']!
+      .replace(/      - name: Checkout localization platform[\s\S]*?(?=      - name: Setup Bun)/, '')
+      .replace(/      - name: Install localization platform dependencies[\s\S]*?(?=      - name: Install web apps dependencies)/, '');
+    files['saylo.config.json'] = JSON.stringify({ baseLocale: 'ko', checkLocales: ['ko'], requireCompleteTranslations: scenario !== 'incomplete', typegen: { outFile: 'src/types.d.ts' } });
+    files['package.json'] = JSON.stringify({ dependencies: { '@0disoft/saylo-core': scenario === 'file-dependency' ? 'file:../core' : '^0.1.0' }, devDependencies: { '@0disoft/saylo-typegen': '^0.1.0' }, scripts: { check: scenario === 'missing-check' ? 'echo ok' : 'bun run check:localization', 'check:localization': 'bun scripts/check-localization.ts' } });
+    await withRepositoryRoot(files, async repositoryRoot => {
+      const diagnostics = await validateRepositoryAppShellContract({ repositoryRoot, repositoryServiceContract: JSON.parse(JSON.stringify(createWebAppsServiceContract()).replaceAll('platform-localization', 'Saylo')) });
+      if (scenario === 'valid') expect(diagnostics).toEqual([]);
+      else expect(diagnostics.some(diagnostic => diagnostic.path === 'localization.saylo')).toBe(true);
+    });
+  });
+
   test('passes when the web apps repository declares the app shell gate', async () => {
     await withRepositoryRoot(createValidAppShellFiles(), async (repositoryRoot) => {
       const diagnostics = await validateRepositoryAppShellContract({

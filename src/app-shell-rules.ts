@@ -185,12 +185,13 @@ export async function validateRepositoryAppShellContract(input: {
 
   if (contract.value !== null) {
     diagnostics.push(...validateAppShellContract(contract.value));
+    if (usesSaylo(contract.value)) diagnostics.push(...await validateSayloConsumer(input.repositoryRoot));
   }
 
   diagnostics.push(
     ...validateServiceContractIncludes(input.repositoryServiceContract, contract.value)
   );
-  diagnostics.push(...(await validateCiWorkflowIncludes(input.repositoryRoot)));
+  diagnostics.push(...(await validateCiWorkflowIncludes(input.repositoryRoot, usesSaylo(contract.value))));
   diagnostics.push(...(await validateSourceBoundaries(input.repositoryRoot, contract.value)));
 
   return diagnostics;
@@ -436,12 +437,12 @@ function validateLocalizationCanary(value: unknown): readonly Diagnostic[] {
   const scope = readStringField(canary, 'scope');
   const rollbackBoundary = readStringField(canary, 'rollback_boundary');
 
-  if (provider !== 'zdp-platform-localization') {
+  if (provider !== 'zdp-platform-localization' && provider !== '@0disoft/saylo-core') {
     diagnostics.push(
       createAppShellDiagnostic(
         APP_SHELL_CONTRACT_FILE,
         'localization_canary.provider',
-        'App shell localization canary provider must be `zdp-platform-localization`.'
+        'App shell localization canary provider must be `@0disoft/saylo-core` or `zdp-platform-localization`.'
       )
     );
   }
@@ -579,7 +580,7 @@ function validateServiceContractIncludes(
     'status'
   );
   const requiredSnippets = [
-    ...REQUIRED_SERVICE_CONTRACT_SNIPPETS,
+    ...REQUIRED_SERVICE_CONTRACT_SNIPPETS.filter(snippet => !usesSaylo(appShellContract) || !['platform-localization', 'fixture catalog diagnostics 0', 'generated large-catalog diagnostics 0', 'production fallback 0'].includes(snippet)),
     ...(promotionStatus === PARTIAL_AUTH_ROUTE_PROMOTION_STATUS
       ? REQUIRED_PARTIAL_AUTH_SERVICE_SNIPPETS
       : REQUIRED_BLOCKED_AUTH_SERVICE_SNIPPETS)
@@ -603,7 +604,8 @@ function validateServiceContractIncludes(
 }
 
 async function validateCiWorkflowIncludes(
-  repositoryRoot: string
+  repositoryRoot: string,
+  saylo: boolean
 ): Promise<readonly Diagnostic[]> {
   let source: string;
 
@@ -619,7 +621,7 @@ async function validateCiWorkflowIncludes(
 
   const diagnostics: Diagnostic[] = [];
 
-  for (const snippet of REQUIRED_CI_WORKFLOW_SNIPPETS) {
+  for (const snippet of REQUIRED_CI_WORKFLOW_SNIPPETS.filter(snippet => !saylo || !['0disoft/zdp-platform-localization', 'secrets.ZDP_CI_READ_TOKEN || github.token', 'projects/zdp-platforms/platform/zdp-platform-localization', 'Install localization platform dependencies'].includes(snippet))) {
     if (source.includes(snippet)) {
       continue;
     }
@@ -1000,4 +1002,42 @@ function stringify(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function usesSaylo(contract: unknown): boolean {
+  return readStringField(readRecordPath(contract, 'localization_canary'), 'provider') === '@0disoft/saylo-core';
+}
+
+// The public registry contract replaces the legacy provider gate, not translation checks.
+async function validateSayloConsumer(repositoryRoot: string): Promise<Diagnostic[]> {
+  const diagnostics: Diagnostic[] = [];
+  for (const file of ['saylo.config.json', 'package.json']) {
+    try {
+      const value: unknown = JSON.parse(await readFile(join(repositoryRoot, file), 'utf8'));
+      if (!isRecord(value)) throw new Error('Expected an object.');
+      if (file === 'saylo.config.json') {
+        if (value.requireCompleteTranslations !== true || !Array.isArray(value.checkLocales) ||
+            value.checkLocales.length === 0 || typeof value.baseLocale !== 'string' ||
+            !value.checkLocales.includes(value.baseLocale) || !isRecord(value.typegen) ||
+            typeof value.typegen.outFile !== 'string' || !value.typegen.outFile) {
+          throw new Error('Saylo must require complete translations, check the base locale, and generate types.');
+        }
+      } else {
+        const packages = { ...(isRecord(value.dependencies) ? value.dependencies : {}), ...(isRecord(value.devDependencies) ? value.devDependencies : {}) };
+        for (const name of ['core', 'typegen']) {
+          const version = packages[`@0disoft/saylo-${name}`];
+          if (typeof version !== 'string' || !/^[~^]?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+            throw new Error('Saylo core and typegen must use registry versions.');
+          }
+        }
+        if (Object.keys(packages).some(name => name.startsWith('@zdp/localization-'))) throw new Error('Legacy localization packages must be removed.');
+        if (!isRecord(value.scripts) || typeof value.scripts['check:localization'] !== 'string' ||
+            !value.scripts['check:localization'].trim() || typeof value.scripts.check !== 'string' ||
+            !value.scripts.check.includes('check:localization')) throw new Error('The check script must run check:localization.');
+      }
+    } catch (error) {
+      diagnostics.push(createAppShellDiagnostic(file, 'localization.saylo', error instanceof Error ? error.message : String(error)));
+    }
+  }
+  return diagnostics;
 }
